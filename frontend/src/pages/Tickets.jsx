@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, AlertCircle, CheckCircle2, Clock, MoreHorizontal, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Search, AlertCircle, CheckCircle2, Clock, ArrowUp, Zap } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
 
@@ -45,11 +45,11 @@ const Tickets = () => {
 
     const priorityColor = (p) => {
         switch (p) {
-            case 'CRITICAL': return 'text-red-600 bg-red-50 border-red-200';
-            case 'HIGH': return 'text-orange-600 bg-orange-50 border-orange-200';
-            case 'MEDIUM': return 'text-amber-600 bg-amber-50 border-amber-200';
-            case 'LOW': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
-            default: return 'text-zinc-600 bg-zinc-50 border-zinc-200';
+            case 'CRITICAL': return 'text-red-700 bg-red-100 border-red-200';
+            case 'HIGH': return 'text-orange-700 bg-orange-100 border-orange-200';
+            case 'MEDIUM': return 'text-amber-700 bg-amber-100 border-amber-200';
+            case 'LOW': return 'text-emerald-700 bg-emerald-100 border-emerald-200';
+            default: return 'text-zinc-600 bg-zinc-100 border-zinc-200';
         }
     };
 
@@ -62,12 +62,39 @@ const Tickets = () => {
         }
     };
 
+    const SlaBadge = ({ status, time }) => {
+        if (!time) return <span className="text-zinc-400 text-xs">-</span>;
+
+        const isNegative = time < 0;
+        const absTime = Math.abs(time);
+
+        let color = 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        let text = `${absTime}h left`;
+
+        if (status === 'BREACHED' || (status === 'MISSED')) {
+            color = 'bg-red-100 text-red-700 border-red-200';
+            text = `${absTime}h over`;
+        } else if (status === 'AT_RISK') {
+            color = 'bg-orange-100 text-orange-700 border-orange-200';
+        } else if (status === 'MET') {
+            color = 'bg-zinc-100 text-zinc-600 border-zinc-200';
+            text = 'Met';
+        }
+
+        return (
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${color}`}>
+                {status === 'BREACHED' && <Zap size={10} />}
+                {text}
+            </span>
+        );
+    };
+
     return (
         <div className="layout-container p-6 animate-fade-in space-y-6">
             <header className="flex justify-between items-center pb-6 border-b border-zinc-200">
                 <div>
-                    <h1 className="text-xl font-semibold text-zinc-900 tracking-tight">Tickets</h1>
-                    <p className="text-sm text-zinc-500 mt-1">Manage support requests and issues.</p>
+                    <h1 className="text-xl font-semibold text-zinc-900 tracking-tight">Support Tickets</h1>
+                    <p className="text-sm text-zinc-500 mt-1">SLA tracking and issue resolution queue.</p>
                 </div>
                 <button onClick={() => setIsCreateModalOpen(true)} className="btn btn-primary">
                     <Plus size={16} /> New Ticket
@@ -79,7 +106,7 @@ const Tickets = () => {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
                     <input
                         type="text"
-                        placeholder="Search tickets..."
+                        placeholder="Search IDs or titles..."
                         className="input-field pl-9"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -95,7 +122,7 @@ const Tickets = () => {
                                     : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
                                 }`}
                         >
-                            {status === 'ALL' ? 'All View' : status.replace('_', ' ')}
+                            {status === 'ALL' ? 'All tickets' : status.replace('_', ' ')}
                         </button>
                     ))}
                 </div>
@@ -106,11 +133,12 @@ const Tickets = () => {
                     <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium select-none">
                         <tr>
                             <th className="px-6 py-3 w-32">ID</th>
-                            <th className="px-6 py-3">Title</th>
+                            <th className="px-6 py-3">Subject</th>
                             <th className="px-6 py-3 w-32">Status</th>
                             <th className="px-6 py-3 w-32">Priority</th>
-                            <th className="px-6 py-3 w-40">Submitted By</th>
-                            <th className="px-6 py-3 w-40 text-right">Created</th>
+                            <th className="px-6 py-3 w-32">SLA</th>
+                            <th className="px-6 py-3 w-40">Requester</th>
+                            <th className="px-6 py-3 w-32 text-right">Created</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
@@ -130,13 +158,16 @@ const Tickets = () => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-3.5">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${priorityColor(ticket.priority)}`}>
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${priorityColor(ticket.priority)}`}>
                                         {ticket.priority}
                                     </span>
                                 </td>
                                 <td className="px-6 py-3.5">
+                                    <SlaBadge status={ticket.sla_status} time={ticket.time_remaining_hours} />
+                                </td>
+                                <td className="px-6 py-3.5">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-5 h-5 rounded bg-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600">
+                                        <div className="w-5 h-5 rounded bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-500">
                                             {ticket.submitted_by_username?.[0]?.toUpperCase()}
                                         </div>
                                         <span className="text-xs text-zinc-600">{ticket.submitted_by_username}</span>
@@ -149,7 +180,7 @@ const Tickets = () => {
                         ))}
                         {filteredTickets.length === 0 && (
                             <tr>
-                                <td colSpan="6" className="py-12 text-center text-zinc-400">No tickets found matching your filters.</td>
+                                <td colSpan="7" className="py-12 text-center text-zinc-400">No tickets found matching your filters.</td>
                             </tr>
                         )}
                     </tbody>
@@ -188,6 +219,7 @@ const Tickets = () => {
                                         <option value="HIGH">High</option>
                                         <option value="CRITICAL">Critical</option>
                                     </select>
+                                    <p className="text-[10px] text-zinc-400 mt-1">SLA: {newTicket.priority === 'CRITICAL' ? '4h' : newTicket.priority === 'HIGH' ? '24h' : '48h+'}</p>
                                 </div>
                             </div>
                             <div>

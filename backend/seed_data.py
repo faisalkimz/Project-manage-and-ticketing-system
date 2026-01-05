@@ -12,7 +12,7 @@ django.setup()
 from django.contrib.auth import get_user_model
 from users.models import Role, Permission
 from projects.models import Project, Task, Tag
-from tickets.models import Ticket
+from tickets.models import Ticket, SLAPolicy
 from django.utils import timezone
 from datetime import timedelta
 
@@ -127,8 +127,28 @@ def seed():
     for name, color in tag_data:
         tag, _ = Tag.objects.get_or_create(name=name, defaults={'color': color})
         tags.append(tag)
+
+    # 5. Create SLA Policies
+    print("... Creating SLA Policies")
+    sla_data = [
+        ('Crucial Response', 'CRITICAL', 1, 4),    # 1h response, 4h resolve
+        ('High Velocity', 'HIGH', 4, 24),         # 4h response, 24h resolve
+        ('Standard Ops', 'MEDIUM', 8, 48),        # 8h response, 48h resolve
+        ('Low Priority', 'LOW', 24, 72),          # 24h response, 72h resolve
+    ]
     
-    # 5. Create Projects
+    for name, prio, resp, res_time in sla_data:
+        SLAPolicy.objects.get_or_create(
+            priority=prio,
+            defaults={
+                'name': name,
+                'description': f'Policy for {prio} priority items',
+                'response_time_hours': resp,
+                'resolution_time_hours': res_time
+            }
+        )
+    
+    # 6. Create Projects
     print("... Creating Projects")
     project_data = [
         ('Omni-PMS Redesign', 'Complete overhaul of the project management system with human-centric design approach.', users_map['admin']),
@@ -149,7 +169,7 @@ def seed():
         p.members.add(users_map['admin'], users_map['michael.k'], users_map['luna.dev'], users_map['alex.pm'])
         projects.append(p)
 
-    # 6. Create Tasks
+    # 7. Create Tasks
     print("... Creating Tasks")
     task_data = [
         (projects[0], 'Implement Light Mode Theme', 'Update all CSS variables to match the slate/indigo palette.', 'DONE', 'HIGH', users_map['michael.k'], tags[0]),
@@ -173,12 +193,14 @@ def seed():
         )
         t.tags.add(tag)
 
-    # 7. Create Tickets
+    # 8. Create Tickets
     print("... Creating Tickets")
     ticket_data = [
         ('Database Connection Timeout', 'Unexpected timeouts occurring in production every 4 hours.', 'BUG', 'CRITICAL', users_map['michael.k']),
         ('New Logo Implementation', 'Need to update the sidebar logo with the new SVG assets.', 'FEATURE', 'LOW', users_map['sarah.j']),
         ('Password Reset Loop', 'Users are reporting they cannot reset passwords.', 'IT_SUPPORT', 'HIGH', users_map['alex.pm']),
+        ('Email Service Down', 'SMTP relay is not connecting.', 'IT_SUPPORT', 'CRITICAL', users_map['sarah.j']),
+        ('Dark Mode Toggle', 'Request to add dark mode back.', 'FEATURE', 'MEDIUM', users_map['luna.dev']),
     ]
     
     for title, desc, cat, prio, sub in ticket_data:
@@ -191,6 +213,10 @@ def seed():
                 'submitted_by': sub
             }
         )
+        # Ensure SLA due date is set, even if created previously
+        if not ti.sla_due_date:
+            ti.calculate_sla()
+            ti.save()
 
     print("✅ Seeding complete successfully!")
 
