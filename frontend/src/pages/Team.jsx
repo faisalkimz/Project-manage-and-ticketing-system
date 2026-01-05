@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Mail, Shield, Search, Filter } from 'lucide-react';
+import { Mail, Shield, Search, User as UserIcon, MoreHorizontal } from 'lucide-react';
 import api from '../services/api';
 
 const Team = () => {
@@ -23,60 +23,90 @@ const Team = () => {
         u.email.toLowerCase().includes(search.toLowerCase())
     );
 
+    const roleBadgeColor = (role) => {
+        switch (role) {
+            case 'ADMIN': return 'bg-purple-100 text-purple-700 border-purple-200';
+            case 'DEVELOPER': return 'bg-blue-100 text-blue-700 border-blue-200';
+            case 'PROJECT_MANAGER': return 'bg-orange-100 text-orange-700 border-orange-200';
+            default: return 'bg-zinc-100 text-zinc-600 border-zinc-200';
+        }
+    };
+
     return (
-        <div className="p-10 max-w-7xl mx-auto space-y-10 animate-fade-in bg-slate-50/20 min-h-screen">
-            <header className="flex justify-between items-end">
+        <div className="layout-container p-6 animate-fade-in space-y-6">
+            <header className="flex justify-between items-center pb-6 border-b border-zinc-200">
                 <div>
-                    <div className="flex items-center gap-3 text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] mb-3">
-                        <Shield size={14} className="text-indigo-500" /> Human Capital
-                    </div>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tight">Team Members</h1>
-                    <p className="text-slate-500 text-sm mt-2 font-medium">Manage permissions and view organizational roles.</p>
+                    <h1 className="text-xl font-semibold text-zinc-900 tracking-tight">Team Directory</h1>
+                    <p className="text-sm text-zinc-500 mt-1">Manage workspace members and permissions.</p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="relative group">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" size={16} />
-                        <input
-                            type="text"
-                            placeholder="Find member..."
-                            className="pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:border-indigo-500 transition-all w-64 shadow-sm"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                    </div>
+                <div className="flex items-center gap-3">
+                    <button className="btn btn-secondary">Invite Member</button>
+                    <button className="btn btn-primary">Export CSV</button>
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredUsers.map((member) => (
-                    <div key={member.id} className="bg-white border border-slate-200 rounded-[2rem] p-8 flex items-center gap-6 hover:shadow-xl hover:shadow-slate-200/50 transition-all group relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-8 opacity-5 -mr-4 -mt-4 group-hover:scale-110 transition-transform">
-                            <User size={80} />
-                        </div>
+            <div className="flex items-center mb-6">
+                <div className="relative w-full max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Search by name or email..."
+                        className="input-field pl-9"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                </div>
+            </div>
 
-                        <div className="w-20 h-20 rounded-2xl bg-slate-900 border-4 border-white shadow-xl flex items-center justify-center text-white text-xl font-black shrink-0 relative z-10">
-                            {member.profile_image ? (
-                                <img src={member.profile_image} alt={member.username} className="w-full h-full object-cover rounded-xl" />
-                            ) : (
-                                member.username[0].toUpperCase()
-                            )}
-                        </div>
-
-                        <div className="relative z-10">
-                            <h3 className="text-lg font-black text-slate-900 mb-1">{member.username}</h3>
-                            <div className="flex items-center gap-2 text-xs font-medim text-slate-500 mb-3">
-                                <Mail size={12} /> {member.email}
-                            </div>
-                            <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${member.role === 'ADMIN' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                    member.role === 'DEVELOPER' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                        member.role === 'PROJECT_MANAGER' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                                            'bg-slate-50 text-slate-500 border-slate-100'
-                                }`}>
-                                {member.role || 'Unassigned'}
-                            </span>
-                        </div>
-                    </div>
-                ))}
+            <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden shadow-sm">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
+                        <tr>
+                            <th className="px-6 py-3">Member</th>
+                            <th className="px-6 py-3">Role</th>
+                            <th className="px-6 py-3">Email</th>
+                            <th className="px-6 py-3">Status</th>
+                            <th className="px-6 py-3 w-10"></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                        {filteredUsers.map((member) => (
+                            <tr key={member.id} className="group hover:bg-zinc-50 transition-colors">
+                                <td className="px-6 py-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-600 font-bold text-xs">
+                                            {member.profile_image ? (
+                                                <img src={member.profile_image} alt={member.username} className="w-full h-full object-cover rounded" />
+                                            ) : (
+                                                member.username[0].toUpperCase()
+                                            )}
+                                        </div>
+                                        <span className="font-medium text-zinc-900">{member.username}</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-3">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${roleBadgeColor(member.role)}`}>
+                                        {member.role || 'Unassigned'}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-3 text-zinc-500 font-mono text-xs">
+                                    {member.email}
+                                </td>
+                                <td className="px-6 py-3">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                        <span className="text-xs text-zinc-600">Active</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-3 text-right">
+                                    <button className="text-zinc-400 hover:text-zinc-600">
+                                        <MoreHorizontal size={16} />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );

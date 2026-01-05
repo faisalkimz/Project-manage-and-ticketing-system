@@ -1,318 +1,208 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Search, Filter, MessageSquare, Clock, Hash, MoreVertical, Paperclip, ChevronRight, X, Tag as TagIcon } from 'lucide-react';
+import { Plus, Search, Filter, AlertCircle, CheckCircle2, Clock, MoreHorizontal, ArrowUp, ArrowDown } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
 
 const Tickets = () => {
     const [tickets, setTickets] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
-    const [newTicket, setNewTicket] = useState({ title: '', description: '', category: 'OTHER', priority: 'MEDIUM' });
-    const [availableTags, setAvailableTags] = useState([]);
-    const [newTag, setNewTag] = useState({ name: '', color: '#6366F1' });
+    const [search, setSearch] = useState('');
+    const [filterStatus, setFilterStatus] = useState('ALL');
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'MEDIUM', category: 'BUG' });
     const { user } = useAuthStore();
-
-    const fetchTickets = async () => {
-        try {
-            const response = await api.get('/tickets/tickets/');
-            setTickets(response.data);
-        } catch (error) {
-            console.error('Failed to fetch tickets', error);
-        }
-    };
-
-    const fetchTags = async () => {
-        try {
-            const response = await api.get('/projects/tags/');
-            setAvailableTags(response.data);
-        } catch (error) {
-            console.error('Failed to fetch tags', error);
-        }
-    };
 
     useEffect(() => {
         fetchTickets();
-        fetchTags();
     }, []);
 
-    const handleSubmit = async (e) => {
+    const fetchTickets = async () => {
+        try {
+            const res = await api.get('/tickets/tickets/');
+            setTickets(res.data);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleCreateTicket = async (e) => {
         e.preventDefault();
         try {
-            await api.post('/tickets/tickets/', newTicket);
-            setIsModalOpen(false);
-            setNewTicket({ title: '', description: '', category: 'OTHER', priority: 'MEDIUM' });
-            fetchTickets();
-        } catch (error) {
-            console.error('Failed to create ticket', error);
+            const res = await api.post('/tickets/tickets/', newTicket);
+            setTickets([...tickets, res.data]);
+            setIsCreateModalOpen(false);
+            setNewTicket({ title: '', description: '', priority: 'MEDIUM', category: 'BUG' });
+        } catch (err) {
+            console.error(err);
         }
     };
 
-    const handleCreateTag = async () => {
-        if (!newTag.name.trim()) return;
-        try {
-            await api.post('/projects/tags/', newTag);
-            setNewTag({ name: '', color: '#6366F1' });
-            fetchTags();
-        } catch (error) {
-            console.error('Failed to create tag', error);
+    const filteredTickets = tickets.filter(t => {
+        const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) ||
+            t.ticket_number.toLowerCase().includes(search.toLowerCase());
+        const matchesStatus = filterStatus === 'ALL' || t.status === filterStatus;
+        return matchesSearch && matchesStatus;
+    });
+
+    const priorityColor = (p) => {
+        switch (p) {
+            case 'CRITICAL': return 'text-red-600 bg-red-50 border-red-200';
+            case 'HIGH': return 'text-orange-600 bg-orange-50 border-orange-200';
+            case 'MEDIUM': return 'text-amber-600 bg-amber-50 border-amber-200';
+            case 'LOW': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+            default: return 'text-zinc-600 bg-zinc-50 border-zinc-200';
         }
     };
 
-    const handleDeleteTag = async (id) => {
-        try {
-            await api.delete(`/projects/tags/${id}/`);
-            fetchTags();
-        } catch (error) {
-            console.error('Failed to delete tag', error);
-        }
-    };
-
-    const getPriorityStyle = (priority) => {
-        switch (priority) {
-            case 'CRITICAL': return 'bg-red-50 text-red-600 border-red-100';
-            case 'HIGH': return 'bg-orange-50 text-orange-600 border-orange-100';
-            case 'MEDIUM': return 'bg-blue-50 text-blue-600 border-blue-100';
-            default: return 'bg-slate-50 text-slate-500 border-slate-100';
+    const statusIcon = (s) => {
+        switch (s) {
+            case 'OPEN': return <AlertCircle size={14} className="text-zinc-500" />;
+            case 'IN_PROGRESS': return <Clock size={14} className="text-amber-500" />;
+            case 'RESOLVED': return <CheckCircle2 size={14} className="text-emerald-500" />;
+            default: return <Clock size={14} className="text-zinc-400" />;
         }
     };
 
     return (
-        <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fade-in bg-slate-50/30 min-h-screen">
-            <header className="flex justify-between items-end">
+        <div className="layout-container p-6 animate-fade-in space-y-6">
+            <header className="flex justify-between items-center pb-6 border-b border-zinc-200">
                 <div>
-                    <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em] mb-2">
-                        <Hash size={12} /> Support Center
-                    </div>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tight">Support Tickets</h1>
-                    <p className="text-slate-500 text-sm mt-1">Manage and track your service requests efficiently.</p>
+                    <h1 className="text-xl font-semibold text-zinc-900 tracking-tight">Tickets</h1>
+                    <p className="text-sm text-zinc-500 mt-1">Manage support requests and issues.</p>
                 </div>
-                <div className="flex gap-4">
-                    <button
-                        onClick={() => setIsTagsModalOpen(true)}
-                        className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-xs shadow-sm hover:border-indigo-200 hover:text-indigo-600 transition-all"
-                    >
-                        <TagIcon size={16} className="inline mr-2" /> Manage Tags
-                    </button>
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold text-xs shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
-                    >
-                        <Plus size={20} /> Create Ticket
-                    </button>
-                </div>
+                <button onClick={() => setIsCreateModalOpen(true)} className="btn btn-primary">
+                    <Plus size={16} /> New Ticket
+                </button>
             </header>
 
-            <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-100/50 overflow-hidden">
-                <div className="p-6 bg-white border-b border-slate-50 flex gap-4">
-                    <div className="relative flex-1 group">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Search tickets by title, ID or submitter..."
-                            className="w-full pl-12 pr-6 py-3 bg-slate-50/50 border-transparent focus:bg-white focus:border-indigo-500/20 focus:ring-4 focus:ring-indigo-50 rounded-2xl text-sm font-medium transition-all outline-none"
-                        />
-                    </div>
-                    <button className="px-6 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-slate-600 font-bold text-xs flex items-center gap-2 hover:bg-white hover:border-slate-200 transition-all">
-                        <Filter size={18} /> Filters
-                    </button>
+            <div className="flex items-center gap-4">
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Search tickets..."
+                        className="input-field pl-9"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
                 </div>
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-50/30 border-b border-slate-50">
-                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[40%]">Ticket Intelligence</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status Flow</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Urgency</th>
-                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {tickets.map((ticket) => (
-                                <tr key={ticket.id} className="hover:bg-indigo-50/20 transition-all group">
-                                    <td className="px-8 py-6">
-                                        <Link to={`/tickets/${ticket.id}`} className="block">
-                                            <p className="text-[10px] font-black text-indigo-500 mb-1.5 tracking-[0.1em] uppercase">{ticket.ticket_number}</p>
-                                            <h4 className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight text-base mb-2">{ticket.title}</h4>
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                                                    <Clock size={12} strokeWidth={3} /> {new Date(ticket.created_at).toLocaleDateString()}
-                                                </div>
-                                                <div className="w-1 h-1 bg-slate-200 rounded-full"></div>
-                                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                                                    <User size={12} strokeWidth={3} /> {ticket.submitted_by_details?.username}
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    </td>
-                                    <td className="px-6 py-6">
-                                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black border uppercase tracking-widest shadow-sm ${ticket.status === 'RESOLVED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                ticket.status === 'OPEN' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-slate-50 text-slate-500 border-slate-100'
-                                            }`}>
-                                            {ticket.status.replace('_', ' ')}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-6">
-                                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black border uppercase tracking-widest shadow-sm ${getPriorityStyle(ticket.priority)}`}>
-                                            {ticket.priority}
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-6 text-right">
-                                        <div className="flex items-center justify-end gap-3">
-                                            <Link to={`/tickets/${ticket.id}`} className="w-10 h-10 bg-slate-50 text-slate-400 p-2.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all flex items-center justify-center border border-transparent hover:border-indigo-100">
-                                                <ChevronRight size={18} strokeWidth={3} />
-                                            </Link>
-                                            <button className="w-10 h-10 bg-slate-50 text-slate-400 p-2.5 hover:text-slate-900 hover:bg-white rounded-xl transition-all flex items-center justify-center border border-transparent hover:border-slate-100">
-                                                <MoreVertical size={18} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="flex items-center gap-2">
+                    {['ALL', 'OPEN', 'IN_PROGRESS', 'RESOLVED'].map(status => (
+                        <button
+                            key={status}
+                            onClick={() => setFilterStatus(status)}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${filterStatus === status
+                                    ? 'bg-zinc-900 text-white border-zinc-900'
+                                    : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                                }`}
+                        >
+                            {status === 'ALL' ? 'All View' : status.replace('_', ' ')}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* Ticket Creation Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fade-in">
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200">
-                        <div className="p-10 border-b border-slate-50 bg-slate-50/50">
-                            <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-3">Post Ticket</h2>
-                            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">Our support team will review this shortly.</p>
+            <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden shadow-sm">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium select-none">
+                        <tr>
+                            <th className="px-6 py-3 w-32">ID</th>
+                            <th className="px-6 py-3">Title</th>
+                            <th className="px-6 py-3 w-32">Status</th>
+                            <th className="px-6 py-3 w-32">Priority</th>
+                            <th className="px-6 py-3 w-40">Submitted By</th>
+                            <th className="px-6 py-3 w-40 text-right">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                        {filteredTickets.map(ticket => (
+                            <tr key={ticket.id} className="group hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => window.location.href = `/tickets/${ticket.id}`}>
+                                <td className="px-6 py-3.5 font-mono text-xs text-zinc-500">
+                                    {ticket.ticket_number}
+                                </td>
+                                <td className="px-6 py-3.5 font-medium text-zinc-900">
+                                    {ticket.title}
+                                    <div className="text-xs text-zinc-400 font-normal mt-0.5 line-clamp-1">{ticket.description}</div>
+                                </td>
+                                <td className="px-6 py-3.5">
+                                    <div className="flex items-center gap-2">
+                                        {statusIcon(ticket.status)}
+                                        <span className="text-xs font-medium text-zinc-700">{ticket.status.replace('_', ' ')}</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-3.5">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${priorityColor(ticket.priority)}`}>
+                                        {ticket.priority}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-3.5">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded bg-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600">
+                                            {ticket.submitted_by_username?.[0]?.toUpperCase()}
+                                        </div>
+                                        <span className="text-xs text-zinc-600">{ticket.submitted_by_username}</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-3.5 text-right font-mono text-xs text-zinc-400">
+                                    {new Date(ticket.created_at).toLocaleDateString()}
+                                </td>
+                            </tr>
+                        ))}
+                        {filteredTickets.length === 0 && (
+                            <tr>
+                                <td colSpan="6" className="py-12 text-center text-zinc-400">No tickets found matching your filters.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Create Modal */}
+            {isCreateModalOpen && (
+                <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+                    <div className="bg-white rounded-xl shadow-xl border border-zinc-200 w-full max-w-lg overflow-hidden">
+                        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+                            <h3 className="font-semibold text-zinc-900">Create New Ticket</h3>
+                            <button onClick={() => setIsCreateModalOpen(false)} className="text-zinc-400 hover:text-zinc-600">✕</button>
                         </div>
-                        <form onSubmit={handleSubmit} className="p-10 space-y-8">
-                            <div className="space-y-3">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Subject</label>
-                                <input
-                                    type="text"
-                                    className="w-full bg-slate-50 border-transparent focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 rounded-2xl py-4 px-6 text-sm font-bold shadow-sm transition-all outline-none"
-                                    placeholder="Issue summary..."
-                                    value={newTicket.title}
-                                    onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })}
-                                    required
-                                />
+                        <form onSubmit={handleCreateTicket} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium text-zinc-700 mb-1.5">Title</label>
+                                <input type="text" required className="input-field" placeholder="Brief summary of the issue"
+                                    value={newTicket.title} onChange={e => setNewTicket({ ...newTicket, title: e.target.value })} />
                             </div>
-                            <div className="space-y-3">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Context</label>
-                                <textarea
-                                    className="w-full bg-slate-50 border-transparent focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 rounded-2xl py-4 px-6 text-sm font-medium shadow-sm transition-all outline-none min-h-[120px] resize-none"
-                                    placeholder="Detailed reports help us help you faster..."
-                                    value={newTicket.description}
-                                    onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })}
-                                    required
-                                ></textarea>
-                            </div>
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Category</label>
-                                    <select
-                                        className="w-full bg-slate-50 border-transparent focus:bg-white focus:border-indigo-600 rounded-2xl py-4 px-6 text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
-                                        value={newTicket.category}
-                                        onChange={(e) => setNewTicket({ ...newTicket, category: e.target.value })}
-                                    >
-                                        <option value="BUG">Bug Protocol</option>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Category</label>
+                                    <select className="input-field" value={newTicket.category} onChange={e => setNewTicket({ ...newTicket, category: e.target.value })}>
+                                        <option value="BUG">Bug Report</option>
                                         <option value="FEATURE">Feature Request</option>
-                                        <option value="IT_SUPPORT">Internal IT</option>
-                                        <option value="OTHER">Generic Query</option>
+                                        <option value="IT_SUPPORT">IT Support</option>
+                                        <option value="OTHER">Other</option>
                                     </select>
                                 </div>
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Priority</label>
-                                    <select
-                                        className="w-full bg-slate-50 border-transparent focus:bg-white focus:border-indigo-600 rounded-2xl py-4 px-6 text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
-                                        value={newTicket.priority}
-                                        onChange={(e) => setNewTicket({ ...newTicket, priority: e.target.value })}
-                                    >
-                                        <option value="LOW">Low Alert</option>
-                                        <option value="MEDIUM">Standard</option>
-                                        <option value="HIGH">High Alert</option>
-                                        <option value="CRITICAL">Critical Exit</option>
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Priority</label>
+                                    <select className="input-field" value={newTicket.priority} onChange={e => setNewTicket({ ...newTicket, priority: e.target.value })}>
+                                        <option value="LOW">Low</option>
+                                        <option value="MEDIUM">Medium</option>
+                                        <option value="HIGH">High</option>
+                                        <option value="CRITICAL">Critical</option>
                                     </select>
                                 </div>
                             </div>
-                            <div className="flex justify-end gap-4 pt-6">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-200 transition-all">Abort</button>
-                                <button type="submit" className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Submit Support Case</button>
+                            <div>
+                                <label className="block text-xs font-medium text-zinc-700 mb-1.5">Description</label>
+                                <textarea required rows="4" className="input-field resize-none" placeholder="Detailed description..."
+                                    value={newTicket.description} onChange={e => setNewTicket({ ...newTicket, description: e.target.value })}></textarea>
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="btn btn-secondary">Cancel</button>
+                                <button type="submit" className="btn btn-primary">Create Ticket</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-
-            {/* Manage Tags Modal (Matching Image 4) */}
-            {isTagsModalOpen && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fade-in">
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden border border-slate-200 animate-slide-up">
-                        <header className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-                            <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm"><Hash size={20} strokeWidth={3} /></div>
-                                <h2 className="text-xl font-black text-slate-900 tracking-tight">Tag Management</h2>
-                            </div>
-                            <button onClick={() => setIsTagsModalOpen(false)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><X size={24} /></button>
-                        </header>
-
-                        <div className="p-10 space-y-10">
-                            <div className="space-y-4">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] ml-1">Create Meta Identifier</label>
-                                <div className="flex gap-3">
-                                    <div className="relative flex-1 group">
-                                        <input
-                                            type="text"
-                                            className="w-full bg-slate-50 border-transparent focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 rounded-2xl py-4 px-6 text-sm font-bold shadow-sm transition-all outline-none"
-                                            placeholder="Tag name..."
-                                            value={newTag.name}
-                                            onChange={(e) => setNewTag({ ...newTag, name: e.target.value })}
-                                        />
-                                        <input
-                                            type="color"
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-transparent border-none outline-none cursor-pointer"
-                                            value={newTag.color}
-                                            onChange={(e) => setNewTag({ ...newTag, color: e.target.value })}
-                                        />
-                                    </div>
-                                    <button onClick={handleCreateTag} className="px-6 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center">Add</button>
-                                </div>
-                            </div>
-
-                            <div className="space-y-6">
-                                <div className="flex justify-between items-center px-1">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Active Library ({availableTags.length})</label>
-                                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Select to Delete</span>
-                                </div>
-                                <div className="flex flex-wrap gap-2.5">
-                                    {availableTags.map((tag) => (
-                                        <div key={tag.id} className="px-4 py-2.5 rounded-2xl border border-slate-100 bg-white text-[10px] font-black text-slate-600 flex items-center gap-3 group cursor-default shadow-sm hover:border-red-200 transition-all">
-                                            <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: tag.color }}></div>
-                                            <span style={{ color: tag.color }}>{tag.name}</span>
-                                            <button onClick={() => handleDeleteTag(tag.id)} className="text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><X size={14} strokeWidth={4} /></button>
-                                        </div>
-                                    ))}
-                                    {availableTags.length === 0 && (
-                                        <p className="text-xs text-slate-300 font-medium italic py-4 w-full text-center">No metadata identifiers initialized.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        <footer className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end">
-                            <button onClick={() => setIsTagsModalOpen(false)} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Sync Library</button>
-                        </footer>
-                    </div>
-                </div>
-            )}
-
-            <style jsx="true">{`
-                @keyframes slideUp {
-                    from { transform: translateY(20px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
-                .animate-slide-up {
-                    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-                }
-            `}</style>
         </div>
     );
 };
