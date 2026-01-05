@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'projects.apps.ProjectsConfig',
     'tickets.apps.TicketsConfig',
     'activity.apps.ActivityConfig',
+    'timetracking.apps.TimetrackingConfig',
 ]
 
 MIDDLEWARE = [

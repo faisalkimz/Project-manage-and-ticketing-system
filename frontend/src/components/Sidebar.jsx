@@ -22,7 +22,7 @@ const Sidebar = () => {
                     <div className="w-6 h-6 bg-zinc-900 rounded flex items-center justify-center text-white">
                         <Command size={14} />
                     </div>
-                    <span className="font-semibold text-sm text-zinc-900 tracking-tight">Omni System</span>
+                    <span className="font-semibold text-sm text-zinc-900 tracking-tight">Mbabali</span>
                 </div>
             </div>
 
@@ -42,8 +42,8 @@ const Sidebar = () => {
                             key={link.path}
                             to={link.path}
                             className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive
-                                    ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200'
-                                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                                ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200'
+                                : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
                                 }`}
                         >
                             <Icon size={16} className={isActive ? 'text-zinc-900' : 'text-zinc-500'} strokeWidth={2} />

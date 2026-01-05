@@ -32,7 +32,7 @@ const Login = () => {
                     <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
                         <div className="w-4 h-4 bg-slate-950 rounded-sm rotate-45"></div>
                     </div>
-                    <span className="text-xl font-bold tracking-tight text-white">Manajeks</span>
+                    <span className="text-xl font-bold tracking-tight text-white">Mbabali</span>
                 </div>
 
                 <div className="relative z-10">
@@ -61,7 +61,7 @@ const Login = () => {
                         <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                             <div className="w-4 h-4 bg-white rounded-sm rotate-45"></div>
                         </div>
-                        <span className="text-xl font-bold tracking-tight text-slate-900">Manajeks</span>
+                        <span className="text-xl font-bold tracking-tight text-slate-900">Mbabali</span>
                     </div>
 
                     <div className="mb-10">
@@ -123,15 +123,7 @@ const Login = () => {
                         </button>
                     </form>
 
-                    <div className="mt-12 p-6 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-1">Demo Credentials</span>
-                            <p className="text-sm font-bold text-slate-900">admin / <span className="text-indigo-600">admin123</span></p>
-                        </div>
-                        <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
-                            <LogIn size={20} />
-                        </div>
-                    </div>
+
                 </div>
             </div>
 
