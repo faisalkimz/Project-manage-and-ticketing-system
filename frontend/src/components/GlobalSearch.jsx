@@ -1,19 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Search,
-    X,
-    Briefcase,
-    CheckCircle2,
-    User,
-    ChevronRight,
-    Command,
-    Sparkles,
-    ArrowUpRight,
-    SearchSlash as NoResults,
-    Zap,
-    Box,
-    Layers
+    Search, X, Briefcase, User, Layers, ArrowRight, Loader
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -85,111 +73,86 @@ const GlobalSearch = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] p-6 animate-fade-in" onKeyDown={handleKeyDown}>
-            {/* Ultra-soft Backdrop */}
-            <div className="absolute inset-0 bg-zinc-900/40 backdrop-blur-2xl" onClick={onClose}></div>
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 p-4 animate-fade-in" onKeyDown={handleKeyDown}>
+            {/* Backdrop */}
+            <div className="fixed inset-0 bg-black/60" onClick={onClose}></div>
 
-            <div className="relative w-full max-w-2xl bg-white rounded-[3.5rem] shadow-[0_0_100px_rgba(0,0,0,0.15)] border border-white/20 overflow-hidden animate-slide-up">
-                {/* Search Bar Canvas */}
-                <div className="relative flex items-center h-24 px-10 border-b border-zinc-50 bg-[#FDFCFB]/50">
-                    <div className="w-12 h-12 flex items-center justify-center text-zinc-300">
-                        {loading ? <Zap size={28} className="animate-pulse text-indigo-500" /> : <Search size={28} strokeWidth={1.5} />}
-                    </div>
+            {/* Modal */}
+            <div className="relative w-full max-w-2xl bg-white rounded-sm shadow-2xl animate-scale-in flex flex-col max-h-[80vh] overflow-hidden">
+                {/* Search Header */}
+                <div className="flex items-center p-4 border-b border-[#DFE1E6]">
+                    <Search className="text-[#5E6C84] mr-3 shrink-0" size={20} />
                     <input
                         ref={inputRef}
                         type="text"
-                        placeholder="Search initiatives, tasks, or teammates..."
-                        className="flex-1 h-full bg-transparent border-none outline-none text-xl font-serif italic text-zinc-900 placeholder:text-zinc-200 px-6"
+                        placeholder="Search boards, tasks, or members..."
+                        className="flex-1 text-[#172B4D] placeholder-[#5E6C84] outline-none text-base bg-transparent font-medium"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                     />
-                    <div className="flex items-center gap-4">
-                        <div className="px-3 py-1.5 bg-zinc-50 border border-zinc-100 rounded-xl flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-zinc-400">ESC</span>
-                        </div>
-                        <button onClick={onClose} className="w-12 h-12 flex items-center justify-center hover:bg-white rounded-2xl transition-all shadow-sm">
-                            <X size={24} />
-                        </button>
-                    </div>
+                    {loading && <Loader size={16} className="text-[#0079BF] animate-spin mr-3" />}
+                    <button onClick={onClose} className="p-1 hover:bg-[#EBECF0] rounded-sm text-[#5E6C84] transition-colors">
+                        <X size={20} />
+                    </button>
                 </div>
 
-                {/* Results Storyboard */}
-                <div className="max-h-[60vh] overflow-y-auto p-10 custom-scrollbar bg-white">
-                    {query.length < 2 ? (
-                        <div className="py-20 flex flex-col items-center justify-center text-center space-y-6">
-                            <div className="w-20 h-20 bg-zinc-50 rounded-[2rem] flex items-center justify-center text-zinc-100">
-                                <Sparkles size={40} />
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-xl font-serif italic text-zinc-400">Discover your workspace</p>
-                                <p className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest leading-relaxed">Type to find what you're looking for</p>
-                            </div>
-                        </div>
-                    ) : flatResults.length === 0 && !loading ? (
-                        <div className="py-20 flex flex-col items-center justify-center text-center space-y-6">
-                            <NoResults size={48} className="text-zinc-100" />
-                            <p className="text-lg font-serif italic text-zinc-300">Nothing found for "{query}"</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-10">
-                            {flatResults.map((item, index) => (
-                                <div
-                                    key={`${item.type}-${item.id}`}
-                                    onMouseEnter={() => setActiveIndex(index)}
-                                    onClick={() => handleSelect(item)}
-                                    className={`group flex items-center gap-6 p-6 rounded-[2.5rem] transition-all cursor-pointer ${activeIndex === index
-                                            ? 'bg-zinc-900 text-white shadow-2xl scale-[1.02]'
-                                            : 'hover:bg-zinc-50/50 grayscale hover:grayscale-0'
-                                        }`}
-                                >
-                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${activeIndex === index ? 'bg-white/10' : 'bg-zinc-50 border border-zinc-100 text-zinc-300'
-                                        }`}>
-                                        {item.type === 'Project' && <Layers size={24} strokeWidth={1.5} />}
-                                        {item.type === 'Task' && <Briefcase size={24} strokeWidth={1.5} />}
-                                        {item.type === 'Person' && <User size={24} strokeWidth={1.5} />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-3">
-                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${activeIndex === index ? 'text-indigo-400' : 'text-zinc-300'}`}>
-                                                {item.type}
-                                            </span>
-                                            {item.status && (
-                                                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-md border ${activeIndex === index ? 'border-white/20 bg-white/10' : 'border-zinc-100 bg-zinc-50 text-zinc-400'
-                                                    }`}>
-                                                    {item.status}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <h4 className={`text-xl font-serif italic tracking-tight mt-1 truncate ${activeIndex === index ? 'text-white' : 'text-zinc-900'}`}>
-                                            {item.name || item.title || item.username}
-                                        </h4>
-                                    </div>
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeIndex === index ? 'bg-white/10 text-white' : 'text-zinc-100 opacity-0'
-                                        }`}>
-                                        <ArrowUpRight size={20} />
-                                    </div>
-                                </div>
-                            ))}
+                {/* Results List */}
+                <div className="overflow-y-auto p-2 custom-scrollbar bg-[#F4F5F7]">
+                    {query.length < 2 && (
+                        <div className="p-8 text-center text-[#5E6C84]">
+                            <p className="text-sm">Type to search...</p>
                         </div>
                     )}
+
+                    {query.length >= 2 && flatResults.length === 0 && !loading && (
+                        <div className="p-8 text-center text-[#5E6C84]">
+                            <p className="text-sm">No results found.</p>
+                        </div>
+                    )}
+
+                    <div className="space-y-1">
+                        {flatResults.map((item, index) => (
+                            <button
+                                key={`${item.type}-${item.id}`}
+                                onMouseEnter={() => setActiveIndex(index)}
+                                onClick={() => handleSelect(item)}
+                                className={`w-full flex items-center gap-3 p-3 text-left rounded-sm transition-colors ${activeIndex === index
+                                        ? 'bg-[#E4F0F6] text-[#0079BF]'
+                                        : 'bg-white hover:bg-[#FAFBFC] text-[#172B4D] border border-transparent hover:border-[#DFE1E6]'
+                                    } shadow-sm`}
+                            >
+                                <div className={`w-8 h-8 rounded-sm flex items-center justify-center shrink-0 ${activeIndex === index ? 'bg-[#0079BF] text-white' : 'bg-[#EBECF0] text-[#5E6C84]'
+                                    }`}>
+                                    {item.type === 'Project' && <Layers size={16} />}
+                                    {item.type === 'Task' && <Briefcase size={16} />}
+                                    {item.type === 'Person' && <User size={16} />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between mb-0.5">
+                                        <span className={`text-xs font-bold uppercase ${activeIndex === index ? 'text-[#0079BF]' : 'text-[#5E6C84]'}`}>
+                                            {item.type}
+                                        </span>
+                                        {item.status && (
+                                            <span className="text-[10px] font-semibold bg-[#EBECF0] text-[#5E6C84] px-1.5 py-0.5 rounded-sm uppercase">
+                                                {item.status.replace('_', ' ')}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h4 className="text-sm font-semibold truncate">{item.name || item.title || item.username}</h4>
+                                </div>
+                                {activeIndex === index && <ArrowRight size={16} className="shrink-0" />}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Command Footer */}
-                <div className="px-10 py-6 border-t border-zinc-50 bg-[#FDFCFB]/50 flex items-center justify-between">
-                    <div className="flex items-center gap-8">
-                        <div className="flex items-center gap-3 text-zinc-400">
-                            <div className="px-2 py-1 bg-white border border-zinc-100 rounded-lg text-[9px] font-bold">↑↓</div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest">Navigate</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-zinc-400">
-                            <div className="px-2 py-1 bg-white border border-zinc-100 rounded-lg text-[9px] font-bold">ENTER</div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest">Select</span>
-                        </div>
+                {/* Footer */}
+                <div className="px-4 py-2 bg-[#EBECF0] border-t border-[#DFE1E6] flex items-center justify-between text-xs text-[#5E6C84]">
+                    <div className="flex gap-4">
+                        <span><strong className="px-1 bg-white rounded border border-[#C1C7D0]">↑↓</strong> Navigate</span>
+                        <span><strong className="px-1 bg-white rounded border border-[#C1C7D0]">↵</strong> Select</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <Command size={14} className="text-zinc-200" />
-                        <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest italic">Mbabali Studio Portal</span>
-                    </div>
+                    <span>ESC to close</span>
                 </div>
             </div>
         </div>

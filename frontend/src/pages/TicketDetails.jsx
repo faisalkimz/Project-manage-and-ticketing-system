@@ -1,13 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-    ChevronLeft, Send, Paperclip, MoreHorizontal, User, Clock,
-    AlertCircle, Hash, MessageSquare, Plus, FileText, CheckCircle2,
-    X, ArrowRight, Tag as TagIcon, LayoutGrid, Calendar, ShieldAlert,
-    UserPlus, Check, ChevronDown, Flag, AlertTriangle, Zap,
-    History, Lock, Globe, Download, Search, Info, HelpCircle,
-    ArrowUpRight, Share2, CornerDownRight, CircleDot, Inbox,
-    ArrowRightCircle, Mail, ShieldCheck, ZapOff
+    ChevronLeft, Send, Paperclip, MoreHorizontal, User,
+    Check, ChevronDown, LayoutGrid, Zap, Mail,
+    Clock, Tag, Globe, Lock, FileText, Download, ArrowUpRight
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -25,7 +21,6 @@ const TicketDetails = () => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
 
-    const commentEndRef = useRef(null);
     const fileInputRef = useRef(null);
 
     const fetchTicket = async () => {
@@ -59,7 +54,7 @@ const TicketDetails = () => {
             await api.post('/activity/comments/', {
                 text: newComment,
                 is_internal: isInternal,
-                content_type: 'ticket',
+                content_type_name: 'ticket', // Fixed for compatibility
                 object_id: id
             });
             fetchTicket();
@@ -92,141 +87,130 @@ const TicketDetails = () => {
         }
     };
 
-    if (!ticket) return null;
+    if (!ticket) return (
+        <div className="h-screen w-full flex items-center justify-center bg-white text-[#5E6C84]">
+            Loading ticket...
+        </div>
+    );
 
     const combinedFeed = [
         ...(ticket.comments_details?.map(c => ({ ...c, type: 'comment' })) || []),
         ...(ticket.audit_logs_details?.map(l => ({ ...l, type: 'log' })) || [])
     ].sort((a, b) => new Date(a.created_at || a.timestamp) - new Date(b.created_at || b.timestamp));
 
-    const getPriorityBadge = (p) => {
-        const colors = {
-            CRITICAL: 'text-red-600 bg-red-50 border-red-100',
-            HIGH: 'text-orange-600 bg-orange-50 border-orange-100',
-            MEDIUM: 'text-amber-600 bg-amber-50 border-amber-100',
-            LOW: 'text-emerald-600 bg-emerald-50 border-emerald-100'
-        };
-        return <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${colors[p] || 'bg-zinc-50'}`}>{p}</span>;
-    };
-
-    const getStatusBadge = (s) => {
-        const colors = {
-            OPEN: 'bg-zinc-100 text-zinc-600',
-            IN_PROGRESS: 'bg-indigo-50 text-indigo-600',
-            RESOLVED: 'bg-emerald-50 text-emerald-600',
-            CLOSED: 'bg-zinc-900 text-white'
-        };
-        return <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${colors[s] || 'bg-zinc-50'}`}>{s.replace('_', ' ')}</span>;
-    };
-
     const canEdit = user?.role !== 'EMPLOYEE';
 
     return (
-        <div className="flex h-screen bg-[#FDFDFF] text-zinc-900 overflow-hidden font-sans animate-fade-in">
-            {/* Thread Area */}
-            <div className="flex-1 flex flex-col min-w-0 bg-white border-r border-zinc-100">
-                {/* Header */}
-                <header className="h-[72px] flex items-center justify-between px-8 border-b border-zinc-50 sticky top-0 bg-white/80 backdrop-blur-md z-40">
-                    <div className="flex items-center gap-4 min-w-0">
-                        <button onClick={() => navigate('/tickets')} className="w-10 h-10 flex items-center justify-center hover:bg-zinc-50 rounded-xl transition-all text-zinc-400 hover:text-zinc-900">
-                            <ChevronLeft size={20} />
-                        </button>
-                        <div className="flex flex-col min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{ticket.ticket_number}</span>
-                                <span className="w-1 h-1 bg-zinc-200 rounded-full"></span>
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{ticket.category}</span>
-                            </div>
-                            <h2 className="text-sm font-bold truncate text-zinc-900">{ticket.title}</h2>
+        <div className="min-h-screen bg-[#F9FAFB] text-[#172B4D] font-sans flex flex-col">
+            {/* Header */}
+            <header className="h-14 bg-white border-b border-[#DFE1E6] flex items-center justify-between px-6 shrink-0 sticky top-0 z-40">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => navigate('/tickets')}
+                        className="p-2 hover:bg-[#EBECF0] rounded text-[#5E6C84] transition-colors"
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
+                    <div>
+                        <div className="flex items-center gap-2 text-xs font-semibold text-[#5E6C84] uppercase tracking-wider mb-0.5">
+                            <span>{ticket.ticket_number}</span>
+                            <span className="w-1 h-1 rounded-full bg-[#DFE1E6]" />
+                            <span>{ticket.category}</span>
                         </div>
+                        <h1 className="text-sm font-bold text-[#172B4D] truncate max-w-md">{ticket.title}</h1>
                     </div>
-                    <div className="flex items-center gap-3">
-                        {ticket.status !== 'RESOLVED' && canEdit && (
-                            <button
-                                onClick={() => handleUpdateField('status', 'RESOLVED')}
-                                className="h-9 px-5 bg-zinc-900 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-100 flex items-center gap-2"
-                            >
-                                <Check size={14} /> Resolve Request
-                            </button>
-                        )}
-                        <button className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 rounded-lg transition-all">
-                            <MoreHorizontal size={18} />
-                        </button>
-                    </div>
-                </header>
+                </div>
 
-                {/* Conversation Body */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
-                    <div className="max-w-4xl w-full mx-auto px-10 py-12">
-                        {/* Summary Section */}
-                        <div className="mb-16">
-                            <div className="flex items-center gap-4 mb-8">
-                                <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center text-white shadow-xl shadow-zinc-200">
-                                    <Mail size={20} />
+                <div className="flex items-center gap-2">
+                    {ticket.status !== 'RESOLVED' && canEdit && (
+                        <button
+                            onClick={() => handleUpdateField('status', 'RESOLVED')}
+                            className="px-3 h-8 bg-[#0079BF] text-white rounded text-sm font-semibold hover:bg-[#026AA7] transition-colors flex items-center gap-2 shadow-sm"
+                        >
+                            <Check size={14} /> Resolve
+                        </button>
+                    )}
+                    <button className="p-2 hover:bg-[#EBECF0] rounded text-[#5E6C84]">
+                        <MoreHorizontal size={18} />
+                    </button>
+                </div>
+            </header>
+
+            {/* Content Body */}
+            <div className="flex flex-1 overflow-hidden">
+                {/* Main Thread */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
+                    <div className="max-w-3xl mx-auto space-y-8">
+                        {/* Description Card */}
+                        <div className="bg-white rounded-lg shadow-sm border border-[#DFE1E6] overflow-hidden">
+                            <div className="p-4 bg-[#F4F5F7] border-b border-[#DFE1E6] flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-[#172B4D] font-bold text-xs ring-2 ring-white">
+                                        {ticket.submitted_by_username[0].toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-[#172B4D]">{ticket.submitted_by_username}</p>
+                                        <p className="text-xs text-[#5E6C84]">{new Date(ticket.created_at).toLocaleString()}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Initial Request</p>
-                                    <p className="text-xs font-medium text-zinc-500">Submitted by {ticket.submitted_by_username} · {new Date(ticket.created_at).toLocaleDateString()}</p>
+                                <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${ticket.status === 'OPEN' ? 'bg-green-100 text-green-700' :
+                                            ticket.status === 'RESOLVED' ? 'bg-slate-100 text-slate-700' : 'bg-blue-100 text-blue-700'
+                                        }`}>
+                                        {ticket.status.replace('_', ' ')}
+                                    </span>
                                 </div>
                             </div>
-                            <div className="bg-zinc-50/50 rounded-[2rem] p-10 border border-zinc-100">
-                                <p className="text-base text-zinc-700 leading-relaxed font-medium whitespace-pre-wrap">
+                            <div className="p-6">
+                                <p className="text-sm text-[#172B4D] leading-relaxed whitespace-pre-wrap">
                                     {ticket.description}
                                 </p>
                             </div>
-
                             {ticket.attachments_details?.length > 0 && (
-                                <div className="flex flex-wrap gap-4 mt-8">
+                                <div className="px-6 pb-6 pt-0 flex flex-wrap gap-2">
                                     {ticket.attachments_details.map(file => (
-                                        <a key={file.id} href={file.file} target="_blank" className="flex items-center gap-3 px-5 py-3 bg-white border border-zinc-100 rounded-2xl group hover:border-zinc-900 transition-all shadow-sm">
-                                            <FileText size={16} className="text-zinc-400" />
-                                            <span className="text-xs font-bold text-zinc-600 truncate max-w-[150px]">{file.file.split('/').pop()}</span>
-                                            <Download size={14} className="text-zinc-300 group-hover:text-zinc-900 transition-colors" />
+                                        <a
+                                            key={file.id}
+                                            href={file.file}
+                                            target="_blank"
+                                            className="flex items-center gap-2 px-3 py-2 bg-[#F4F5F7] rounded hover:bg-[#EBECF0] text-sm text-[#172B4D] border border-transparent hover:border-[#DFE1E6] transition-all"
+                                        >
+                                            <FileText size={14} className="text-[#5E6C84]" />
+                                            <span className="truncate max-w-[120px]">{file.file.split('/').pop()}</span>
+                                            <Download size={12} className="text-[#5E6C84]" />
                                         </a>
                                     ))}
                                 </div>
                             )}
                         </div>
 
-                        {/* Thread Divider */}
-                        <div className="flex items-center gap-4 mb-16">
-                            <div className="h-[1px] flex-1 bg-zinc-100"></div>
-                            <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-[0.2em]">Activity Log</span>
-                            <div className="h-[1px] flex-1 bg-zinc-100"></div>
-                        </div>
-
-                        {/* Thread Messages */}
-                        <div className="space-y-12">
+                        {/* Activity Feed */}
+                        <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-[#EBECF0]">
                             {combinedFeed.map((item, i) => (
-                                <div key={i} className="animate-fade-in group">
+                                <div key={i} className="relative animate-fade-in">
                                     {item.type === 'comment' ? (
-                                        <div className={`flex gap-6 ${item.is_internal ? 'bg-indigo-50/20 -mx-6 px-6 py-6 rounded-[2rem] border border-indigo-100/50 shadow-sm' : ''}`}>
-                                            <div className="w-10 h-10 rounded-2xl bg-white border border-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-500 shadow-sm group-hover:scale-110 transition-transform">
-                                                {item.user_details.username[0].toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-sm font-bold text-zinc-900">{item.user_details.username}</span>
-                                                        {item.is_internal && (
-                                                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded-lg text-[9px] font-bold uppercase">
-                                                                <Lock size={10} /> Private
-                                                            </div>
-                                                        )}
-                                                        <span className="text-[10px] text-zinc-300 font-bold uppercase tracking-tight">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        <div className={`p-4 rounded-lg border shadow-sm ${item.is_internal
+                                                ? 'bg-[#FFF0B3]/20 border-[#FFFAE6]'
+                                                : 'bg-white border-[#DFE1E6]'
+                                            }`}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-sm text-[#172B4D]">{item.user_details.username}</span>
+                                                    <span className="text-xs text-[#5E6C84]">{new Date(item.created_at).toLocaleString()}</span>
+                                                </div>
+                                                {item.is_internal && (
+                                                    <div className="px-1.5 py-0.5 rounded bg-[#FFFAE6] text-[#FF991F] text-[10px] font-bold border border-[#FFF0B3] flex items-center gap-1">
+                                                        <Lock size={10} /> Internal
                                                     </div>
-                                                </div>
-                                                <div className="text-sm text-zinc-600 leading-relaxed">
-                                                    {item.text}
-                                                </div>
+                                                )}
                                             </div>
+                                            <p className="text-sm text-[#172B4D] whitespace-pre-wrap">{item.text}</p>
                                         </div>
                                     ) : (
-                                        <div className="flex items-center gap-4 pl-16">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-200"></div>
-                                            <p className="text-[11px] font-medium text-zinc-400">
-                                                <span className="font-bold text-zinc-500 uppercase tracking-widest mr-2">{item.action}</span>
-                                                by {item.user_details?.username || 'System'}
+                                        <div className="flex items-center gap-3 ml-2">
+                                            <div className="w-2 h-2 rounded-full bg-[#DFE1E6] -ml-[1.4rem] ring-4 ring-[#F9FAFB]" />
+                                            <p className="text-xs text-[#5E6C84]">
+                                                <span className="font-semibold text-[#172B4D]">{item.user_details?.username}</span> {item.action}
                                             </p>
                                         </div>
                                     )}
@@ -236,184 +220,143 @@ const TicketDetails = () => {
                     </div>
                 </div>
 
-                {/* Response Input */}
-                <div className="p-6 bg-white border-t border-zinc-50">
-                    <div className="max-w-4xl mx-auto flex gap-4">
-                        <div className="flex-1 relative flex items-center group">
-                            <button
-                                onClick={() => setIsInternal(!isInternal)}
-                                className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all shrink-0 mr-3 ${isInternal ? 'bg-indigo-600 border-indigo-600 text-white shadow-xl shadow-indigo-200' : 'bg-zinc-50 border-zinc-100 text-zinc-300 hover:text-zinc-500 hover:border-zinc-200'}`}
-                                title={isInternal ? "Switch to Team Thread" : "Switch to Internal Note"}
-                            >
-                                {isInternal ? <Lock size={20} /> : <Globe size={20} />}
-                            </button>
-                            <div className="flex-1 relative">
-                                <input
-                                    type="text"
-                                    placeholder={isInternal ? "Add an internal team note..." : "Share an update with the user..."}
-                                    className={`w-full h-12 bg-zinc-50 border border-zinc-100 rounded-2xl px-6 text-sm font-medium focus:bg-white outline-none transition-all ${isInternal ? 'focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100/30' : 'focus:border-zinc-900 focus:ring-4 focus:ring-zinc-100/50'}`}
-                                    value={newComment}
-                                    onChange={e => setNewComment(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handlePostComment()}
-                                />
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                    <button onClick={() => fileInputRef.current?.click()} className="p-2 text-zinc-300 hover:text-zinc-600 transition-colors">
-                                        <Paperclip size={18} />
-                                        <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => { }} />
-                                    </button>
+                {/* Sidebar */}
+                <aside className="w-80 bg-white border-l border-[#DFE1E6] p-6 space-y-8 overflow-y-auto">
+                    {/* Input Area */}
+                    <div className="space-y-3">
+                        <h3 className="text-xs font-bold text-[#5E6C84] uppercase">Reply</h3>
+                        <div className="border border-[#DFE1E6] rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#0079BF] focus-within:border-transparent transition-shadow">
+                            <textarea
+                                placeholder={isInternal ? "Add an internal note..." : "Reply to customer..."}
+                                className={`w-full min-h-[100px] p-3 text-sm outline-none resize-none ${isInternal ? 'bg-[#FFF0B3]/10' : 'bg-white'}`}
+                                value={newComment}
+                                onChange={e => setNewComment(e.target.value)}
+                            />
+                            <div className={`px-2 py-2 border-t border-[#DFE1E6] bg-[#F4F5F7] flex items-center justify-between ${isInternal ? 'bg-[#FFF0B3]/20' : ''}`}>
+                                <div className="flex items-center gap-1">
                                     <button
-                                        onClick={handlePostComment}
-                                        disabled={!newComment.trim()}
-                                        className="h-9 w-9 flex items-center justify-center bg-zinc-900 text-white rounded-xl shadow-lg shadow-zinc-200 active:scale-95 transition-all disabled:opacity-20"
+                                        onClick={() => setIsInternal(!isInternal)}
+                                        className={`p-1.5 rounded transition-colors ${isInternal ? 'bg-[#FFFAE6] text-[#FF991F]' : 'hover:bg-[#EBECF0] text-[#5E6C84]'}`}
+                                        title="Toggle Internal Note"
                                     >
-                                        <Send size={16} />
+                                        {isInternal ? <Lock size={16} /> : <Globe size={16} />}
+                                    </button>
+                                    <button className="p-1.5 hover:bg-[#EBECF0] rounded text-[#5E6C84]">
+                                        <Paperclip size={16} />
                                     </button>
                                 </div>
+                                <button
+                                    onClick={handlePostComment}
+                                    disabled={!newComment.trim()}
+                                    className="px-3 py-1.5 bg-[#0079BF] text-white rounded text-xs font-semibold hover:bg-[#026AA7] disabled:opacity-50 transition-colors"
+                                >
+                                    Send
+                                </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Meta Sidebar */}
-            <aside className="w-[360px] bg-[#FDFDFF] p-10 overflow-y-auto space-y-12">
-                <section>
-                    <h3 className="text-[10px] font-bold text-zinc-300 uppercase tracking-[0.25em] mb-8">Metadata</h3>
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-zinc-400">Current Status</span>
+                    <div className="h-px bg-[#DFE1E6]" />
+
+                    {/* Metadata */}
+                    <div className="space-y-4">
+                        <h3 className="text-xs font-bold text-[#5E6C84] uppercase">Details</h3>
+
+                        <div className="space-y-1">
+                            <label className="text-xs text-[#5E6C84]">Status</label>
                             {canEdit ? (
                                 <select
-                                    className="appearance-none bg-transparent border-none text-xs font-bold text-zinc-900 outline-none text-right cursor-pointer hover:text-indigo-600 transition-colors"
+                                    className="w-full h-9 px-2 bg-[#F4F5F7] border border-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] outline-none focus:border-[#0079BF]"
                                     value={ticket.status}
                                     onChange={e => handleUpdateField('status', e.target.value)}
                                 >
                                     <option value="OPEN">Open</option>
-                                    <option value="IN_PROGRESS">Progressing</option>
+                                    <option value="IN_PROGRESS">In Progress</option>
                                     <option value="RESOLVED">Resolved</option>
-                                    <option value="CLOSED">Archived</option>
+                                    <option value="CLOSED">Closed</option>
                                 </select>
-                            ) : getStatusBadge(ticket.status)}
+                            ) : (
+                                <div className="text-sm font-medium text-[#172B4D]">{ticket.status.replace('_', ' ')}</div>
+                            )}
                         </div>
 
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-zinc-400">Priority Level</span>
+                        <div className="space-y-1">
+                            <label className="text-xs text-[#5E6C84]">Priority</label>
                             {canEdit ? (
                                 <select
-                                    className="appearance-none bg-transparent border-none text-xs font-bold text-zinc-900 outline-none text-right cursor-pointer hover:text-indigo-600 transition-colors"
+                                    className="w-full h-9 px-2 bg-[#F4F5F7] border border-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] outline-none focus:border-[#0079BF]"
                                     value={ticket.priority}
                                     onChange={e => handleUpdateField('priority', e.target.value)}
                                 >
-                                    <option value="LOW">Routine</option>
-                                    <option value="MEDIUM">Standard</option>
-                                    <option value="HIGH">High Priority</option>
+                                    <option value="LOW">Low</option>
+                                    <option value="MEDIUM">Medium</option>
+                                    <option value="HIGH">High</option>
                                     <option value="CRITICAL">Critical</option>
                                 </select>
-                            ) : getPriorityBadge(ticket.priority)}
+                            ) : (
+                                <div className="text-sm font-medium text-[#172B4D]">{ticket.priority}</div>
+                            )}
                         </div>
 
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-zinc-400">Resolution Lead</span>
+                        <div className="space-y-1">
+                            <label className="text-xs text-[#5E6C84]">Assignee</label>
                             {canEdit ? (
                                 <select
-                                    className="appearance-none bg-transparent border-none text-xs font-bold text-zinc-900 outline-none text-right cursor-pointer hover:text-indigo-600 transition-colors max-w-[140px]"
+                                    className="w-full h-9 px-2 bg-[#F4F5F7] border border-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] outline-none focus:border-[#0079BF]"
                                     value={ticket.assigned_to || ''}
                                     onChange={e => handleUpdateField('assigned_to', e.target.value)}
                                 >
-                                    <option value="">Choose Lead...</option>
+                                    <option value="">Unassigned</option>
                                     {users.map(u => (
                                         <option key={u.id} value={u.id}>{u.username}</option>
                                     ))}
                                 </select>
                             ) : (
-                                <span className="text-xs font-bold text-zinc-900">{ticket.assigned_to_details?.username || 'Unassigned'}</span>
+                                <div className="text-sm font-medium text-[#172B4D]">{ticket.assigned_to_details?.username || 'Unassigned'}</div>
                             )}
                         </div>
                     </div>
-                </section>
 
-                <section>
-                    <h3 className="text-[10px] font-bold text-zinc-300 uppercase tracking-[0.25em] mb-8">Performance (SLA)</h3>
-                    <div className="bg-white rounded-[2rem] p-8 border border-zinc-100 shadow-sm space-y-6">
-                        <div className="flex justify-between items-start">
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Time Budget</p>
-                                <p className={`text-3xl font-bold tracking-tight ${ticket.time_remaining_hours < 0 ? 'text-red-600' : 'text-zinc-900'}`}>
-                                    {ticket.time_remaining_hours || 0}h
-                                </p>
-                            </div>
-                            <div className={`p-2 rounded-xl ${ticket.time_remaining_hours < 0 ? 'bg-red-50 text-red-600' : 'bg-zinc-50 text-zinc-400'}`}>
-                                {ticket.time_remaining_hours < 0 ? <AlertCircle size={20} /> : <Zap size={20} />}
-                            </div>
-                        </div>
-                        <div className="h-1.5 bg-zinc-50 rounded-full overflow-hidden">
-                            <div
-                                className={`h-full transition-all duration-1000 ${ticket.time_remaining_hours < 5 ? 'bg-red-500' : 'bg-zinc-900'}`}
-                                style={{ width: `${Math.max(0, Math.min(100, (ticket.time_remaining_hours / 48) * 100))}%` }}
-                            ></div>
-                        </div>
-                        <p className="text-[10px] font-bold text-zinc-400 text-center uppercase tracking-widest leading-relaxed">
-                            Target Resolution: {ticket.sla_due_date ? new Date(ticket.sla_due_date).toLocaleDateString() : 'N/A'}
-                        </p>
-                    </div>
-                </section>
-
-                <section>
-                    <h3 className="text-[10px] font-bold text-zinc-300 uppercase tracking-[0.25em] mb-8">Escalation Sync</h3>
-                    {!ticket.project_task ? (
-                        <div className="bg-white rounded-[2.5rem] p-8 border border-zinc-100 shadow-sm space-y-6">
-                            <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                                    <LayoutGrid size={20} />
-                                </div>
-                                <p className="text-xs font-semibold text-zinc-500 leading-relaxed">Sync this request to a development stream.</p>
-                            </div>
-                            <div className="space-y-4">
-                                <div className="relative">
+                    {/* Developer Tools */}
+                    {canEdit && (
+                        <div className="bg-[#EBECF0]/50 p-4 rounded-lg border border-[#DFE1E6]">
+                            <h4 className="text-xs font-bold text-[#172B4D] uppercase mb-3 flex items-center gap-2">
+                                <LayoutGrid size={14} /> Developer Actions
+                            </h4>
+                            {!ticket.project_task ? (
+                                <div className="space-y-2">
+                                    <p className="text-xs text-[#5E6C84] mb-2">Convert this ticket to a task to start tracking work.</p>
                                     <select
-                                        className="w-full h-12 bg-zinc-50 border border-zinc-100 rounded-2xl text-xs font-bold px-5 appearance-none outline-none focus:bg-white transition-all cursor-pointer"
+                                        className="w-full h-9 px-2 bg-white border border-[#DFE1E6] rounded text-xs outline-none focus:border-[#0079BF]"
                                         value={selectedProject}
                                         onChange={e => setSelectedProject(e.target.value)}
                                     >
-                                        <option value="">Stream Selection...</option>
+                                        <option value="">Select Project...</option>
                                         {projects.map(p => (
                                             <option key={p.id} value={p.id}>{p.name}</option>
                                         ))}
                                     </select>
-                                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-300 pointer-events-none" />
+                                    <button
+                                        onClick={handleConvert}
+                                        disabled={!selectedProject || isConverting}
+                                        className="w-full h-8 bg-[#172B4D] text-white rounded text-xs font-bold hover:bg-[#253858] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {isConverting ? 'Linking...' : 'Convert to Task'}
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={handleConvert}
-                                    disabled={!selectedProject || isConverting}
-                                    className="w-full h-12 bg-zinc-900 text-white rounded-2xl text-xs font-bold hover:bg-zinc-800 disabled:opacity-20 transition-all shadow-lg shadow-zinc-100 flex items-center justify-center gap-2"
-                                >
-                                    {isConverting ? 'Processing...' : <><Zap size={14} /> Initialize Task</>}
-                                </button>
-                            </div>
+                            ) : (
+                                <Link to={`/projects/${ticket.project_task_details?.project}`} className="block group">
+                                    <p className="text-xs text-[#5E6C84] mb-1">Linked Task</p>
+                                    <div className="flex items-center justify-between p-2 bg-white rounded border border-[#DFE1E6] group-hover:border-[#0079BF] transition-colors">
+                                        <span className="text-xs font-medium text-[#172B4D] truncate">{ticket.project_task_details?.title}</span>
+                                        <ArrowUpRight size={14} className="text-[#5E6C84]" />
+                                    </div>
+                                </Link>
+                            )}
                         </div>
-                    ) : (
-                        <Link
-                            to={`/projects/${ticket.project_task_details?.project}`}
-                            className="flex flex-col gap-2 p-6 bg-white border border-zinc-100 rounded-3xl hover:border-indigo-500/30 group transition-all"
-                        >
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Linked Initiative</span>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-bold text-zinc-900 group-hover:text-indigo-600 truncate">{ticket.project_task_details?.title}</span>
-                                <ArrowUpRight size={16} className="text-zinc-300 group-hover:text-indigo-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
-                            </div>
-                        </Link>
                     )}
-                </section>
-
-                <div className="pt-10 flex items-center justify-between px-2">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400">
-                            <User size={14} />
-                        </div>
-                        <span className="text-xs font-bold text-zinc-500">{ticket.submitted_by_username}</span>
-                    </div>
-                </div>
-            </aside>
+                </aside>
+            </div>
         </div>
     );
 };

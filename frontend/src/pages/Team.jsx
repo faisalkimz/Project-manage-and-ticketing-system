@@ -1,359 +1,480 @@
 import { useState, useEffect } from 'react';
-import { Mail, Search, UserPlus, X, Users, Trash2, Plus } from 'lucide-react';
+import {
+    Users, UserPlus, Mail, Edit2, Trash2,
+    Search, X, Check, Plus, Settings, MoreHorizontal,
+    Briefcase, Shield, Filter
+} from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
 
 const Team = () => {
     const { user: currentUser } = useAuthStore();
-    const [view, setView] = useState('members');
+    const [activeTab, setActiveTab] = useState('structure');
+    const [users, setUsers] = useState([]);
     const [teams, setTeams] = useState([]);
-    const [directory, setDirectory] = useState([]);
     const [invites, setInvites] = useState([]);
     const [search, setSearch] = useState('');
+
+    // Modal States
     const [isCreateTeamModalOpen, setIsCreateTeamModalOpen] = useState(false);
-    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const [isManageTeamModalOpen, setIsManageTeamModalOpen] = useState(false);
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
+    // Data States
+    const [newTeam, setNewTeam] = useState({ name: '', description: '', members: [] });
     const [selectedTeam, setSelectedTeam] = useState(null);
-    const [newTeam, setNewTeam] = useState({ name: '', description: '' });
-    const [inviteForm, setInviteForm] = useState({ email: '', role_name: 'EMPLOYEE' });
-    const [memberSearch, setMemberSearch] = useState('');
+    const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteRole, setInviteRole] = useState('EMPLOYEE');
+    const [loading, setLoading] = useState(false);
+    const [activeUserMenu, setActiveUserMenu] = useState(null);
 
     const fetchData = async () => {
         try {
-            const [teamsRes, usersRes, invitesRes] = await Promise.all([
-                api.get('/users/teams/'),
+            const [usersRes, teamsRes, invitesRes] = await Promise.all([
                 api.get('/users/list/'),
+                api.get('/users/teams/'),
                 api.get('/users/invites/')
             ]);
+            setUsers(usersRes.data);
             setTeams(teamsRes.data);
-            setDirectory(usersRes.data);
             setInvites(invitesRes.data);
-        } catch (error) { console.error(error); }
+        } catch (error) { console.error('Failed to fetch data', error); }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
+    // Handlers
     const handleCreateTeam = async (e) => {
         e.preventDefault();
         try {
             await api.post('/users/teams/', newTeam);
             setIsCreateTeamModalOpen(false);
-            setNewTeam({ name: '', description: '' });
+            setNewTeam({ name: '', description: '', members: [] });
             fetchData();
-        } catch (error) { console.error(error); }
+        } catch (e) { alert('Failed to create team.'); }
     };
 
     const handleInvite = async (e) => {
         e.preventDefault();
+        setLoading(true);
         try {
-            await api.post('/users/invites/', inviteForm);
+            await api.post('/users/invites/', { email: inviteEmail, role_name: inviteRole });
             setIsInviteModalOpen(false);
-            setInviteForm({ email: '', role_name: 'EMPLOYEE' });
+            setInviteEmail('');
             fetchData();
-        } catch (error) { console.error(error); }
+            alert(`Invitation sent to ${inviteEmail}`);
+        } catch (e) { alert('Invite failed.'); } finally { setLoading(false); }
     };
 
-    const toggleMember = async (team, userId) => {
-        const isMember = team.members.includes(userId);
-        const newMembers = isMember ? team.members.filter(id => id !== userId) : [...team.members, userId];
-        try {
-            const res = await api.patch(`/users/teams/${team.id}/`, { members: newMembers });
-            setTeams(teams.map(t => t.id === team.id ? res.data : t));
-            setSelectedTeam(res.data);
-        } catch (error) { console.error(error); }
+    const toggleTeamMember = async (userId) => {
+        if (!selectedTeam) return;
+        const current = selectedTeam.members || [];
+        const updated = current.includes(userId) ? current.filter(id => id !== userId) : [...current, userId];
+
+        // Optimistic update
+        const newDetails = users.filter(u => updated.includes(u.id));
+        setSelectedTeam({ ...selectedTeam, members: updated, members_details: newDetails });
+
+        try { await api.patch(`/users/teams/${selectedTeam.id}/`, { members: updated }); fetchData(); }
+        catch (e) { console.error(e); }
     };
 
-    const deleteTeam = async (teamId) => {
-        if (!confirm('Delete this team?')) return;
+    const handleDeleteTeam = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this team?")) return;
         try {
-            await api.delete(`/users/teams/${teamId}/`);
+            await api.delete(`/users/teams/${id}/`);
             setIsManageTeamModalOpen(false);
             fetchData();
-        } catch (error) { console.error(error); }
+        } catch (e) { alert("Could not delete team."); }
+    }
+
+    const handleSettingsClick = () => {
+        alert("Team settings customization is coming soon!");
     };
 
-    const getRoleBadge = (role) => {
-        const colors = {
-            ADMIN: 'bg-[#C377E0]',
-            DEVELOPER: 'bg-[#0079BF]',
-            PROJECT_MANAGER: 'bg-[#FF9F1A]',
-            EMPLOYEE: 'bg-[#61BD4F]'
-        };
-        return colors[role] || colors.EMPLOYEE;
+    const handleUpdateUserRole = async (userId, newRole) => {
+        try {
+            await api.patch(`/users/${userId}/`, { role: newRole });
+            setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+            setActiveUserMenu(null);
+        } catch (e) { alert('Failed to update role'); }
     };
 
-    const filteredMembers = directory.filter(u =>
-        u.username.toLowerCase().includes(search.toLowerCase())
-    );
+    const handleToggleUserStatus = async (userId, userIsActive) => {
+        try {
+            await api.patch(`/users/${userId}/`, { is_active: !userIsActive });
+            setUsers(users.map(u => u.id === userId ? { ...u, is_active: !userIsActive } : u));
+            setActiveUserMenu(null);
+        } catch (e) { alert('Failed to update status'); }
+    };
+
+    const filteredUsers = users.filter(u => u.username.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()));
+
+    const getRoleParams = (role) => {
+        switch (role) {
+            case 'ADMIN': return { bg: 'bg-purple-100', text: 'text-purple-700' };
+            case 'DEVELOPER': return { bg: 'bg-blue-100', text: 'text-blue-700' };
+            case 'PROJECT_MANAGER': return { bg: 'bg-orange-100', text: 'text-orange-700' };
+            default: return { bg: 'bg-green-100', text: 'text-green-700' };
+        }
+    };
 
     return (
-        <div className="min-h-screen bg-[#FAFBFC] p-6">
-            {/* Header */}
-            <header className="flex items-center justify-between mb-8">
-                <div>
-                    <h1 className="text-2xl font-semibold text-[#172B4D] mb-1">Team Management</h1>
-                    <p className="text-sm text-[#5E6C84]">Manage team members and groups</p>
-                </div>
-                <button
-                    onClick={() => setIsInviteModalOpen(true)}
-                    className="trello-btn trello-btn-primary"
-                >
-                    <UserPlus size={16} />
-                    <span>Invite</span>
-                </button>
-            </header>
-
-            {/* Tabs */}
-            <div className="flex items-center gap-2 mb-6">
-                <button
-                    onClick={() => setView('members')}
-                    className={`trello-btn ${view === 'members' ? 'trello-btn-primary' : 'trello-btn-secondary'}`}
-                >
-                    Members
-                </button>
-                <button
-                    onClick={() => setView('teams')}
-                    className={`trello-btn ${view === 'teams' ? 'trello-btn-primary' : 'trello-btn-secondary'}`}
-                >
-                    Teams
-                </button>
-                {invites.length > 0 && (
-                    <button
-                        onClick={() => setView('invites')}
-                        className={`trello-btn ${view === 'invites' ? 'trello-btn-primary' : 'trello-btn-secondary'}`}
-                    >
-                        Pending Invites ({invites.length})
-                    </button>
-                )}
-            </div>
-
-            {/* Search */}
-            {view === 'members' && (
-                <div className="mb-6 max-w-md">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5E6C84]" size={16} />
-                        <input
-                            type="text"
-                            placeholder="Search members..."
-                            className="trello-input pl-10"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                    </div>
-                </div>
-            )}
-
-            {/* Content */}
-            {view === 'members' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredMembers.map(member => (
-                        <div key={member.id} className="bg-white border border-[#DFE1E6] rounded-sm p-4 hover:shadow-md transition-shadow">
-                            <div className="flex items-start gap-3">
-                                <div className="w-12 h-12 rounded-full bg-[#DFE1E6] flex items-center justify-center text-base font-semibold text-[#172B4D] shrink-0">
-                                    {member.username[0].toUpperCase()}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-sm font-semibold text-[#172B4D] truncate">{member.username}</h3>
-                                    <p className="text-xs text-[#5E6C84] truncate">{member.email || 'No email'}</p>
-                                    <div className="mt-2">
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium text-white ${getRoleBadge(member.role)}`}>
-                                            {member.role?.replace('_', ' ') || 'Employee'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
+        <div className="min-h-screen bg-[#F9FAFB] p-6 font-sans text-[#172B4D]">
+            {/* Professional Header */}
+            <div className="max-w-7xl mx-auto">
+                <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                    <div>
+                        <div className="flex items-center gap-2 text-[#5E6C84] mb-1">
+                            <Briefcase size={16} />
+                            <span className="text-sm font-medium uppercase tracking-wide">Workspace</span>
                         </div>
-                    ))}
-                </div>
-            )}
-
-            {view === 'teams' && (
-                <div>
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-lg font-semibold text-[#172B4D]">Teams</h2>
+                        <h1 className="text-2xl font-semibold text-[#172B4D]">Team Management</h1>
+                    </div>
+                    <div className="flex gap-3">
                         <button
-                            onClick={() => setIsCreateTeamModalOpen(true)}
-                            className="trello-btn trello-btn-primary"
+                            onClick={handleSettingsClick}
+                            className="flex items-center gap-2 px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded-[3px] font-medium transition-colors"
                         >
-                            <Plus size={16} />
-                            <span>Create Team</span>
+                            <Settings size={16} />
+                            <span>Settings</span>
+                        </button>
+                        <button
+                            onClick={() => setIsInviteModalOpen(true)}
+                            className="flex items-center gap-2 px-3 py-2 bg-[#0079BF] hover:bg-[#026AA7] text-white rounded-[3px] font-medium transition-colors shadow-sm"
+                        >
+                            <UserPlus size={16} />
+                            <span>Invite Member</span>
                         </button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {teams.map(team => (
-                            <div
-                                key={team.id}
-                                onClick={() => { setSelectedTeam(team); setIsManageTeamModalOpen(true); }}
-                                className="bg-white border border-[#DFE1E6] rounded-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
+                </header>
+
+                {/* Tabs */}
+                <div className="border-b border-[#DFE1E6] mb-8">
+                    <div className="flex gap-6">
+                        {[
+                            { id: 'structure', label: 'Teams & Groups' },
+                            { id: 'members', label: 'All Members' },
+                            { id: 'invites', label: `Pending Invites (${invites.length})` }
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
+                                    ? 'border-[#0079BF] text-[#0079BF]'
+                                    : 'border-transparent text-[#5E6C84] hover:text-[#172B4D] hover:border-[#DFE1E6]'
+                                    }`}
                             >
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-10 h-10 bg-[#0079BF] rounded-sm flex items-center justify-center text-white">
-                                        <Users size={20} />
-                                    </div>
-                                    <h3 className="text-base font-semibold text-[#172B4D]">{team.name}</h3>
-                                </div>
-                                <p className="text-sm text-[#5E6C84] mb-3 line-clamp-2">{team.description || 'No description'}</p>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs text-[#5E6C84]">{team.member_count || 0} members</span>
-                                    <div className="flex -space-x-2">
-                                        {team.members_details?.slice(0, 3).map((m, i) => (
-                                            <div
-                                                key={i}
-                                                className="w-6 h-6 rounded-full bg-[#DFE1E6] border-2 border-white flex items-center justify-center text-[10px] font-semibold"
-                                                title={m.username}
-                                            >
-                                                {m.username[0].toUpperCase()}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
+                                {tab.label}
+                            </button>
                         ))}
                     </div>
                 </div>
-            )}
 
-            {view === 'invites' && (
-                <div className="space-y-3">
-                    {invites.map(invite => (
-                        <div key={invite.id} className="bg-white border border-[#DFE1E6] rounded-sm p-4 flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-semibold text-[#172B4D]">{invite.email}</p>
-                                <p className="text-xs text-[#5E6C84]">Invited as {invite.role_name?.replace('_', ' ')}</p>
-                            </div>
-                            <span className="trello-badge bg-[#F2D600] text-[#172B4D]">Pending</span>
-                        </div>
-                    ))}
-                </div>
-            )}
+                {/* Content Area */}
+                <div className="animate-fade-in">
+                    {/* --- TEAMS TAB --- */}
+                    {activeTab === 'structure' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {/* Create Team Card */}
+                            <button
+                                onClick={() => setIsCreateTeamModalOpen(true)}
+                                className="group h-48 border-2 border-dashed border-[#DFE1E6] rounded-[3px] flex flex-col items-center justify-center gap-3 text-[#5E6C84] hover:border-[#0079BF] hover:text-[#0079BF] hover:bg-[#F4F5F7] transition-all"
+                            >
+                                <div className="p-3 bg-[#EBECF0] rounded-full group-hover:bg-[#0079BF] group-hover:text-white transition-colors">
+                                    <Plus size={24} />
+                                </div>
+                                <span className="font-medium text-sm">Create a new team</span>
+                            </button>
 
-            {/* Manage Team Modal */}
-            {isManageTeamModalOpen && selectedTeam && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6 animate-fade-in" onClick={() => setIsManageTeamModalOpen(false)}>
-                    <div className="trello-modal w-full max-w-3xl max-h-[90vh] flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-6 border-b border-[#DFE1E6]">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-[#172B4D]">{selectedTeam.name}</h3>
-                                <button onClick={() => setIsManageTeamModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded-sm">
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <p className="text-sm text-[#5E6C84] mt-1">{selectedTeam.description}</p>
+                            {teams.map(team => (
+                                <div key={team.id} className="bg-white border border-[#DFE1E6] rounded-[3px] p-5 hover:shadow-md transition-shadow group relative">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <h3 className="text-lg font-semibold text-[#172B4D]">{team.name}</h3>
+                                        <button
+                                            onClick={() => { setSelectedTeam(team); setIsManageTeamModalOpen(true); }}
+                                            className="p-1.5 hover:bg-[#EBECF0] rounded text-[#5E6C84] transition-colors"
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                    </div>
+                                    <p className="text-[#5E6C84] text-sm mb-6 h-10 line-clamp-2">{team.description || "No description provided."}</p>
+
+                                    <div className="flex items-center justify-between pt-4 border-t border-[#DFE1E6]">
+                                        <div className="flex -space-x-1">
+                                            {team.members_details?.slice(0, 4).map((m, i) => (
+                                                <div key={i} title={m.username} className="w-7 h-7 rounded-full bg-[#DFE1E6] border border-white flex items-center justify-center text-[10px] font-bold text-[#172B4D]">
+                                                    {m.username[0].toUpperCase()}
+                                                </div>
+                                            ))}
+                                            {(team.members_details?.length || 0) > 4 && (
+                                                <div className="w-7 h-7 rounded-full bg-[#FAFBFC] border border-[#DFE1E6] flex items-center justify-center text-[10px] font-medium text-[#5E6C84]">
+                                                    +{team.members_details.length - 4}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span className="text-xs font-semibold text-[#5E6C84] uppercase">{team.member_count} Members</span>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        <div className="p-6 flex-1 overflow-y-auto">
-                            <div className="mb-4">
+                    )}
+
+                    {/* --- MEMBERS TAB --- */}
+                    {activeTab === 'members' && (
+                        <div className="space-y-6">
+                            <div className="max-w-md relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5E6C84]" size={16} />
                                 <input
                                     type="text"
                                     placeholder="Search members..."
-                                    className="trello-input"
-                                    value={memberSearch}
-                                    onChange={(e) => setMemberSearch(e.target.value)}
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 bg-white border border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] outline-none transition-colors"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                {directory.filter(u => u.username.toLowerCase().includes(memberSearch.toLowerCase())).map(user => {
-                                    const isMember = selectedTeam.members.includes(user.id);
-                                    return (
-                                        <div key={user.id} className="flex items-center justify-between p-3 bg-[#F4F5F7] rounded-sm">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
-                                                    {user.username[0].toUpperCase()}
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-medium text-[#172B4D]">{user.username}</p>
-                                                    <p className="text-xs text-[#5E6C84]">{user.role?.replace('_', ' ')}</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => toggleMember(selectedTeam, user.id)}
-                                                className={`trello-btn ${isMember ? 'bg-[#EB5A46] text-white hover:bg-[#CF513D]' : 'trello-btn-primary'}`}
-                                            >
-                                                {isMember ? 'Remove' : 'Add'}
-                                            </button>
-                                        </div>
-                                    );
-                                })}
+
+                            <div className="bg-white border border-[#DFE1E6] rounded-[3px] overflow-hidden">
+                                <table className="w-full">
+                                    <thead className="bg-[#FAFBFC] border-b border-[#DFE1E6]">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase tracking-wider">User</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase tracking-wider">Role</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase tracking-wider">Status</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#DFE1E6]">
+                                        {filteredUsers.map(user => {
+                                            const roleStyle = getRoleParams(user.role);
+                                            return (
+                                                <tr key={user.id} className="hover:bg-[#F4F5F7] transition-colors">
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-bold text-[#172B4D]">
+                                                                {user.username[0].toUpperCase()}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-medium text-[#172B4D]">{user.username}</p>
+                                                                <p className="text-xs text-[#5E6C84]">{user.email}</p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-2 py-1 rounded-[3px] text-xs font-bold uppercase ${roleStyle.bg} ${roleStyle.text}`}>
+                                                            {user.role}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {user.is_active ? (
+                                                            <span className="flex items-center gap-1.5 text-xs font-medium text-green-600">
+                                                                <span className="w-2 h-2 rounded-full bg-green-500"></span> Active
+                                                            </span>
+                                                        ) : (
+                                                            <span className="flex items-center gap-1.5 text-xs font-medium text-[#5E6C84]">
+                                                                <span className="w-2 h-2 rounded-full bg-[#DFE1E6]"></span> Inactive
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 relative">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setActiveUserMenu(activeUserMenu === user.id ? null : user.id); }}
+                                                            className="p-1 hover:bg-[#EBECF0] rounded text-[#5E6C84]"
+                                                        >
+                                                            <MoreHorizontal size={16} />
+                                                        </button>
+                                                        {activeUserMenu === user.id && (
+                                                            <div className="absolute right-8 top-8 w-56 bg-white border border-[#DFE1E6] rounded-[3px] shadow-xl z-20 animate-scale-in" onClick={e => e.stopPropagation()}>
+                                                                <div className="p-2 border-b border-[#DFE1E6]">
+                                                                    <p className="text-xs font-bold text-[#5E6C84] px-2 mb-2 uppercase">Change Role</p>
+                                                                    {['EMPLOYEE', 'DEVELOPER', 'PROJECT_MANAGER', 'ADMIN'].map(role => (
+                                                                        <button
+                                                                            key={role}
+                                                                            onClick={() => handleUpdateUserRole(user.id, role)}
+                                                                            className={`w-full text-left px-2 py-1.5 text-xs rounded-[3px] mb-0.5 ${user.role === role ? 'bg-blue-50 text-[#0079BF] font-semibold' : 'text-[#172B4D] hover:bg-[#F4F5F7]'}`}
+                                                                        >
+                                                                            {role}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="p-2">
+                                                                    <button
+                                                                        onClick={() => handleToggleUserStatus(user.id, user.is_active)}
+                                                                        className="w-full text-left px-2 py-1.5 text-xs text-[#EB5A46] hover:bg-[#FFF0B3] rounded-[3px] font-medium"
+                                                                    >
+                                                                        {user.is_active ? 'Deactivate User' : 'Activate User'}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                        <div className="p-6 border-t border-[#DFE1E6] flex justify-end gap-2">
-                            <button onClick={() => deleteTeam(selectedTeam.id)} className="trello-btn bg-[#EB5A46] text-white hover:bg-[#CF513D]">
-                                <Trash2 size={14} />
-                                <span>Delete Team</span>
-                            </button>
+                    )}
+
+                    {/* --- INVITES TAB --- */}
+                    {activeTab === 'invites' && (
+                        <div className="max-w-3xl">
+                            {invites.length === 0 ? (
+                                <div className="text-center py-12 border-2 border-dashed border-[#DFE1E6] rounded-[3px] bg-[#FAFBFC]">
+                                    <Mail className="mx-auto mb-3 text-[#DFE1E6]" size={48} />
+                                    <p className="text-[#5E6C84] font-medium">No pending invitations</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {invites.map(invite => (
+                                        <div key={invite.id} className="bg-white border border-[#DFE1E6] rounded-[3px] p-4 flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-full bg-[#EBECF0] flex items-center justify-center text-[#5E6C84]">
+                                                    <Mail size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-[#172B4D]">{invite.email}</p>
+                                                    <p className="text-xs text-[#5E6C84]">Role: {invite.role_name}</p>
+                                                </div>
+                                            </div>
+                                            <span className="px-2 py-1 bg-[#FFF0B3] text-[#172B4D] text-xs font-bold uppercase rounded-[3px]">Pending</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    </div>
+                    )}
                 </div>
-            )}
+            </div>
+
+            {/* --- MODALS (Trello Style) --- */}
 
             {/* Create Team Modal */}
             {isCreateTeamModalOpen && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6 animate-fade-in" onClick={() => setIsCreateTeamModalOpen(false)}>
-                    <div className="trello-modal w-full max-w-md animate-scale-in" onClick={(e) => e.stopPropagation()}>
-                        <form onSubmit={handleCreateTeam}>
-                            <div className="p-6 border-b border-[#DFE1E6]">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold text-[#172B4D]">Create Team</h3>
-                                    <button type="button" onClick={() => setIsCreateTeamModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded-sm">
-                                        <X size={20} />
-                                    </button>
-                                </div>
+                <div className="fixed inset-0 z-50 bg-[#091E42]/50 flex items-center justify-center p-4" onClick={() => setIsCreateTeamModalOpen(false)}>
+                    <div className="bg-white w-full max-w-md rounded-[3px] shadow-lg animate-scale-in" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-[#DFE1E6] flex justify-between items-center">
+                            <h3 className="text-lg font-semibold text-[#172B4D]">Create Team</h3>
+                            <button onClick={() => setIsCreateTeamModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded text-[#5E6C84]"><X size={20} /></button>
+                        </div>
+                        <form onSubmit={handleCreateTeam} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Team Name</label>
+                                <input
+                                    autoFocus
+                                    required
+                                    className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] outline-none"
+                                    value={newTeam.name}
+                                    onChange={e => setNewTeam({ ...newTeam, name: e.target.value })}
+                                />
                             </div>
-                            <div className="p-6 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#5E6C84] uppercase mb-1">Team Name</label>
-                                    <input type="text" required className="trello-input" placeholder="Engineering Team" value={newTeam.name} onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#5E6C84] uppercase mb-1">Description</label>
-                                    <textarea className="trello-input min-h-[80px]" placeholder="Team description..." value={newTeam.description} onChange={(e) => setNewTeam({ ...newTeam, description: e.target.value })} />
-                                </div>
+                            <div>
+                                <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                                <textarea
+                                    className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] outline-none min-h-[100px] resize-none"
+                                    value={newTeam.description}
+                                    onChange={e => setNewTeam({ ...newTeam, description: e.target.value })}
+                                />
                             </div>
-                            <div className="p-6 border-t border-[#DFE1E6] flex justify-end gap-2">
-                                <button type="button" onClick={() => setIsCreateTeamModalOpen(false)} className="trello-btn trello-btn-subtle">Cancel</button>
-                                <button type="submit" className="trello-btn trello-btn-primary">Create Team</button>
+                            <div className="flex justify-end pt-2">
+                                <button type="submit" className="px-6 py-2 bg-[#0079BF] text-white font-bold rounded-[3px] hover:bg-[#026AA7] transition-colors text-sm">
+                                    Create
+                                </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
 
+            {/* Manage Team Modal */}
+            {isManageTeamModalOpen && selectedTeam && (
+                <div className="fixed inset-0 z-50 bg-[#091E42]/50 flex items-center justify-center p-4" onClick={() => setIsManageTeamModalOpen(false)}>
+                    <div className="bg-white w-full max-w-2xl h-[80vh] rounded-[3px] flex flex-col shadow-lg animate-scale-in" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-[#DFE1E6] flex justify-between items-center">
+                            <h3 className="text-lg font-semibold text-[#172B4D]">{selectedTeam.name}</h3>
+                            <button onClick={() => setIsManageTeamModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded text-[#5E6C84]"><X size={20} /></button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 bg-[#F9FAFB]">
+                            <div className="flex justify-between items-center mb-4">
+                                <h4 className="text-xs font-bold text-[#5E6C84] uppercase">Members</h4>
+                                <button onClick={() => handleDeleteTeam(selectedTeam.id)} className="text-xs text-red-600 hover:underline font-medium">Delete Team</button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {users.map(u => {
+                                    const isMember = selectedTeam.members?.includes(u.id);
+                                    return (
+                                        <div
+                                            key={u.id}
+                                            onClick={() => toggleTeamMember(u.id)}
+                                            className={`flex items-center gap-3 p-2 rounded-[3px] border cursor-pointer transition-colors ${isMember
+                                                ? 'bg-blue-50 border-[#0079BF]'
+                                                : 'bg-white border-[#DFE1E6] hover:border-[#b3bac5]'
+                                                }`}
+                                        >
+                                            <div className="w-8 h-8 rounded-full bg-[#EBECF0] flex items-center justify-center text-xs font-bold text-[#172B4D]">
+                                                {u.username[0].toUpperCase()}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-[#172B4D]">{u.username}</p>
+                                                <p className="text-xs text-[#5E6C84]">{u.role}</p>
+                                            </div>
+                                            {isMember && <Check size={16} className="text-[#0079BF]" />}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-[#DFE1E6] bg-white flex justify-end">
+                            <button onClick={() => setIsManageTeamModalOpen(false)} className="px-4 py-2 bg-[#091E42] text-white rounded-[3px] font-medium hover:bg-[#253858] transition-colors text-sm">
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Invite Modal */}
             {isInviteModalOpen && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6 animate-fade-in" onClick={() => setIsInviteModalOpen(false)}>
-                    <div className="trello-modal w-full max-w-md animate-scale-in" onClick={(e) => e.stopPropagation()}>
-                        <form onSubmit={handleInvite}>
-                            <div className="p-6 border-b border-[#DFE1E6]">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold text-[#172B4D]">Invite Member</h3>
-                                    <button type="button" onClick={() => setIsInviteModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded-sm">
-                                        <X size={20} />
-                                    </button>
-                                </div>
+                <div className="fixed inset-0 z-50 bg-[#091E42]/50 flex items-center justify-center p-4" onClick={() => setIsInviteModalOpen(false)}>
+                    <div className="bg-white w-full max-w-md rounded-[3px] shadow-lg animate-scale-in" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-[#DFE1E6] flex justify-between items-center bg-[#F4F5F7]">
+                            <h3 className="text-lg font-semibold text-[#172B4D]">Invite to Workspace</h3>
+                            <button onClick={() => setIsInviteModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded text-[#5E6C84]"><X size={20} /></button>
+                        </div>
+
+                        <form onSubmit={handleInvite} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Email Address</label>
+                                <input
+                                    type="email"
+                                    required
+                                    className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] outline-none"
+                                    value={inviteEmail}
+                                    onChange={e => setInviteEmail(e.target.value)}
+                                />
                             </div>
-                            <div className="p-6 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#5E6C84] uppercase mb-1">Email</label>
-                                    <input type="email" required className="trello-input" placeholder="colleague@example.com" value={inviteForm.email} onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#5E6C84] uppercase mb-1">Role</label>
-                                    <select className="trello-input" value={inviteForm.role_name} onChange={(e) => setInviteForm({ ...inviteForm, role_name: e.target.value })}>
-                                        <option value="EMPLOYEE">Employee</option>
-                                        <option value="DEVELOPER">Developer</option>
-                                        <option value="PROJECT_MANAGER">Project Manager</option>
-                                        <option value="ADMIN">Admin</option>
-                                    </select>
-                                </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Role</label>
+                                <select
+                                    value={inviteRole}
+                                    onChange={e => setInviteRole(e.target.value)}
+                                    className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] outline-none bg-white"
+                                >
+                                    <option value="EMPLOYEE">Employee</option>
+                                    <option value="DEVELOPER">Developer</option>
+                                    <option value="PROJECT_MANAGER">Project Manager</option>
+                                    <option value="ADMIN">Admin</option>
+                                </select>
                             </div>
-                            <div className="p-6 border-t border-[#DFE1E6] flex justify-end gap-2">
-                                <button type="button" onClick={() => setIsInviteModalOpen(false)} className="trello-btn trello-btn-subtle">Cancel</button>
-                                <button type="submit" className="trello-btn trello-btn-primary">
-                                    <Mail size={14} />
-                                    <span>Send Invite</span>
-                                </button>
-                            </div>
+
+                            <button type="submit" disabled={loading} className="w-full mt-2 py-2 bg-[#0079BF] text-white font-bold rounded-[3px] hover:bg-[#026AA7] transition-colors text-sm disabled:opacity-50">
+                                {loading ? 'Sending...' : 'Send Invitation'}
+                            </button>
                         </form>
                     </div>
                 </div>

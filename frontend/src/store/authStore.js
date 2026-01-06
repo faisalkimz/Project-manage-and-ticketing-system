@@ -22,6 +22,23 @@ const useAuthStore = create((set) => ({
         }
     },
 
+    register: async (userData) => {
+        set({ loading: true });
+        try {
+            await api.post('/users/register/', userData);
+            // Auto login after register? Or redirect?
+            // Usually returns user data but not tokens unless modified.
+            // Let's assume we need to login after.
+            // Or if backend returns tokens? RegisterView generic CreateAPIView returns object.
+            // We will just return true and let component call login or redirect to login.
+            set({ loading: false });
+            return true;
+        } catch (error) {
+            set({ loading: false });
+            return false;
+        }
+    },
+
     logout: () => {
         localStorage.removeItem('token');
         localStorage.removeItem('refresh');

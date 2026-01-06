@@ -4,23 +4,29 @@ import useAuthStore from '../store/authStore';
 import { Loader, AlertCircle } from 'lucide-react';
 import SocialLoginButtons from '../components/SocialLoginButtons';
 
-const Login = () => {
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
+const Signup = () => {
+    const [formData, setFormData] = useState({ username: '', email: '', password: '' });
     const [error, setError] = useState('');
-    const { login, loading } = useAuthStore();
+    const { register, login, loading } = useAuthStore();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!username || !password) return;
-
         setError('');
-        const success = await login(username, password);
+
+        // 1. Register
+        const success = await register(formData);
         if (success) {
-            navigate('/');
+            // 2. Auto-login
+            const loginSuccess = await login(formData.username, formData.password);
+            if (loginSuccess) {
+                // 3. Go to Onboarding (not Home)
+                navigate('/onboarding');
+            } else {
+                navigate('/login');
+            }
         } else {
-            setError('Account not found (Invalid username or password).');
+            setError('Registration failed. Username or Email may already be taken.');
         }
     };
 
@@ -38,18 +44,15 @@ const Login = () => {
                 className="fixed bottom-0 right-0 w-[350px] lg:w-[450px] max-w-[30vw] hidden md:block z-0 pointer-events-none animate-fade-in-up"
             />
 
-            {/* Content Container */}
             <div className="relative z-10 w-full flex flex-col items-center">
-                {/* Logo */}
                 <div className="flex items-center gap-2 mb-8">
                     <div className="w-8 h-8 bg-[#0079BF] rounded-[3px] flex items-center justify-center font-bold text-white text-xl">M</div>
                     <h1 className="text-3xl font-bold tracking-tight text-[#172B4D]">Mbabali</h1>
                 </div>
 
-                {/* Login Card */}
                 <div className="w-full max-w-[400px] bg-white rounded-[3px] shadow-[0_0_15px_rgba(0,0,0,0.1)] overflow-hidden">
                     <div className="p-8 pb-6">
-                        <h2 className="text-base font-semibold text-[#5E6C84] text-center mb-6">Log in to continue</h2>
+                        <h2 className="text-base font-semibold text-[#5E6C84] text-center mb-6">Sign up for your account</h2>
 
                         {error && (
                             <div className="mb-4 p-3 bg-[#FFEBE6] border border-[#EB5A46] rounded-[3px] flex items-start gap-2">
@@ -60,26 +63,38 @@ const Login = () => {
 
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <input
-                                type="text"
-                                placeholder="Enter your username"
+                                type="email"
+                                placeholder="Enter email address"
                                 className="w-full px-3 py-2 bg-[#FAFBFC] border-2 border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] focus:bg-white outline-none transition-colors"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                autoFocus
+                                value={formData.email}
+                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                required
+                            />
+                            <input
+                                type="text"
+                                placeholder="Enter username"
+                                className="w-full px-3 py-2 bg-[#FAFBFC] border-2 border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] focus:bg-white outline-none transition-colors"
+                                value={formData.username}
+                                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                required
                             />
                             <input
                                 type="password"
-                                placeholder="Enter password"
+                                placeholder="Create password"
                                 className="w-full px-3 py-2 bg-[#FAFBFC] border-2 border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] focus:bg-white outline-none transition-colors"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                value={formData.password}
+                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                required
                             />
+                            <p className="text-xs text-[#5E6C84]">
+                                By signing up, you confirm that you've read and accepted our <a href="#" className="text-[#0052CC] hover:underline">Terms of Service</a> and <a href="#" className="text-[#0052CC] hover:underline">Privacy Policy</a>.
+                            </p>
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full py-2 bg-[#5AAC44] hover:bg-[#61BD4F] text-white font-bold rounded-[3px] transition-colors shadow-sm disabled:opacity-50"
+                                className="w-full py-2 bg-[#0052CC] hover:bg-[#0065FF] text-white font-bold rounded-[3px] transition-colors shadow-sm disabled:opacity-50"
                             >
-                                {loading ? <Loader size={18} className="animate-spin mx-auto" /> : 'Log in'}
+                                {loading ? <Loader size={18} className="animate-spin mx-auto" /> : 'Sign up'}
                             </button>
                         </form>
 
@@ -91,7 +106,7 @@ const Login = () => {
                         <SocialLoginButtons />
 
                         <div className="mt-6 border-t border-[#DFE1E6] pt-4 text-center">
-                            <Link to="/signup" className="text-sm text-[#0052CC] hover:underline">Sign up for an account</Link>
+                            <Link to="/login" className="text-sm text-[#0052CC] hover:underline">Already have an account? Log In</Link>
                         </div>
                     </div>
                 </div>
@@ -116,4 +131,4 @@ const Login = () => {
     );
 };
 
-export default Login;
+export default Signup;

@@ -13,6 +13,7 @@ const Sidebar = () => {
         { name: 'Projects', path: '/projects', icon: Briefcase },
         { name: 'Tickets', path: '/tickets', icon: MessageSquare },
         { name: 'Team', path: '/team', icon: Users, roles: ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER'] },
+        { name: 'Settings', path: '/settings', icon: Settings },
     ];
 
     const isActive = (path) => location.pathname === path;
@@ -63,26 +64,7 @@ const Sidebar = () => {
                     })}
                 </nav>
 
-                {/* Workspace Section */}
-                {!isCollapsed && (
-                    <div className="mt-8">
-                        <div className="px-3 mb-2">
-                            <p className="text-[11px] font-semibold text-[rgba(255,255,255,0.7)] uppercase tracking-wider">
-                                Workspace
-                            </p>
-                        </div>
-                        <Link
-                            to="/settings"
-                            className={`flex items-center gap-3 px-3 py-2 rounded-sm transition-all font-medium text-sm ${isActive('/settings')
-                                ? 'bg-[rgba(255,255,255,0.25)] text-white'
-                                : 'text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.15)] hover:text-white'
-                                }`}
-                        >
-                            <Settings size={18} strokeWidth={2} />
-                            <span>Settings</span>
-                        </Link>
-                    </div>
-                )}
+
             </div>
 
             {/* User Profile */}
