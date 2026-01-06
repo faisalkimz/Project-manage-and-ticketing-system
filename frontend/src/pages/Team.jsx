@@ -7,10 +7,12 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
+import { useToast } from '../components/Toast';
 
 const Team = () => {
     const navigate = useNavigate();
     const { user: currentUser } = useAuthStore();
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState('structure');
     const [users, setUsers] = useState([]);
     const [teams, setTeams] = useState([]);
@@ -54,7 +56,10 @@ const Team = () => {
             setIsCreateTeamModalOpen(false);
             setNewTeam({ name: '', description: '', members: [] });
             fetchData();
-        } catch (e) { alert('Failed to create team.'); }
+        } catch (e) {
+            const msg = e.response?.data?.detail || e.response?.data?.name?.[0] || 'Failed to create team.';
+            showToast(msg, 'error');
+        }
     };
 
     const handleInvite = async (e) => {
@@ -65,8 +70,11 @@ const Team = () => {
             setIsInviteModalOpen(false);
             setInviteEmail('');
             fetchData();
-            alert(`Invitation sent to ${inviteEmail}`);
-        } catch (e) { alert('Invite failed.'); } finally { setLoading(false); }
+            showToast(`Invitation sent to ${inviteEmail}`, 'success');
+        } catch (e) {
+            const msg = e.response?.data?.detail || e.response?.data?.email?.[0] || 'Invite failed.';
+            showToast(msg, 'error');
+        } finally { setLoading(false); }
     };
 
     const toggleTeamMember = async (userId) => {
@@ -88,7 +96,7 @@ const Team = () => {
             await api.delete(`/users/teams/${id}/`);
             setIsManageTeamModalOpen(false);
             fetchData();
-        } catch (e) { alert("Could not delete team."); }
+        } catch (e) { showToast("Could not delete team.", 'error'); }
     }
 
     const handleSettingsClick = () => {
@@ -102,8 +110,8 @@ const Team = () => {
             // Update local state
             setTeams(teams.map(t => t.id === selectedTeam.id ? { ...t, ...editingTeamForm } : t));
             setSelectedTeam({ ...selectedTeam, ...editingTeamForm });
-            alert('Team updated successfully');
-        } catch (e) { alert('Failed to update team'); }
+            showToast('Team updated successfully', 'success');
+        } catch (e) { showToast('Failed to update team', 'error'); }
     };
 
     const handleUpdateUserRole = async (userId, newRole) => {
@@ -111,7 +119,8 @@ const Team = () => {
             await api.patch(`/users/${userId}/`, { role: newRole });
             setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
             setActiveUserMenu(null);
-        } catch (e) { alert('Failed to update role'); }
+            showToast('Role updated successfully', 'success');
+        } catch (e) { showToast('Failed to update role', 'error'); }
     };
 
     const handleToggleUserStatus = async (userId, userIsActive) => {
@@ -119,7 +128,8 @@ const Team = () => {
             await api.patch(`/users/${userId}/`, { is_active: !userIsActive });
             setUsers(users.map(u => u.id === userId ? { ...u, is_active: !userIsActive } : u));
             setActiveUserMenu(null);
-        } catch (e) { alert('Failed to update status'); }
+            showToast(`User ${userIsActive ? 'deactivated' : 'activated'}`, 'info');
+        } catch (e) { showToast('Failed to update status', 'error'); }
     };
 
     const filteredUsers = users.filter(u => u.username.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()));
@@ -134,28 +144,28 @@ const Team = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#F9FAFB] p-6 font-sans text-[#172B4D]">
+        <div className="min-h-screen bg-[#F9FAFB] p-4 md:p-6 font-sans text-[#172B4D] pb-24 md:pb-6">
             {/* Professional Header */}
             <div className="max-w-7xl mx-auto">
-                <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 mb-8">
                     <div>
                         <div className="flex items-center gap-2 text-[#5E6C84] mb-1">
                             <Briefcase size={16} />
                             <span className="text-sm font-medium uppercase tracking-wide">Workspace</span>
                         </div>
-                        <h1 className="text-2xl font-semibold text-[#172B4D]">Team Management</h1>
+                        <h1 className="text-xl md:text-2xl font-semibold text-[#172B4D]">Team Management</h1>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3">
                         <button
                             onClick={handleSettingsClick}
-                            className="flex items-center gap-2 px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded-[3px] font-medium transition-colors"
+                            className="flex items-center justify-center gap-2 px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded-[3px] font-medium transition-colors"
                         >
                             <Settings size={16} />
                             <span>Settings</span>
                         </button>
                         <button
                             onClick={() => setIsInviteModalOpen(true)}
-                            className="flex items-center gap-2 px-3 py-2 bg-[#0079BF] hover:bg-[#026AA7] text-white rounded-[3px] font-medium transition-colors shadow-sm"
+                            className="flex items-center justify-center gap-2 px-3 py-2 bg-[#0079BF] hover:bg-[#026AA7] text-white rounded-[3px] font-medium transition-colors shadow-sm"
                         >
                             <UserPlus size={16} />
                             <span>Invite Member</span>
@@ -252,8 +262,8 @@ const Team = () => {
                                 />
                             </div>
 
-                            <div className="bg-white border border-[#DFE1E6] rounded-[3px] overflow-hidden">
-                                <table className="w-full">
+                            <div className="bg-white border border-[#DFE1E6] rounded-[3px] overflow-x-auto custom-scrollbar shadow-sm">
+                                <table className="w-full min-w-[700px]">
                                     <thead className="bg-[#FAFBFC] border-b border-[#DFE1E6]">
                                         <tr>
                                             <th className="px-6 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase tracking-wider">User</th>

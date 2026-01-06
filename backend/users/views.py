@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import UserSerializer, RegisterSerializer, TeamInviteSerializer, TeamSerializer, UserUpdateSerializer
 from .models import User, TeamInvite, Role, Team
+from django.core.mail import send_mail
 
 # Existing views...
 # ... (RegisterView, UserProfileView, UserListView)
@@ -13,7 +14,8 @@ class TeamViewSet(viewsets.ModelViewSet):
     permission_classes = (permissions.IsAuthenticated,)
 
     def perform_create(self, serializer):
-        serializer.save(lead=self.request.user)
+        team = serializer.save(lead=self.request.user)
+        team.members.add(self.request.user)
 
 class TeamInviteViewSet(viewsets.ModelViewSet):
     queryset = TeamInvite.objects.all()
@@ -27,7 +29,17 @@ class TeamInviteViewSet(viewsets.ModelViewSet):
         except Role.DoesNotExist:
             role = Role.objects.get(name='EMPLOYEE')
         
-        serializer.save(invited_by=self.request.user, role=role)
+        invite = serializer.save(invited_by=self.request.user, role=role)
+        
+        # Send invitation email
+        join_link = f"http://localhost:5173/register?token={invite.token}"
+        send_mail(
+            subject='Invitation to Join Mbabali PMS',
+            message=f'You have been invited to join Mbabali PMS.\n\nRole: {role.name}\n\nClick the link to join:\n{join_link}',
+            from_email='noreply@mbabali.com',
+            recipient_list=[invite.email],
+            fail_silently=True
+        )
 
     def get_queryset(self):
         # Admins see all, others see what they invited?
@@ -41,8 +53,12 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserSerializer
     permission_classes = (permissions.IsAuthenticated,)
+
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return UserUpdateSerializer
+        return UserSerializer
 
     def get_object(self):
         return self.request.user
@@ -62,3 +78,18 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in ['PUT', 'PATCH']:
             return UserUpdateSerializer
         return UserSerializer
+
+class ChangePasswordView(generics.UpdateAPIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def update(self, request, *args, **kwargs):
+        user = self.request.user
+        old_password = request.data.get("old_password")
+        new_password = request.data.get("new_password")
+        
+        if not user.check_password(old_password):
+            return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.set_password(new_password)
+        user.save()
+        return Response({"status": "password set"}, status=status.HTTP_200_OK)

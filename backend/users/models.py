@@ -26,10 +26,22 @@ class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     # Role is now a ForeignKey. We make it nullable temporarily for migration, 
     # but in practice every user should have a role.
+    class Department(models.TextChoices):
+        ENGINEERING = 'CORE_ENGINEERING', 'Core Engineering'
+        PRODUCT_DESIGN = 'PRODUCT_DESIGN', 'Product Design'
+        CUSTOMER_SUCCESS = 'CUSTOMER_SUCCESS', 'Customer Success'
+        GENERAL = 'GENERAL', 'General'
+
     role = models.ForeignKey(Role, on_delete=models.PROTECT, null=True, related_name='users')
-    department = models.CharField(max_length=100, blank=True)
+    department = models.CharField(max_length=100, choices=Department.choices, default=Department.GENERAL)
     profile_image = models.ImageField(upload_to='profiles/', null=True, blank=True)
     bio = models.TextField(max_length=500, blank=True)
+    job_title = models.CharField(max_length=100, blank=True)
+    
+    # Notification Preferences
+    email_notifications = models.BooleanField(default=True)
+    push_notifications = models.BooleanField(default=True)
+    task_updates_only = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.username} ({self.role.name if self.role else 'No Role'})"

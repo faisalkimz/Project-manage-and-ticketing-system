@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Plus } from 'lucide-react';
 
 const CalendarView = ({ tasks, onTaskClick }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -8,7 +8,7 @@ const CalendarView = ({ tasks, onTaskClick }) => {
         const year = date.getFullYear();
         const month = date.getMonth();
         const days = new Date(year, month + 1, 0).getDate();
-        const firstDay = new Date(year, month, 1).getDay(); // 0 = Sunday
+        const firstDay = new Date(year, month, 1).getDay();
         return { days, firstDay };
     };
 
@@ -37,9 +37,7 @@ const CalendarView = ({ tasks, onTaskClick }) => {
         return tasks.filter(task => {
             if (!task.due_date) return false;
             const taskDate = new Date(task.due_date);
-            // Fix timezone offset issues by comparing simply YYYY-MM-DD strings or using UTC logic if needed
-            // For now, simple local comparison
-            return isSameDay(target, taskDate); // Note: this assumes due_date is stored/parsed correctly
+            return isSameDay(target, taskDate);
         });
     };
 
@@ -49,9 +47,9 @@ const CalendarView = ({ tasks, onTaskClick }) => {
         const allSlots = [...blanks, ...daysArray];
 
         return (
-            <div className="grid grid-cols-7 gap-px bg-zinc-200 border border-zinc-200 rounded-b-lg overflow-hidden">
+            <div className="grid grid-cols-7 gap-px bg-[#DFE1E6] border border-[#DFE1E6]">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="bg-zinc-50 py-2 text-center text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    <div key={day} className="bg-[#F4F5F7] py-2 text-center text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest border-b border-[#DFE1E6]">
                         {day}
                     </div>
                 ))}
@@ -60,23 +58,28 @@ const CalendarView = ({ tasks, onTaskClick }) => {
                     const isToday = day && isSameDay(new Date(), new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
 
                     return (
-                        <div key={index} className={`min-h-[120px] bg-white p-2 relative group hover:bg-zinc-50/50 transition-colors ${!day ? 'bg-zinc-50/30' : ''}`}>
+                        <div key={index} className={`min-h-[140px] bg-white p-2 relative group transition-colors ${!day ? 'bg-[#FAFBFC]' : 'hover:bg-[#F4F5F7]'}`}>
                             {day && (
                                 <>
-                                    <div className={`text-sm font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-zinc-900 text-white' : 'text-zinc-500'}`}>
-                                        {day}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className={`text-xs font-bold leading-none ${isToday ? 'bg-[#0052CC] text-white w-6 h-6 flex items-center justify-center rounded-sm' : 'text-[#172B4D]'}`}>
+                                            {day}
+                                        </span>
+                                        <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[#EBECF0] rounded-sm text-[#5E6C84] transition-opacity">
+                                            <Plus size={14} />
+                                        </button>
                                     </div>
                                     <div className="space-y-1">
                                         {dayTasks.map(task => (
                                             <div
                                                 key={task.id}
                                                 onClick={() => onTaskClick(task)}
-                                                className={`px-2 py-1 rounded border text-[10px] font-medium cursor-pointer truncate transition-all shadow-sm hover:shadow hover:scale-[1.02]
-                                                    ${task.priority === 'CRITICAL' ? 'bg-red-50 border-red-100 text-red-700' :
-                                                        task.status === 'DONE' ? 'bg-zinc-100 border-zinc-200 text-zinc-400 line-through' :
-                                                            'bg-indigo-50 border-indigo-100 text-indigo-700'}`}
+                                                className={`px-2 py-1.5 rounded-[3px] border text-[10px] font-bold cursor-pointer truncate transition-all
+                                                    ${task.priority === 'CRITICAL' || task.priority === 'HIGH' ? 'bg-[#FFEBE6] border-[#FFBDAD] text-[#BF2600]' :
+                                                        task.status === 'DONE' ? 'bg-[#E3FCEF] border-[#ABF5D1] text-[#006644] line-through opacity-70' :
+                                                            'bg-[#DEEBFF] border-[#B3D4FF] text-[#0747A6]'}`}
                                             >
-                                                {task.title}
+                                                MB-{task.id} {task.title}
                                             </div>
                                         ))}
                                     </div>
@@ -90,26 +93,27 @@ const CalendarView = ({ tasks, onTaskClick }) => {
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden h-full flex flex-col">
-            <header className="p-4 border-b border-zinc-200 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <h2 className="text-lg font-semibold text-zinc-900 flex items-center gap-2">
-                        <CalendarIcon size={20} className="text-zinc-400" />
+        <div className="bg-white border border-[#DFE1E6] flex flex-col h-full rounded-sm overflow-hidden">
+            <header className="px-6 py-4 flex items-center justify-between border-b border-[#DFE1E6] bg-white">
+                <div className="flex items-center gap-6">
+                    <h2 className="text-lg font-bold text-[#172B4D]">
                         {currentDate.toLocaleDateString('default', { month: 'long', year: 'numeric' })}
                     </h2>
-                    <div className="flex items-center rounded-md border border-zinc-200 bg-white">
-                        <button onClick={prevMonth} className="p-1.5 hover:bg-zinc-50 text-zinc-500 border-r border-zinc-200"><ChevronLeft size={16} /></button>
-                        <button onClick={goToToday} className="px-3 py-1.5 text-xs font-medium hover:bg-zinc-50 text-zinc-600">Today</button>
-                        <button onClick={nextMonth} className="p-1.5 hover:bg-zinc-50 text-zinc-500 border-l border-zinc-200"><ChevronRight size={16} /></button>
+                    <div className="flex items-center bg-[#EBECF0] h-8 rounded-sm p-0.5">
+                        <button onClick={prevMonth} className="px-2 h-full hover:bg-white rounded-sm text-[#42526E] transition-colors"><ChevronLeft size={16} /></button>
+                        <button onClick={goToToday} className="px-3 h-full hover:bg-white rounded-sm text-xs font-bold text-[#42526E] transition-colors mx-0.5">Today</button>
+                        <button onClick={nextMonth} className="px-2 h-full hover:bg-white rounded-sm text-[#42526E] transition-colors"><ChevronRight size={16} /></button>
                     </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-zinc-400">
-                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Due</div>
-                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> Critical</div>
-                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-300"></span> Done</div>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[2px] bg-[#DEEBFF] border border-[#B3D4FF]"></span> Todo</div>
+                        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[2px] bg-[#FFEBE6] border border-[#FFBDAD]"></span> Priority</div>
+                        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[2px] bg-[#E3FCEF] border border-[#ABF5D1]"></span> Done</div>
+                    </div>
                 </div>
             </header>
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {renderCalendar()}
             </div>
         </div>

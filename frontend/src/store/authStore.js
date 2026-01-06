@@ -56,6 +56,17 @@ const useAuthStore = create((set) => ({
                 set({ user: null, isAuthenticated: false });
             }
         }
+    },
+
+    updateProfile: async (data) => {
+        try {
+            const response = await api.patch('/users/profile/', data);
+            set({ user: response.data });
+            return true;
+        } catch (error) {
+            console.error('Failed to update profile', error);
+            return false;
+        }
     }
 }));
 

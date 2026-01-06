@@ -1,14 +1,23 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { Loader, AlertCircle } from 'lucide-react';
 import SocialLoginButtons from '../components/SocialLoginButtons';
 
 const Signup = () => {
-    const [formData, setFormData] = useState({ username: '', email: '', password: '' });
+    const [formData, setFormData] = useState({ username: '', email: '', password: '', token: '' });
     const [error, setError] = useState('');
     const { register, login, loading } = useAuthStore();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const token = params.get('token');
+        if (token) {
+            setFormData(prev => ({ ...prev, token }));
+        }
+    }, [location]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

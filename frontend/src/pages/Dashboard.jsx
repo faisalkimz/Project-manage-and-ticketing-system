@@ -53,10 +53,10 @@ const Dashboard = () => {
     );
 
     return (
-        <div className="min-h-screen bg-[#FAFBFC] p-6">
+        <div className="min-h-screen bg-[#FAFBFC] p-4 md:p-6 pb-24 md:pb-6">
             {/* Header */}
-            <header className="mb-8">
-                <h1 className="text-2xl font-semibold text-[#172B4D] mb-1">
+            <header className="mb-6 md:mb-8">
+                <h1 className="text-xl md:text-2xl font-semibold text-[#172B4D] mb-1">
                     Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {user?.username}
                 </h1>
                 <p className="text-sm text-[#5E6C84]">Here's what's happening in your workspace</p>

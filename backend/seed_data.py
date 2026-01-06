@@ -10,7 +10,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core_api.settings')
 django.setup()
 
 from django.contrib.auth import get_user_model
-from users.models import Role, Permission
+from users.models import Role, Permission, Team
 from projects.models import Project, Task, Tag
 from tickets.models import Ticket, SLAPolicy
 from django.utils import timezone
@@ -148,21 +148,41 @@ def seed():
             }
         )
     
-    # 6. Create Projects
+    # 6. Create Teams (Workspaces)
+    print("... Creating Teams")
+    team_data = [
+        ('Core Engineering', 'Responsible for the core engine, API architecture, and performance optimization.', users_map['michael.k']),
+        ('Product Design', 'Visual designers and UX researchers focusing on human-centric aesthetics.', users_map['sarah.j']),
+        ('Customer Success', 'Ensuring our clients get the most out of Omni-PMS through support and advocacy.', users_map['luna.dev'])
+    ]
+    
+    for name, desc, lead in team_data:
+        t, created = Team.objects.get_or_create(
+            name=name,
+            defaults={'description': desc, 'lead': lead}
+        )
+        t.members.add(users_map['admin'], users_map['michael.k'], users_map['luna.dev'], users_map['alex.pm'], users_map['sarah.j'])
+
+    # 7. Create Projects
     print("... Creating Projects")
+    eng_team = Team.objects.get(name='Core Engineering')
+    design_team = Team.objects.get(name='Product Design')
+    success_team = Team.objects.get(name='Customer Success')
+
     project_data = [
-        ('Omni-PMS Redesign', 'Complete overhaul of the project management system with human-centric design approach.', users_map['admin']),
-        ('Customer Portal 2.0', 'Modernizing the customer interaction gateway with real-time support integration.', users_map['luna.dev']),
-        ('AI Integration Engine', 'Internal workspace for developing LLM-powered ticket categorization services.', users_map['michael.k'])
+        ('Omni-PMS Redesign', 'Complete overhaul of the project management system with human-centric design approach.', users_map['admin'], design_team),
+        ('Customer Portal 2.0', 'Modernizing the customer interaction gateway with real-time support integration.', users_map['luna.dev'], success_team),
+        ('AI Integration Engine', 'Internal workspace for developing LLM-powered ticket categorization services.', users_map['michael.k'], eng_team)
     ]
     
     projects = []
-    for name, desc, lead in project_data:
+    for name, desc, lead, team in project_data:
         p, created = Project.objects.get_or_create(
             name=name, 
             defaults={
                 'description': desc,
                 'created_by': lead,
+                'team': team,
                 'start_date': timezone.now().date()
             }
         )

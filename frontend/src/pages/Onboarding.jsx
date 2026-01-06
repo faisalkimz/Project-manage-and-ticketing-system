@@ -38,6 +38,7 @@ const Onboarding = () => {
                     name: boardName,
                     description: 'My first project board',
                     status: 'ACTIVE',
+                    team_id: teamId
                 });
             }
 
