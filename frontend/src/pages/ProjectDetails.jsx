@@ -816,31 +816,71 @@ const ProjectDetails = () => {
                     <div className="flex-1 overflow-y-auto p-8 bg-white">
                         <div className="max-w-4xl">
                             <h1 className="text-2xl font-bold text-[#172B4D] mb-2">Roadmap</h1>
-                            <p className="text-sm text-[#5E6C84] mb-8">Plan and track your project milestones.</p>
+                            <p className="text-sm text-[#5E6C84] mb-8">Plan and track your project milestones and deliverables.</p>
 
-                            <div className="space-y-4">
-                                {project.deliverables?.map((milestone) => (
-                                    <div key={milestone.id} className="flex gap-4 p-4 border border-[#DFE1E6] rounded-sm bg-[#FAFBFC] hover:border-[#0052CC] transition-all">
-                                        <div className={`shrink-0 w-10 h-10 rounded-sm flex items-center justify-center ${milestone.is_completed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
-                                            <Flag size={20} />
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <h3 className="font-bold text-[#172B4D]">{milestone.name}</h3>
-                                                <span className="text-xs font-bold text-[#5E6C84]">{new Date(milestone.due_date).toLocaleDateString()}</span>
-                                            </div>
-                                            <p className="text-sm text-[#5E6C84] mb-4">{milestone.description}</p>
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex-1 h-1.5 bg-[#DFE1E6] rounded-full overflow-hidden">
-                                                    <div className="h-full bg-[#00875A]" style={{ width: milestone.is_completed ? '100%' : '30%' }} />
+                            <div className="space-y-8">
+                                {/* Milestones Section */}
+                                <section>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-sm font-bold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
+                                            <Flag size={16} /> Milestones
+                                        </h3>
+                                        <button onClick={() => setIsRoadmapModalOpen(true)} className="text-xs font-bold text-[#0052CC] hover:underline flex items-center gap-1">
+                                            <Plus size={14} /> Add Milestone
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {project.milestones?.map((m) => (
+                                            <div key={m.id} className="relative pl-6 border-l-2 border-[#DFE1E6] pb-4 last:pb-0">
+                                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ${m.is_completed ? 'bg-green-500' : 'bg-[#0052CC]'}`} />
+                                                <div className="bg-[#FAFBFC] border border-[#DFE1E6] rounded p-3">
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <h4 className="font-bold text-[#172B4D] text-sm">{m.name}</h4>
+                                                        <span className="text-xs font-bold text-[#5E6C84]">{new Date(m.due_date).toLocaleDateString()}</span>
+                                                    </div>
+                                                    <p className="text-xs text-[#5E6C84]">{m.description}</p>
                                                 </div>
                                             </div>
-                                        </div>
+                                        ))}
+                                        {(!project.milestones || project.milestones.length === 0) && (
+                                            <p className="text-sm text-[#5E6C84] italic">No milestones defined.</p>
+                                        )}
                                     </div>
-                                ))}
-                                <button onClick={() => setShowDeliverableModal(true)} className="flex items-center gap-2 text-sm font-bold text-[#0052CC] hover:underline p-2">
-                                    <Plus size={16} /> Add milestone
-                                </button>
+                                </section>
+
+                                {/* Deliverables Section */}
+                                <section>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-sm font-bold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
+                                            <CheckSquare size={16} /> Deliverables
+                                        </h3>
+                                        <button onClick={() => setShowDeliverableModal(true)} className="text-xs font-bold text-[#0052CC] hover:underline flex items-center gap-1">
+                                            <Plus size={14} /> Add Deliverable
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {project.deliverables?.map((d) => (
+                                            <div key={d.id} className="flex gap-3 p-3 border border-[#DFE1E6] rounded bg-white relative overflow-hidden group">
+                                                <div className={`w-1 h-full absolute left-0 top-0 ${d.is_completed ? 'bg-green-500' : 'bg-[#FF9F1A]'}`} />
+                                                <div className="flex-1">
+                                                    <h4 className="font-bold text-[#172B4D] text-sm mb-1">{d.name}</h4>
+                                                    <p className="text-xs text-[#5E6C84] line-clamp-2">{d.description}</p>
+                                                    <div className="mt-2 flex items-center gap-2">
+                                                        <span className="text-[10px] font-bold uppercase text-[#5E6C84] bg-[#EBECF0] px-1.5 py-0.5 rounded">
+                                                            {d.due_date ? new Date(d.due_date).toLocaleDateString() : 'No Date'}
+                                                        </span>
+                                                        <button onClick={() => handleToggleDeliverable(d.id, d.is_completed)} className="text-[10px] text-[#0052CC] hover:underline">
+                                                            {d.is_completed ? 'Mark Incomplete' : 'Mark Complete'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {(!project.deliverables || project.deliverables.length === 0) && (
+                                            <p className="col-span-2 text-sm text-[#5E6C84] italic">No deliverables defined.</p>
+                                        )}
+                                    </div>
+                                </section>
                             </div>
                         </div>
                     </div>
@@ -875,6 +915,45 @@ const ProjectDetails = () => {
                                                 </div>
                                                 <p className="text-lg font-bold text-[#172B4D]">{project.members_details?.length || 0}</p>
                                             </div>
+                                        </div>
+                                    </section>
+
+                                    {/* Goals Section */}
+                                    <section className="bg-white border border-[#DFE1E6] p-6 rounded-sm">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-xs font-bold text-[#172B4D] uppercase tracking-widest flex items-center gap-2">
+                                                <Target size={14} /> Goals & Objectives
+                                            </h3>
+                                            <button onClick={() => setShowGoalModal(true)} className="text-[#0052CC] hover:underline text-xs font-bold flex items-center gap-1">
+                                                <Plus size={14} /> Add Goal
+                                            </button>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {project.goals?.map(goal => (
+                                                <div key={goal.id} className="flex items-start gap-3 p-3 bg-[#FAFBFC] rounded border border-[#DFE1E6]">
+                                                    <div
+                                                        onClick={() => handleToggleGoal(goal.id, goal.is_achieved)}
+                                                        className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center cursor-pointer transition-colors ${goal.is_achieved ? 'bg-green-500 border-green-500 text-white' : 'border-[#DFE1E6] bg-white hover:border-[#0052CC]'}`}
+                                                    >
+                                                        {goal.is_achieved && <Check size={10} />}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className={`text-sm font-bold ${goal.is_achieved ? 'text-[#5E6C84] line-through' : 'text-[#172B4D]'}`}>{goal.title}</h4>
+                                                        <p className="text-xs text-[#5E6C84] mt-1">{goal.description}</p>
+                                                        {goal.target_date && (
+                                                            <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-[#5E6C84] uppercase">
+                                                                <CalendarIcon size={10} /> Target: {new Date(goal.target_date).toLocaleDateString()}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {(!project.goals || project.goals.length === 0) && (
+                                                <div className="text-center py-4 border-2 border-dashed border-[#DFE1E6] rounded">
+                                                    <Target size={20} className="mx-auto text-[#DFE1E6] mb-2" />
+                                                    <p className="text-xs text-[#5E6C84]">Define project goals to align your team.</p>
+                                                </div>
+                                            )}
                                         </div>
                                     </section>
 
