@@ -38,7 +38,7 @@ class TeamInviteViewSet(viewsets.ModelViewSet):
             message=f'You have been invited to join Mbabali PMS.\n\nRole: {role.name}\n\nClick the link to join:\n{join_link}',
             from_email='noreply@mbabali.com',
             recipient_list=[invite.email],
-            fail_silently=True
+            fail_silently=False
         )
 
     def get_queryset(self):

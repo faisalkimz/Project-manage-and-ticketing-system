@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Layers, ArrowLeft, Calendar, User, Activity,
-    PieChart, MoreHorizontal, Target, CheckCircle2, ChevronRight
+    PieChart, MoreHorizontal, Target, CheckCircle2, ChevronRight,
+    X, Search, Check, Plus
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../components/Toast';
@@ -13,6 +14,10 @@ const PortfolioDetails = () => {
     const { showToast } = useToast();
     const [portfolio, setPortfolio] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [availableProjects, setAvailableProjects] = useState([]);
+    const [selectedProjectIds, setSelectedProjectIds] = useState([]);
+    const [projectSearch, setProjectSearch] = useState('');
 
     useEffect(() => {
         const fetchPortfolio = async () => {
@@ -56,6 +61,50 @@ const PortfolioDetails = () => {
     const health = portfolio.health || 'ON_TRACK';
     const progress = portfolio.progress || 0;
     const projectCount = portfolio.projects?.length || 0;
+
+    const openLinkModal = async () => {
+        console.log("Opening Link Modal");
+        setIsLinkModalOpen(true);
+        setSelectedProjectIds([]);
+        try {
+            const res = await api.get('/projects/');
+            // Filter out projects already in this portfolio
+            // Assuming portfolio.id is number/string matching params
+            const currentId = parseInt(id);
+            setAvailableProjects(res.data.filter(p => p.portfolio !== currentId));
+        } catch (e) {
+            showToast('Failed to fetch projects', 'error');
+        }
+    };
+
+    const handleLinkSubmit = async () => {
+        if (selectedProjectIds.length === 0) return;
+        try {
+            await api.post(`/projects/portfolios/${id}/link_projects/`, {
+                project_ids: selectedProjectIds
+            });
+            showToast('Projects linked successfully', 'success');
+            setIsLinkModalOpen(false);
+            // Refresh
+            const res = await api.get(`/projects/portfolios/${id}/`);
+            setPortfolio(res.data);
+        } catch (e) {
+            showToast('Failed to link projects', 'error');
+        }
+    };
+
+    const toggleProjectSelection = (pid) => {
+        if (selectedProjectIds.includes(pid)) {
+            setSelectedProjectIds(prev => prev.filter(id => id !== pid));
+        } else {
+            setSelectedProjectIds(prev => [...prev, pid]);
+        }
+    };
+
+    const filteredProjects = availableProjects.filter(p =>
+        p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
+        (p.key && p.key.toLowerCase().includes(projectSearch.toLowerCase()))
+    );
 
     return (
         <div className="min-h-screen bg-[#FAFBFC] p-6 lg:p-10 font-sans pb-24">
@@ -175,7 +224,10 @@ const PortfolioDetails = () => {
                             <div className="p-8 text-center text-[#5E6C84]">
                                 <PieChart size={32} className="mx-auto mb-2 opacity-50" />
                                 <p className="text-sm">No projects are currently linked to this portfolio.</p>
-                                <button className="mt-4 px-4 py-2 border border-[#DFE1E6] rounded text-xs font-bold text-[#172B4D] hover:bg-[#F4F5F7]">
+                                <button
+                                    onClick={openLinkModal}
+                                    className="mt-4 px-4 py-2 border border-[#DFE1E6] rounded text-xs font-bold text-[#172B4D] hover:bg-[#F4F5F7]"
+                                >
                                     Link Existing Projects
                                 </button>
                             </div>
@@ -213,7 +265,77 @@ const PortfolioDetails = () => {
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* Link Projects Modal */}
+            {
+                isLinkModalOpen && (
+                    <div className="fixed inset-0 z-[200] bg-[#091E42]/50 flex items-center justify-center p-4">
+                        <div className="bg-white w-full max-w-lg rounded-xl shadow-lg animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[80vh]">
+                            <div className="p-4 border-b border-[#DFE1E6] flex justify-between items-center bg-[#F4F5F7]">
+                                <h3 className="text-sm font-bold text-[#172B4D]">Link Projects to Portfolio</h3>
+                                <button onClick={() => setIsLinkModalOpen(false)} className="text-[#5E6C84] hover:text-[#172B4D]"><X size={20} /></button>
+                            </div>
+
+                            <div className="p-4 border-b border-[#DFE1E6]">
+                                <div className="relative">
+                                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5E6C84]" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search projects by name or key..."
+                                        className="w-full pl-9 pr-4 py-2 border border-[#DFE1E6] rounded-lg text-sm focus:border-[#0052CC] outline-none"
+                                        value={projectSearch}
+                                        onChange={e => setProjectSearch(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-2">
+                                {filteredProjects.length === 0 ? (
+                                    <div className="text-center py-8 text-[#5E6C84] text-sm">No projects found.</div>
+                                ) : (
+                                    <div className="space-y-1">
+                                        {filteredProjects.map(proj => {
+                                            const isSelected = selectedProjectIds.includes(proj.id);
+                                            return (
+                                                <div
+                                                    key={proj.id}
+                                                    onClick={() => toggleProjectSelection(proj.id)}
+                                                    className={`p-3 rounded-lg flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-[#E6EFFC] border border-[#B3D4FF]' : 'hover:bg-[#F4F5F7] border border-transparent'}`}
+                                                >
+                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-[#0052CC] border-[#0052CC] text-white' : 'bg-white border-[#DFE1E6] text-transparent'}`}>
+                                                        <Check size={14} />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="text-sm font-bold text-[#172B4D]">{proj.name}</h4>
+                                                        <p className="text-xs text-[#5E6C84]">
+                                                            {proj.key} • {proj.portfolio ? 'Reassigning from other portfolio' : 'No Portfolio'}
+                                                        </p>
+                                                    </div>
+                                                    {proj.portfolio && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-bold">Transfer</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-4 border-t border-[#DFE1E6] bg-[#F4F5F7] flex justify-end gap-3">
+                                <button onClick={() => setIsLinkModalOpen(false)} className="px-4 py-2 border border-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] hover:bg-[#EAECEF]">
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleLinkSubmit}
+                                    disabled={selectedProjectIds.length === 0}
+                                    className="px-4 py-2 bg-[#0052CC] text-white rounded text-sm font-bold hover:bg-[#0065FF] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Link {selectedProjectIds.length > 0 ? `${selectedProjectIds.length} Projects` : ''}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 

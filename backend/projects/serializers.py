@@ -12,9 +12,22 @@ class ProjectCategorySerializer(serializers.ModelSerializer):
 
 class PortfolioSerializer(serializers.ModelSerializer):
     owner_details = UserSerializer(source='owner', read_only=True)
+    projects = serializers.SerializerMethodField()
+    
     class Meta:
         model = Portfolio
         fields = '__all__'
+        
+    def get_projects(self, obj):
+        return [
+            {
+                "id": p.id, 
+                "name": p.name, 
+                "key": p.key,
+                "status": p.status
+            }
+            for p in obj.projects.all()
+        ]
 
 class ProgramSerializer(serializers.ModelSerializer):
     owner_details = UserSerializer(source='owner', read_only=True)

@@ -30,6 +30,13 @@ class PortfolioViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
+    @action(detail=True, methods=['post'])
+    def link_projects(self, request, pk=None):
+        portfolio = self.get_object()
+        project_ids = request.data.get('project_ids', [])
+        Project.objects.filter(id__in=project_ids).update(portfolio=portfolio)
+        return Response({'status': 'Projects linked successfully'})
+
 class ProgramViewSet(viewsets.ModelViewSet):
     queryset = Program.objects.all()
     serializer_class = ProgramSerializer
