@@ -3,12 +3,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import (
     Project, Task, Tag, Milestone, ProjectCategory,
-    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus
+    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint
 )
 from .serializers import (
     ProjectSerializer, TaskSerializer, TagSerializer, MilestoneSerializer,
     ProjectCategorySerializer, PortfolioSerializer, ProgramSerializer,
-    ProjectGoalSerializer, DeliverableSerializer, ProjectStatusSerializer
+    ProjectGoalSerializer, DeliverableSerializer, ProjectStatusSerializer,
+    SprintSerializer
 )
 
 class ProjectCategoryViewSet(viewsets.ModelViewSet):
@@ -83,6 +84,26 @@ class ProjectStatusViewSet(viewsets.ModelViewSet):
         if project_id:
             return ProjectStatus.objects.filter(project_id=project_id)
         return ProjectStatus.objects.all()
+
+class SprintViewSet(viewsets.ModelViewSet):
+    queryset = Sprint.objects.all()
+    serializer_class = SprintSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            return Sprint.objects.filter(project_id=project_id)
+        return Sprint.objects.all()
+
+    @action(detail=True, methods=['post'])
+    def start_sprint(self, request, pk=None):
+        sprint = self.get_object()
+        # Deactivate other active sprints in this project
+        Sprint.objects.filter(project=sprint.project, status='ACTIVE').update(status='COMPLETED')
+        sprint.status = 'ACTIVE'
+        sprint.save()
+        return Response({'status': 'Sprint started'})
 
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()

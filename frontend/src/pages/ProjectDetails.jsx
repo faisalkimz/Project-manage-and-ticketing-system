@@ -30,8 +30,12 @@ const ProjectDetails = () => {
         status: 'TODO',
         due_date: '',
         issue_type: 'TASK',
-        story_points: 0
+        story_points: 0,
+        parent_task: null
     });
+    const [sprints, setSprints] = useState([]);
+    const [showSprintModal, setShowSprintModal] = useState(false);
+    const [newSprint, setNewSprint] = useState({ name: '', goal: '', start_date: '', end_date: '' });
     const [viewMode, setViewMode] = useState('board');
     const [allUsers, setAllUsers] = useState([]);
     const [activeTimer, setActiveTimer] = useState(null);
@@ -73,16 +77,22 @@ const ProjectDetails = () => {
     const [isBulkMode, setIsBulkMode] = useState(false);
     const [auditLogs, setAuditLogs] = useState([]);
 
+    // Section 3: Visualization & Boards
+    const [groupBy, setGroupBy] = useState('none'); // none, assignee, priority
+    const [draggedTaskId, setDraggedTaskId] = useState(null);
+
     const fetchProjectDetails = async () => {
         try {
-            const [projectRes, tasksRes, userRes] = await Promise.all([
+            const [projectRes, tasksRes, userRes, sprintRes] = await Promise.all([
                 api.get(`/projects/projects/${id}/`),
                 api.get(`/projects/tasks/?project_id=${id}`),
-                api.get('/users/list/')
+                api.get('/users/list/'),
+                api.get(`/projects/sprints/?project_id=${id}`)
             ]);
             setProject(projectRes.data);
             setTasks(tasksRes.data);
             setAllUsers(userRes.data);
+            setSprints(sprintRes.data);
         } catch (error) { console.error(error); }
     };
 
@@ -163,7 +173,16 @@ const ProjectDetails = () => {
     const handleCreateTask = async (e) => {
         e.preventDefault();
         try {
-            await api.post('/projects/tasks/', { ...newTask, project: id });
+            const payload = {
+                ...newTask,
+                project: id,
+                description: newTask.description?.trim() || null,
+                due_date: newTask.due_date || null,
+                parent_task: newTask.parent_task || null,
+                status: newTask.status || 'TODO'
+            };
+
+            await api.post('/projects/tasks/', payload);
             setIsTaskModalOpen(false);
             setNewTask({
                 title: '',
@@ -172,10 +191,15 @@ const ProjectDetails = () => {
                 status: 'TODO',
                 due_date: '',
                 issue_type: 'TASK',
-                story_points: 0
+                story_points: 0,
+                parent_task: null
             });
             fetchProjectDetails();
-        } catch (error) { }
+            showToast("Issue created successfully", "success");
+        } catch (error) {
+            console.error('Failed to create issue:', error.response?.data);
+            showToast(error.response?.data?.title?.[0] || error.response?.data?.detail || "Failed to create issue", "error");
+        }
     };
 
     const handleQuickAddCard = async (columnId) => {
@@ -541,12 +565,45 @@ const ProjectDetails = () => {
         } catch (error) { showToast("Failed to create status", "error"); }
     };
 
+    const handleCreateSprint = async () => {
+        if (!newSprint.name || !newSprint.start_date || !newSprint.end_date) return;
+        try {
+            await api.post('/projects/sprints/', { ...newSprint, project: id });
+            setNewSprint({ name: '', goal: '', start_date: '', end_date: '' });
+            setShowSprintModal(false);
+            fetchProjectDetails();
+        } catch (error) { showToast("Failed to create sprint", "error"); }
+    };
+
     const handleDeleteStatus = async (statusId) => {
         if (!window.confirm('Are you sure? Tasks in this status might become invisible.')) return;
         try {
             await api.delete(`/projects/statuses/${statusId}/`);
             fetchProjectDetails();
         } catch (error) { showToast("Failed to delete status", "error"); }
+    };
+
+    // Drag and Drop Handlers
+    const onDragStart = (e, taskId) => {
+        setDraggedTaskId(taskId);
+        e.dataTransfer.setData('taskId', taskId);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const onDragOver = (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const onDrop = async (e, targetStatus) => {
+        e.preventDefault();
+        const taskId = e.dataTransfer.getData('taskId') || draggedTaskId;
+        if (!taskId) return;
+
+        try {
+            await handleMoveCard(parseInt(taskId), targetStatus);
+            setDraggedTaskId(null);
+        } catch (error) { console.error('Drop failed', error); }
     };
 
     if (!project) return <div className="h-screen w-full flex items-center justify-center bg-[#FAFBFC]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0052CC]"></div></div>;
@@ -560,7 +617,40 @@ const ProjectDetails = () => {
             { id: 'DONE', title: 'Done', color: '#E3FCEF' }
         ];
 
-    const rootTasks = tasks.filter(t => !t.parent_task);
+    const rootTasks = Array.isArray(tasks) ? tasks.filter(t => !t.parent_task || t.parent_task === null || t.parent_task === undefined) : [];
+
+    // Grouping for Swimlanes
+    const swimlanes = () => {
+        if (groupBy === 'assignee') {
+            const groups = { 'Unassigned': [] };
+            allUsers.forEach(u => groups[u.username] = []);
+            tasks.forEach(t => {
+                const key = t.assigned_to_details?.username || 'Unassigned';
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(t);
+            });
+            return Object.entries(groups).filter(([_, items]) => items.length > 0 || _ !== 'Unassigned');
+        }
+        if (groupBy === 'priority') {
+            const groups = { 'CRITICAL': [], 'HIGH': [], 'MEDIUM': [], 'LOW': [] };
+            tasks.forEach(t => {
+                const key = t.priority || 'MEDIUM';
+                groups[key].push(t);
+            });
+            return Object.entries(groups);
+        }
+        if (groupBy === 'sprint') {
+            const groups = { 'Backlog': [] };
+            sprints.forEach(s => groups[s.name] = []);
+            tasks.forEach(t => {
+                const key = t.sprint_details?.name || 'Backlog';
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(t);
+            });
+            return Object.entries(groups).filter(([_, items]) => items.length > 0 || _ !== 'Backlog');
+        }
+        return [['All Tasks', tasks]];
+    };
 
     const getPriorityColor = (p) => {
         switch (p) {
@@ -600,69 +690,105 @@ const ProjectDetails = () => {
                     <span className="text-[#172B4D] font-bold capitalize">{viewMode}</span>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between pb-4">
+                    {/* Left: Project Identity */}
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-[#0052CC] rounded-[3px] flex items-center justify-center text-white shrink-0 shadow-sm">
                             <Kanban size={24} />
                         </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-[#172B4D]">{project.name}</h1>
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-xl font-bold text-[#172B4D]">{project.name}</h1>
+                                <button onClick={handleToggleStar} className="p-1 hover:bg-[#EBECF0] rounded transition-colors">
+                                    <Star size={18} className={project.is_starred ? 'fill-amber-400 text-amber-400' : 'text-[#5E6C84]'} />
+                                </button>
+                                <button
+                                    onClick={() => setIsTaskModalOpen(true)}
+                                    className="ml-2 px-3 py-1 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-sm text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                                >
+                                    <Plus size={14} /> Create
+                                </button>
+                            </div>
                             <p className="text-[11px] text-[#5E6C84] uppercase font-bold tracking-wider">Software project</p>
                         </div>
-                        <button onClick={handleToggleStar} className="p-1 hover:bg-[#EBECF0] rounded transition-colors ml-2">
-                            <Star size={20} className={project.is_starred ? 'fill-amber-400 text-amber-400' : 'text-[#5E6C84]'} />
-                        </button>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <div className="flex -space-x-2 mr-2">
-                            {project.members_details?.slice(0, 5).map((m, i) => (
-                                <div
-                                    key={i}
-                                    title={m.username}
-                                    className="w-8 h-8 rounded-full border-2 border-white bg-[#0052CC] text-white flex items-center justify-center text-xs font-bold ring-2 ring-white"
-                                >
-                                    {m.username[0].toUpperCase()}
-                                </div>
-                            ))}
+                    {/* Right: Stats & Actions */}
+                    <div className="flex items-center gap-8">
+                        {/* Status Stats */}
+                        <div className="hidden lg:flex items-center gap-5 border-r border-[#DFE1E6] pr-8">
+                            {columns.map(col => {
+                                const count = tasks.filter(t =>
+                                    t.status === col.id ||
+                                    t.status?.toUpperCase() === col.id?.toUpperCase()
+                                ).length;
+                                return (
+                                    <div key={col.id} className="flex flex-col items-center">
+                                        <span className="text-[9px] font-bold text-[#5E6C84] uppercase tracking-wider mb-0.5">{col.title}</span>
+                                        <span className={`text-xs font-bold ${count > 0 ? 'text-[#172B4D]' : 'text-[#A5ADBA]'}`}>{count}</span>
+                                    </div>
+                                );
+                            })}
+                            <div className="flex flex-col items-center pl-5 border-l border-[#DFE1E6]">
+                                <span className="text-[9px] font-bold text-[#5E6C84] uppercase tracking-wider mb-0.5">Total</span>
+                                <span className="text-xs font-bold text-[#0052CC]">{tasks.length}</span>
+                            </div>
                         </div>
-                        <button
-                            onClick={() => setShowMembersModal(true)}
-                            className="w-8 h-8 rounded-full border-2 border-dashed border-[#DFE1E6] flex items-center justify-center text-[#5E6C84] hover:border-[#0052CC] hover:text-[#0052CC] transition-colors"
-                        >
-                            <Plus size={16} />
-                        </button>
-                        <div className="h-6 w-px bg-[#DFE1E6] mx-2" />
-                        <button
-                            onClick={() => setShowShareModal(true)}
-                            className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded-sm text-sm font-bold text-[#42526E] transition-colors flex items-center gap-2"
-                        >
-                            <Share2 size={16} /> Share
-                        </button>
-                        <div className="relative">
+
+                        {/* Team & Actions */}
+                        <div className="flex items-center gap-3">
+                            <div className="flex -space-x-2">
+                                {project.members_details?.slice(0, 5).map((m, i) => (
+                                    <div
+                                        key={i}
+                                        title={m.username}
+                                        className="w-7 h-7 rounded-full border-2 border-white bg-[#0052CC] text-white flex items-center justify-center text-[10px] font-bold ring-1 ring-[#DFE1E6]"
+                                    >
+                                        {m.username[0].toUpperCase()}
+                                    </div>
+                                ))}
+                                {project.members_details?.length > 5 && (
+                                    <div className="w-7 h-7 rounded-full border-2 border-white bg-[#EBECF0] text-[#42526E] flex items-center justify-center text-[10px] font-bold ring-1 ring-[#DFE1E6]">
+                                        +{project.members_details.length - 5}
+                                    </div>
+                                )}
+                            </div>
                             <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowMoreMenu(!showMoreMenu);
-                                }}
-                                className="p-1.5 hover:bg-[#EBECF0] rounded-sm transition-colors text-[#5E6C84]"
+                                onClick={() => setShowMembersModal(true)}
+                                className="w-7 h-7 rounded-full border border-dashed border-[#DFE1E6] flex items-center justify-center text-[#5E6C84] hover:border-[#0052CC] hover:text-[#0052CC] transition-colors"
                             >
-                                <MoreHorizontal size={20} />
+                                <Plus size={14} />
                             </button>
-                            {showMoreMenu && (
-                                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-[#DFE1E6] shadow-xl rounded-sm py-2 z-50">
-                                    <button onClick={copyBoardLink} className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Board link</button>
-                                    <button onClick={printBoard} className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Print</button>
-                                    <div className="border-t border-[#DFE1E6] my-1" />
-                                    <button onClick={openSettings} className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Board settings</button>
-                                    <button onClick={changeBackground} className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Customize background</button>
-                                </div>
-                            )}
+                            <div className="h-5 w-px bg-[#DFE1E6] mx-1" />
+                            <button
+                                onClick={() => setShowShareModal(true)}
+                                className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded-sm text-xs font-bold text-[#42526E] transition-colors flex items-center gap-2"
+                            >
+                                <Share2 size={14} /> Share
+                            </button>
+                            <div className="relative">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowMoreMenu(!showMoreMenu);
+                                    }}
+                                    className="p-1 hover:bg-[#EBECF0] rounded-sm transition-colors text-[#5E6C84]"
+                                >
+                                    <MoreHorizontal size={20} />
+                                </button>
+                                {showMoreMenu && (
+                                    <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-[#DFE1E6] shadow-xl rounded-sm py-2 z-50">
+                                        <button onClick={copyBoardLink} className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Board link</button>
+                                        <button onClick={printBoard} className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Print</button>
+                                        <div className="border-t border-[#DFE1E6] my-1" />
+                                        <button onClick={openSettings} className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Board settings</button>
+                                        <button onClick={changeBackground} className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Customize background</button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                {/* Horizontal Navigation Tabs */}
+                </div>{/* Horizontal Navigation Tabs */}
                 <nav className="flex items-center gap-1 mt-6 overflow-x-auto no-scrollbar">
                     <div className="flex items-center shrink-0">
                         <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider px-2 self-center">Planning:</span>
@@ -688,6 +814,16 @@ const ProjectDetails = () => {
                         <button onClick={() => setViewMode('timeline')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'timeline' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
                             Timeline
                         </button>
+                        <button onClick={() => setViewMode('grid')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'grid' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
+                            Grid
+                        </button>
+                    </div>
+                    <div className="h-4 w-[1px] bg-[#DFE1E6] mx-2 shrink-0" />
+                    <div className="flex items-center shrink-0">
+                        <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider px-2 self-center">Reports:</span>
+                        <button onClick={() => setViewMode('workload')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'workload' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
+                            Workload
+                        </button>
                     </div>
                     <div className="h-4 w-[1px] bg-[#DFE1E6] mx-2 shrink-0" />
                     <button onClick={openSettings} className="px-3 py-2 border-b-2 text-sm font-bold border-transparent text-[#42526E] hover:text-[#0052CC] shrink-0">
@@ -698,148 +834,197 @@ const ProjectDetails = () => {
 
             <main className="flex-1 overflow-auto bg-[#F4F5F7] flex flex-col">
                 {viewMode === 'board' && (
-                    <div className="flex-1 flex gap-4 p-6 overflow-x-auto custom-scrollbar min-h-0">
-                        {columns.map((col) => (
-                            <div key={col.id} className="flex flex-col w-[280px] md:w-[320px] shrink-0 bg-[#F4F5F7]">
-                                {/* List Header */}
-                                <div className="px-3 py-3 flex items-center justify-between group">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-[11px] font-bold text-[#5E6C84] uppercase tracking-wider">
-                                            {col.title}
-                                        </h3>
-                                        <span className="bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                            {rootTasks.filter(t => t.status === col.id).length}
-                                        </span>
-                                    </div>
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setActiveListMenu(activeListMenu === col.id ? null : col.id)}
-                                            className="p-1 hover:bg-[#DFE1E6] rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <MoreHorizontal size={14} className="text-[#5E6C84]" />
-                                        </button>
-                                        {activeListMenu === col.id && (
-                                            <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-[#DFE1E6] shadow-lg rounded-sm py-1 z-20">
-                                                <button onClick={() => handleSortList(col.id, 'priority')} className="w-full text-left px-4 py-2 text-xs text-[#172B4D] hover:bg-[#F4F5F7]">Sort by Priority</button>
-                                                <button onClick={() => handleSortList(col.id, 'date')} className="w-full text-left px-4 py-2 text-xs text-[#172B4D] hover:bg-[#F4F5F7]">Sort by Date</button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                    <div className="px-6 py-2 bg-white/50 border-b border-[#DFE1E6] flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-4">
+                            <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">Group By:</span>
+                            <div className="flex bg-[#EBECF0] p-0.5 rounded-sm">
+                                {['none', 'assignee', 'priority', 'sprint'].map(mode => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setGroupBy(mode)}
+                                        className={`px-3 py-1 text-[10px] font-bold uppercase rounded-sm transition-all ${groupBy === mode ? 'bg-white text-[#172B4D] shadow-sm' : 'text-[#42526E] hover:text-[#172B4D]'}`}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <span className="text-xs text-[#5E6C84] italic">Drag cards to update status</span>
+                        </div>
+                    </div>
+                )}
 
-                                {/* Cards Container */}
-                                <div className="flex-1 overflow-y-auto px-1 pb-4 space-y-2 custom-scrollbar min-h-[100px]">
-                                    {tasks.filter(t => t.status === col.id && !t.parent_task).map((task) => (
+                {viewMode === 'board' && (
+                    <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                        {swimlanes().map(([groupName, groupTasks]) => (
+                            <div key={groupName} className="space-y-4">
+                                {groupBy !== 'none' && (
+                                    <div className="flex items-center gap-3 py-2 border-b border-[#DFE1E6]">
+                                        <ChevronDown size={14} className="text-[#5E6C84]" />
+                                        <h2 className="text-sm font-bold text-[#172B4D] uppercase">{groupName}</h2>
+                                        <span className="text-[10px] text-[#5E6C84] bg-[#EBECF0] px-1.5 py-0.5 rounded-full font-bold">{groupTasks.length}</span>
+                                    </div>
+                                )}
+                                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                                    {columns.map((col) => (
                                         <div
-                                            key={task.id}
-                                            onClick={(e) => {
-                                                if (isBulkMode) {
-                                                    e.stopPropagation();
-                                                    const newSelected = selectedTaskIds.includes(task.id)
-                                                        ? selectedTaskIds.filter(id => id !== task.id)
-                                                        : [...selectedTaskIds, task.id];
-                                                    setSelectedTaskIds(newSelected);
-                                                    if (newSelected.length === 0) setIsBulkMode(false);
-                                                } else {
-                                                    setSelectedTask(task);
-                                                }
-                                            }}
-                                            className={`bg-white rounded-[3px] border ${selectedTaskIds.includes(task.id) ? 'border-[#4C9AFF] bg-[#E6F0FF]' : 'border-[#DFE1E6]'} hover:border-[#4C9AFF] hover:bg-[#FAFBFC] transition-all cursor-pointer p-3 group relative shadow-sm`}
+                                            key={col.id}
+                                            onDragOver={onDragOver}
+                                            onDrop={(e) => onDrop(e, col.id)}
+                                            className="flex flex-col w-[280px] md:w-[320px] shrink-0 min-h-[200px] group/col"
                                         >
-                                            {/* Bulk Selection Checkbox */}
-                                            <div
-                                                className={`absolute top-2 right-2 z-10 ${selectedTaskIds.includes(task.id) || isBulkMode ? 'block' : 'hidden group-hover:block'}`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setIsBulkMode(true);
-                                                    const newSelected = selectedTaskIds.includes(task.id)
-                                                        ? selectedTaskIds.filter(id => id !== task.id)
-                                                        : [...selectedTaskIds, task.id];
-                                                    setSelectedTaskIds(newSelected);
-                                                    if (newSelected.length === 0) setIsBulkMode(false);
-                                                }}
-                                            >
-                                                <div className={`w-4 h-4 rounded border ${selectedTaskIds.includes(task.id) ? 'bg-[#0052CC] border-[#0052CC]' : 'bg-white border-[#DFE1E6]'} flex items-center justify-center text-white transition-colors`}>
-                                                    {selectedTaskIds.includes(task.id) && <Check size={10} />}
+                                            {/* List Header (Only if no swimlanes or top row) */}
+                                            <div className="px-3 py-3 flex items-center justify-between group">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-[11px] font-bold text-[#5E6C84] uppercase tracking-wider">
+                                                        {col.title}
+                                                    </h3>
+                                                    <span className="bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                                        {groupTasks.filter(t =>
+                                                            t.status === col.id ||
+                                                            t.status?.toUpperCase() === col.id?.toUpperCase()
+                                                        ).length}
+                                                    </span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-col gap-2">
-                                                <p className="text-sm text-[#172B4D] leading-snug">{task.title}</p>
-
-                                                <div className="flex items-center justify-between mt-1">
-                                                    <div className="flex items-center gap-2">
-                                                        {getIssueTypeIcon(task.issue_type)}
-                                                        <span className="text-[10px] font-bold text-[#5E6C84]">
-                                                            {project.key || 'TASK'}-{task.id}
-                                                        </span>
-                                                        {task.story_points > 0 && (
-                                                            <span className="ml-1 bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full" title="Story Points">
-                                                                {task.story_points}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {task.comment_count > 0 && (
-                                                            <div className="flex items-center gap-1 text-[10px] text-[#5E6C84]">
-                                                                <MessageSquare size={12} />
-                                                                {task.comment_count}
+                                            {/* Cards Container */}
+                                            <div className="flex-1 px-1 pb-4 space-y-2 min-h-[100px]">
+                                                {/* Inline Quick Add */}
+                                                <div className="mb-2">
+                                                    {isAddingCard.columnId === col.id ? (
+                                                        <div className="bg-white p-2 rounded shadow-sm border border-[#0052CC] animate-in fade-in slide-in-from-top-1">
+                                                            <textarea
+                                                                autoFocus
+                                                                className="w-full p-2 text-sm border-none outline-none resize-none min-h-[60px]"
+                                                                placeholder="Enter a title for this card..."
+                                                                value={isAddingCard.title}
+                                                                onChange={(e) => setIsAddingCard({ ...isAddingCard, title: e.target.value })}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                                        e.preventDefault();
+                                                                        handleQuickAddCard(col.id);
+                                                                    }
+                                                                    if (e.key === 'Escape') setIsAddingCard({ columnId: null, title: '' });
+                                                                }}
+                                                            />
+                                                            <div className="flex items-center gap-2 mt-2">
+                                                                <button
+                                                                    onClick={() => handleQuickAddCard(col.id)}
+                                                                    className="px-3 py-1.5 bg-[#0052CC] text-white rounded text-xs font-bold hover:bg-[#0747A6]"
+                                                                >
+                                                                    Add card
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setIsAddingCard({ columnId: null, title: '' })}
+                                                                    className="p-1.5 hover:bg-[#EBECF0] rounded text-[#5E6C84]"
+                                                                >
+                                                                    <X size={16} />
+                                                                </button>
                                                             </div>
-                                                        )}
-                                                        {task.assigned_to_details ? (
-                                                            <div
-                                                                className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[9px] font-bold ring-2 ring-white"
-                                                                title={task.assigned_to_details.username}
-                                                            >
-                                                                {task.assigned_to_details.username[0].toUpperCase()}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="w-6 h-6 rounded-full bg-[#EBECF0] text-[#5E6C84] flex items-center justify-center">
-                                                                <Users size={12} />
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setIsAddingCard({ columnId: col.id, title: '' })}
+                                                            className="w-full flex items-center gap-2 p-2 hover:bg-[#EBECF0] rounded-sm text-[#42526E] text-xs font-bold transition-all group opacity-0 group-hover/col:opacity-100"
+                                                        >
+                                                            <Plus size={16} className="text-[#5E6C84] group-hover:text-[#0052CC]" />
+                                                            <span>Add card</span>
+                                                        </button>
+                                                    )}
                                                 </div>
+
+                                                {groupTasks.filter(t =>
+                                                    t.status === col.id ||
+                                                    t.status?.toUpperCase() === col.id?.toUpperCase()
+                                                ).map((task) => (
+                                                    <div
+                                                        key={task.id}
+                                                        draggable
+                                                        onDragStart={(e) => onDragStart(e, task.id)}
+                                                        onClick={(e) => {
+                                                            if (isBulkMode) {
+                                                                e.stopPropagation();
+                                                                const newSelected = selectedTaskIds.includes(task.id)
+                                                                    ? selectedTaskIds.filter(id => id !== task.id)
+                                                                    : [...selectedTaskIds, task.id];
+                                                                setSelectedTaskIds(newSelected);
+                                                                if (newSelected.length === 0) setIsBulkMode(false);
+                                                            } else {
+                                                                setSelectedTask(task);
+                                                            }
+                                                        }}
+                                                        className={`bg-white rounded-[3px] border ${selectedTaskIds.includes(task.id) ? 'border-[#4C9AFF] bg-[#E6F0FF]' : 'border-[#DFE1E6]'} hover:border-[#4C9AFF] hover:bg-[#FAFBFC] transition-all cursor-grab active:cursor-grabbing p-3 group relative shadow-sm`}
+                                                    >
+                                                        {/* Bulk Selection Checkbox */}
+                                                        <div
+                                                            className={`absolute top-2 right-2 z-10 ${selectedTaskIds.includes(task.id) || isBulkMode ? 'block' : 'hidden group-hover:block'}`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setIsBulkMode(true);
+                                                                const newSelected = selectedTaskIds.includes(task.id)
+                                                                    ? selectedTaskIds.filter(id => id !== task.id)
+                                                                    : [...selectedTaskIds, task.id];
+                                                                setSelectedTaskIds(newSelected);
+                                                                if (newSelected.length === 0) setIsBulkMode(false);
+                                                            }}
+                                                        >
+                                                            <div className={`w-4 h-4 rounded border ${selectedTaskIds.includes(task.id) ? 'bg-[#0052CC] border-[#0052CC]' : 'bg-white border-[#DFE1E6]'} flex items-center justify-center text-white transition-colors`}>
+                                                                {selectedTaskIds.includes(task.id) && <Check size={10} />}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex flex-col gap-2">
+                                                            <p className="text-sm text-[#172B4D] leading-snug">{task.title}</p>
+
+                                                            <div className="flex items-center justify-between mt-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    {getIssueTypeIcon(task.issue_type)}
+                                                                    <span className="text-[10px] font-bold text-[#5E6C84]">
+                                                                        {project.key || 'TASK'}-{task.id}
+                                                                    </span>
+                                                                    {task.story_points > 0 && (
+                                                                        <span className="ml-1 bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full" title="Story Points">
+                                                                            {task.story_points}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {task.comment_count > 0 && (
+                                                                        <div className="flex items-center gap-1 text-[10px] text-[#5E6C84]">
+                                                                            <MessageSquare size={12} />
+                                                                            {task.comment_count}
+                                                                        </div>
+                                                                    )}
+                                                                    {task.assigned_to_details ? (
+                                                                        <div className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[9px] font-bold ring-2 ring-white" title={task.assigned_to_details.username}>
+                                                                            {task.assigned_to_details.username[0].toUpperCase()}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="w-6 h-6 rounded-full bg-[#EBECF0] text-[#5E6C84] flex items-center justify-center">
+                                                                            <Users size={12} />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                <button
+                                                    onClick={() => {
+                                                        setNewTask({ ...newTask, status: col.id });
+                                                        setIsTaskModalOpen(true);
+                                                    }}
+                                                    className="w-full flex items-center gap-2 p-2 hover:bg-[#EBECF0] rounded-sm text-[#42526E] text-xs font-bold transition-all group"
+                                                >
+                                                    <Plus size={16} className="text-[#5E6C84] group-hover:text-[#0052CC]" />
+                                                    <span>Create issue</span>
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
-                                </div>
-
-                                {/* Quick Add */}
-                                <div className="p-2">
-                                    {isAddingCard.columnId === col.id ? (
-                                        <div className="bg-white rounded-[3px] border border-[#4C9AFF] p-2 shadow-sm">
-                                            <textarea
-                                                autoFocus
-                                                placeholder="What needs to be done?"
-                                                className="w-full text-sm text-[#172B4D] outline-none resize-none mb-2"
-                                                rows="2"
-                                                value={isAddingCard.title}
-                                                onChange={(e) => setIsAddingCard({ ...isAddingCard, title: e.target.value })}
-                                            />
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    onClick={() => handleQuickAddCard(col.id)}
-                                                    className="px-3 py-1 bg-[#0052CC] text-white text-xs font-bold rounded-sm hover:bg-[#0747A6]"
-                                                >
-                                                    Save
-                                                </button>
-                                                <button
-                                                    onClick={() => setIsAddingCard({ columnId: null, title: '' })}
-                                                    className="p-1 hover:bg-[#F4F5F7] rounded"
-                                                >
-                                                    <X size={16} className="text-[#5E6C84]" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => setIsAddingCard({ columnId: col.id, title: '' })}
-                                            className="w-full text-left px-3 py-2 text-[#42526E] hover:bg-[#EBECF0] rounded-sm transition-colors flex items-center gap-2 text-sm"
-                                        >
-                                            <Plus size={16} /> Create issue
-                                        </button>
-                                    )}
                                 </div>
                             </div>
                         ))}
@@ -849,9 +1034,43 @@ const ProjectDetails = () => {
                 {viewMode === 'list' && (
                     <div className="flex-1 flex flex-col p-6 overflow-hidden">
                         <div className="border border-[#DFE1E6] rounded-sm overflow-hidden flex flex-col bg-white">
-                            <div className="bg-[#FAFBFC] border-b border-[#DFE1E6] flex items-center h-10 px-4">
+                            <div className="bg-[#FAFBFC] border-b border-[#DFE1E6] flex items-center justify-between h-10 px-4">
                                 <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-wider">Project Backlog</h3>
+                                <button
+                                    onClick={() => setShowSprintModal(true)}
+                                    className="px-2 py-1 hover:bg-[#EBECF0] rounded text-[11px] font-bold text-[#0052CC] flex items-center gap-1.5 transition-colors"
+                                >
+                                    <Plus size={14} /> Create sprint
+                                </button>
                             </div>
+
+                            {/* Sprints List */}
+                            {sprints.map(sprint => (
+                                <div key={sprint.id} className="border-b border-[#DFE1E6] bg-white">
+                                    <div className="bg-[#F4F5F7] px-4 py-2 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <ChevronRight size={14} className="text-[#5E6C84]" />
+                                            <span className="text-xs font-bold text-[#172B4D]">{sprint.name}</span>
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${sprint.status === 'ACTIVE' ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#EBECF0] text-[#42526E]'}`}>
+                                                {sprint.status}
+                                            </span>
+                                            <span className="text-[10px] text-[#5E6C84]">{sprint.tasks?.length || 0} tasks</span>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-[10px] text-[#5E6C84]">{new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}</span>
+                                            {sprint.status === 'PLANNED' && (
+                                                <button onClick={async () => {
+                                                    await api.post(`/projects/sprints/${sprint.id}/start_sprint/`);
+                                                    fetchProjectDetails();
+                                                }} className="px-2 py-0.5 bg-[#0052CC] text-white text-[10px] font-bold rounded-sm hover:bg-[#0747A6]">
+                                                    Start sprint
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* Sprint Tasks can go here... for now just keep simple */}
+                                </div>
+                            ))}
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-[#FAFBFC] sticky top-0 z-10 border-b border-[#DFE1E6]">
@@ -960,6 +1179,80 @@ const ProjectDetails = () => {
                 {viewMode === 'timeline' && (
                     <div className="flex-1 overflow-auto p-6 bg-white">
                         <GanttChart tasks={tasks} />
+                    </div>
+                )}
+
+                {viewMode === 'workload' && (
+                    <div className="flex-1 p-8 overflow-y-auto">
+                        <div className="max-w-4xl mx-auto space-y-8">
+                            <h2 className="text-2xl font-bold text-[#172B4D]">Resource Workload</h2>
+                            <div className="grid gap-6">
+                                {allUsers.map(u => {
+                                    const userTasks = tasks.filter(t => t.assigned_to === u.id);
+                                    const done = userTasks.filter(t => t.status === 'DONE').length;
+                                    const total = userTasks.length;
+                                    const points = userTasks.reduce((acc, t) => acc + (t.story_points || 0), 0);
+
+                                    return (
+                                        <div key={u.id} className="bg-white border border-[#DFE1E6] rounded-sm p-6 shadow-sm">
+                                            <div className="flex items-start justify-between mb-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 bg-[#0052CC] text-white rounded-full flex items-center justify-center text-lg font-bold">
+                                                        {u.username[0].toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-[#172B4D]">{u.username}</h3>
+                                                        <p className="text-sm text-[#5E6C84]">{u.email}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-2xl font-bold text-[#172B4D]">{points}</p>
+                                                    <p className="text-[10px] font-bold text-[#5E6C84] uppercase">Story Points</p>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between text-xs font-bold text-[#5E6C84] uppercase">
+                                                    <span>Task Completion</span>
+                                                    <span>{done} / {total} Tasks</span>
+                                                </div>
+                                                <div className="h-2 bg-[#EBECF0] rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-[#61BD4F] transition-all duration-500"
+                                                        style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {viewMode === 'grid' && (
+                    <div className="flex-1 p-6 overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {rootTasks.map(task => (
+                                <div key={task.id} onClick={() => setSelectedTask(task)} className="bg-white border border-[#DFE1E6] rounded-sm p-4 hover:shadow-md transition-shadow cursor-pointer">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">{project.key}-{task.id}</span>
+                                        {getIssueTypeIcon(task.issue_type)}
+                                    </div>
+                                    <h3 className="font-bold text-[#172B4D] mb-4 min-h-[40px]">{task.title}</h3>
+                                    <div className="flex items-center justify-between">
+                                        <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase ${task.status === 'DONE' ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
+                                            {task.status}
+                                        </span>
+                                        {task.assigned_to_details && (
+                                            <div className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[10px] font-bold">
+                                                {task.assigned_to_details.username[0].toUpperCase()}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
 
@@ -2168,6 +2461,174 @@ const ProjectDetails = () => {
                                 <div className="pt-2">
                                     <button type="submit" className="w-full py-2 bg-[#0079BF] text-white font-bold rounded hover:bg-[#026AA7] transition-colors">
                                         Create Deliverable
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+            {/* Sprint Modal */}
+            {
+                showSprintModal && (
+                    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                                <h3 className="font-bold text-[#172B4D]">Create Sprint</h3>
+                                <button onClick={() => setShowSprintModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                            </div>
+                            <div className="p-4 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Sprint Name</label>
+                                    <input
+                                        type="text"
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                        value={newSprint.name}
+                                        onChange={e => setNewSprint({ ...newSprint, name: e.target.value })}
+                                        placeholder="e.g. Sprint 1"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Start Date</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                            value={newSprint.start_date}
+                                            onChange={e => setNewSprint({ ...newSprint, start_date: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">End Date</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                            value={newSprint.end_date}
+                                            onChange={e => setNewSprint({ ...newSprint, end_date: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Sprint Goal</label>
+                                    <textarea
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] min-h-[80px]"
+                                        value={newSprint.goal}
+                                        onChange={e => setNewSprint({ ...newSprint, goal: e.target.value })}
+                                        placeholder="What are we aiming for?"
+                                    />
+                                </div>
+                                <button onClick={handleCreateSprint} className="w-full py-2 bg-[#0052CC] text-white font-bold rounded hover:bg-[#0747A6] transition-colors">
+                                    Create
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Create Task Modal */}
+            {
+                isTaskModalOpen && (
+                    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                                <h3 className="font-bold text-[#172B4D]">Create Issue</h3>
+                                <button onClick={() => setIsTaskModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                            </div>
+                            <form onSubmit={handleCreateTask} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Issue Type</label>
+                                    <div className="flex gap-2">
+                                        {['TASK', 'STORY', 'BUG', 'EPIC'].map(type => (
+                                            <button
+                                                key={type}
+                                                type="button"
+                                                onClick={() => setNewTask({ ...newTask, issue_type: type })}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-2 border rounded-sm transition-all ${newTask.issue_type === type ? 'border-[#0052CC] bg-[#DEEBFF] text-[#0052CC]' : 'border-[#DFE1E6] bg-white text-[#42526E] hover:bg-[#F4F5F7]'}`}
+                                            >
+                                                {getIssueTypeIcon(type)}
+                                                <span className="text-[11px] font-bold">{type}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Summary <span className="text-red-500">*</span></label>
+                                    <input
+                                        required
+                                        type="text"
+                                        className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF]"
+                                        value={newTask.title}
+                                        onChange={e => setNewTask({ ...newTask, title: e.target.value })}
+                                        placeholder="What needs to be done?"
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Priority</label>
+                                        <select
+                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] bg-white"
+                                            value={newTask.priority}
+                                            onChange={e => setNewTask({ ...newTask, priority: e.target.value })}
+                                        >
+                                            <option value="LOW">Low</option>
+                                            <option value="MEDIUM">Medium</option>
+                                            <option value="HIGH">High</option>
+                                            <option value="CRITICAL">Critical</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Story Points</label>
+                                        <input
+                                            type="number"
+                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF]"
+                                            value={newTask.story_points}
+                                            onChange={e => setNewTask({ ...newTask, story_points: parseInt(e.target.value) || 0 })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Parent Task (Optional)</label>
+                                    <select
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] bg-white"
+                                        value={newTask.parent_task || ''}
+                                        onChange={e => setNewTask({ ...newTask, parent_task: e.target.value || null })}
+                                    >
+                                        <option value="">None</option>
+                                        {tasks.filter(t => t.issue_type === 'EPIC' || !t.parent_task).map(t => (
+                                            <option key={t.id} value={t.id}>{t.title}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-[10px] text-[#5E6C84] mt-1">Select an Epic or Parent task to link this issue.</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                                    <textarea
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] min-h-[120px] resize-none"
+                                        value={newTask.description || ''}
+                                        onChange={e => setNewTask({ ...newTask, description: e.target.value })}
+                                        placeholder="Add more details about this issue..."
+                                    />
+                                </div>
+
+                                <div className="pt-4 flex justify-end gap-2 border-t border-[#DFE1E6]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsTaskModalOpen(false)}
+                                        className="px-4 py-2 text-sm font-bold text-[#42526E] hover:bg-[#EBECF0] rounded transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-[#0052CC] text-white rounded text-sm font-bold hover:bg-[#0747A6] transition-colors"
+                                    >
+                                        Create
                                     </button>
                                 </div>
                             </form>

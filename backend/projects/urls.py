@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     ProjectViewSet, TaskViewSet, TagViewSet, MilestoneViewSet,
     ProjectCategoryViewSet, PortfolioViewSet, ProgramViewSet,
-    ProjectGoalViewSet, DeliverableViewSet, ProjectStatusViewSet
+    ProjectGoalViewSet, DeliverableViewSet, ProjectStatusViewSet,
+    SprintViewSet
 )
 
 router = DefaultRouter()
@@ -17,6 +18,7 @@ router.register(r'programs', ProgramViewSet)
 router.register(r'goals', ProjectGoalViewSet)
 router.register(r'deliverables', DeliverableViewSet)
 router.register(r'statuses', ProjectStatusViewSet)
+router.register(r'sprints', SprintViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

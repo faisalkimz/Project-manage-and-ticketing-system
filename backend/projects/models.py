@@ -134,6 +134,23 @@ class ProjectStatus(models.Model):
     def __str__(self):
         return f"{self.project.name} - {self.name}"
 
+class Sprint(models.Model):
+    class Status(models.TextChoices):
+        PLANNED = 'PLANNED', 'Planned'
+        ACTIVE = 'ACTIVE', 'Active'
+        COMPLETED = 'COMPLETED', 'Completed'
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='sprints')
+    name = models.CharField(max_length=100)
+    goal = models.TextField(blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PLANNED)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"
+
 class Task(models.Model):
     class Priority(models.TextChoices):
         LOW = 'LOW', 'Low'
@@ -169,6 +186,7 @@ class Task(models.Model):
     dependencies = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='dependents')
     parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     milestone = models.ForeignKey(Milestone, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
+    sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     is_archived = models.BooleanField(default=False)
     
     # Recurrence fields

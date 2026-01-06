@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Project, Task, Tag, Milestone, ProjectCategory, 
-    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus
+    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint
 )
 from users.serializers import UserSerializer
 
@@ -55,6 +55,17 @@ class TagSerializer(serializers.ModelSerializer):
         model = Tag
         fields = '__all__'
 
+class SprintSerializer(serializers.ModelSerializer):
+    task_count = serializers.IntegerField(source='tasks.count', read_only=True)
+    completed_tasks = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Sprint
+        fields = '__all__'
+
+    def get_completed_tasks(self, obj):
+        return obj.tasks.filter(status='DONE').count()
+
 class MilestoneSerializer(serializers.ModelSerializer):
     task_count = serializers.IntegerField(source='tasks.count', read_only=True)
     completed_tasks = serializers.SerializerMethodField()
@@ -102,11 +113,14 @@ class TaskSerializer(serializers.ModelSerializer):
         rep = super().to_representation(instance)
         if instance.milestone:
             rep['milestone_details'] = MilestoneSerializer(instance.milestone).data
+        if instance.sprint:
+            rep['sprint_details'] = SprintSerializer(instance.sprint).data
         return rep
 
 class ProjectSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
     milestones = MilestoneSerializer(many=True, read_only=True)
+    sprints = SprintSerializer(many=True, read_only=True)
     goals = ProjectGoalSerializer(many=True, read_only=True)
     deliverables = DeliverableSerializer(many=True, read_only=True)
     custom_statuses = ProjectStatusSerializer(many=True, read_only=True)
