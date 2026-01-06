@@ -1,62 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @layer base {
   :root {
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    /* Trello Color Palette */
+    --trello-blue: #0079BF;
+    --trello-blue-hover: #026AA7;
+    --trello-blue-dark: #055A8C;
+    --trello-bg: #FAFBFC;
+    --trello-board-bg: #F4F5F7;
+    --trello-card-bg: #FFFFFF;
+    --trello-list-bg: #EBECF0;
+    --trello-text: #172B4D;
+    --trello-text-light: #5E6C84;
+    --trello-text-subtle: #8993A4;
+    --trello-border: #DFE1E6;
+    --trello-shadow: rgba(9, 30, 66, 0.25);
+    --trello-green: #61BD4F;
+    --trello-yellow: #F2D600;
+    --trello-orange: #FF9F1A;
+    --trello-red: #EB5A46;
+    --trello-purple: #C377E0;
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-white text-zinc-900 min-h-screen antialiased selection:bg-zinc-900 selection:text-white;
-    font-family: var(--font-sans);
+    @apply bg-[#FAFBFC] text-[#172B4D] min-h-screen antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Noto Sans', 'Ubuntu', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
   }
 }
 
 @layer components {
-  .layout-container {
-    @apply max-w-[1600px] mx-auto;
+
+  /* Trello Button Styles */
+  .trello-btn {
+    @apply inline-flex items-center justify-center px-3 py-1.5 rounded-sm font-medium text-sm transition-all duration-150 gap-2 cursor-pointer select-none;
   }
 
-  .card {
-    @apply bg-white border border-zinc-200 rounded-lg p-5 hover:border-zinc-300 transition-colors duration-150;
+  .trello-btn-primary {
+    @apply bg-[#0079BF] text-white hover:bg-[#026AA7] active:bg-[#055A8C] shadow-sm;
   }
 
-  .btn {
-    @apply inline-flex items-center justify-center px-3 py-1.5 rounded-md font-medium text-sm transition-all duration-150 border disabled:opacity-50 disabled:cursor-not-allowed gap-2;
+  .trello-btn-secondary {
+    @apply bg-[#EBECF0] text-[#172B4D] hover:bg-[#DFE1E6] active:bg-[#C1C7D0];
   }
 
-  .btn-primary {
-    @apply bg-zinc-900 text-white border-zinc-900 hover:bg-zinc-800 hover:border-zinc-800 active:bg-black shadow-sm;
+  .trello-btn-subtle {
+    @apply text-[#5E6C84] hover:bg-[#EBECF0] hover:text-[#172B4D];
   }
 
-  .btn-secondary {
-    @apply bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 active:bg-zinc-100 shadow-sm;
+  /* Trello Card */
+  .trello-card {
+    @apply bg-white rounded-sm shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer;
   }
 
-  .btn-ghost {
-    @apply bg-transparent text-zinc-600 border-transparent hover:bg-zinc-100 hover:text-zinc-900;
+  /* Trello List */
+  .trello-list {
+    @apply bg-[#EBECF0] rounded-sm w-72 shrink-0 flex flex-col max-h-full;
   }
 
-  .input-field {
-    @apply w-full px-3 py-2 bg-white border border-zinc-200 rounded-md text-zinc-900 text-sm placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 transition-colors shadow-sm;
+  /* Trello Input */
+  .trello-input {
+    @apply w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-sm text-sm text-[#172B4D] placeholder:text-[#8993A4] focus:outline-none focus:bg-white focus:border-[#0079BF] focus:shadow-[0_0_0_1px_#0079BF] transition-all;
   }
 
-  .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded textxs font-medium border;
+  /* Trello Modal */
+  .trello-modal {
+    @apply bg-white rounded-sm shadow-2xl;
+  }
+
+  /* Trello Badge */
+  .trello-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium gap-1;
+  }
+
+  /* Smooth Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.15s cubic-bezier(0.2, 0, 0.13, 1.5);
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      transform: scale(0.96);
+      opacity: 0;
+    }
+
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+    }
+
+    to {
+      transform: translateX(0);
+    }
   }
 }
 
 @layer utilities {
-  .text-xs {
-    font-size: 0.75rem;
-    line-height: 1rem;
-  }
-
-  /* Linear-style dense scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     @apply w-2 h-2;
   }
@@ -66,10 +139,10 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-zinc-200 rounded-full border-[3px] border-white;
+    @apply bg-[#C1C7D0] rounded hover:bg-[#A5ADBA];
   }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-zinc-300;
+  .custom-scrollbar::-webkit-scrollbar-thumb:active {
+    @apply bg-[#8993A4];
   }
 }

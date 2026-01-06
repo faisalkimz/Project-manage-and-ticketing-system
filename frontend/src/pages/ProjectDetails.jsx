@@ -1,14 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-    ChevronLeft, Plus, MoreHorizontal, Clock, CheckCircle2, ListTodo,
-    PlayCircle, Search, Filter, Hash, Paperclip, MessageSquare,
-    Activity, History, User, Calendar, FileText, ArrowRight,
-    Tag as TagIcon, X, Download, Trash2, Send, LayoutGrid, List,
-    StopCircle, Timer as TimerIcon
+    Plus, Star, MoreHorizontal, X, Users, Share2, Clock, MessageSquare,
+    Paperclip, Tag, ChevronDown, List, Calendar as CalendarIcon, Layout, GitMerge
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
+import CalendarView from '../components/CalendarView';
+import GanttChart from '../components/GanttChart';
 
 const ProjectDetails = () => {
     const { id } = useParams();
@@ -18,29 +17,37 @@ const ProjectDetails = () => {
     const [tasks, setTasks] = useState([]);
     const [selectedTask, setSelectedTask] = useState(null);
     const [comments, setComments] = useState([]);
-    const [attachments, setAttachments] = useState([]);
     const [newComment, setNewComment] = useState('');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', due_date: '' });
-    const [viewMode, setViewMode] = useState('board'); // 'board' | 'list'
-
-    // Time Tracking State
+    const [viewMode, setViewMode] = useState('board');
+    const [allUsers, setAllUsers] = useState([]);
     const [activeTimer, setActiveTimer] = useState(null);
     const [elapsedTime, setElapsedTime] = useState(0);
+    const [isAddingCard, setIsAddingCard] = useState({ columnId: null, title: '' });
 
-    const commentEndRef = useRef(null);
+    // Modal states
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [showMembersModal, setShowMembersModal] = useState(false);
+    const [showLabelsModal, setShowLabelsModal] = useState(false);
+    const [showDatesModal, setShowDatesModal] = useState(false);
+    const [showAttachmentModal, setShowAttachmentModal] = useState(false);
+    const [tempDueDate, setTempDueDate] = useState('');
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [attachments, setAttachments] = useState([]);
 
     const fetchProjectDetails = async () => {
         try {
-            const [projectRes, tasksRes] = await Promise.all([
+            const [projectRes, tasksRes, userRes] = await Promise.all([
                 api.get(`/projects/projects/${id}/`),
-                api.get(`/projects/tasks/?project_id=${id}`)
+                api.get(`/projects/tasks/?project_id=${id}`),
+                api.get('/users/list/')
             ]);
             setProject(projectRes.data);
             setTasks(tasksRes.data);
-        } catch (error) {
-            console.error('Failed to fetch project details', error);
-        }
+            setAllUsers(userRes.data);
+        } catch (error) { console.error(error); }
     };
 
     const fetchTaskSideData = async (task) => {
@@ -51,50 +58,62 @@ const ProjectDetails = () => {
             ]);
             setComments(commentsRes.data);
             setAttachments(attachmentsRes.data);
-        } catch (error) {
-            console.error('Failed to fetch task side data', error);
-        }
+        } catch (error) { console.error(error); }
     };
 
-    const fetchActiveTimer = async () => {
+    const handleFileUpload = async () => {
+        if (!selectedFile || !selectedTask) return;
+
         try {
-            const res = await api.get('/time/entries/current/');
-            if (res.data) {
-                setActiveTimer(res.data);
-                // Calculate initial elapsed time
-                const start = new Date(res.data.start_time).getTime();
-                const now = new Date().getTime();
-                setElapsedTime(Math.floor((now - start) / 1000));
-            } else {
-                setActiveTimer(null);
-                setElapsedTime(0);
-            }
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('content_type', 'task');
+            formData.append('object_id', selectedTask.id);
+
+            await api.post('/activity/attachments/', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            setSelectedFile(null);
+            setShowAttachmentModal(false);
+            fetchTaskSideData(selectedTask);
         } catch (error) {
-            console.error('Failed to fetch timer', error);
+            alert('Failed to upload file. Please try again.');
         }
     };
 
     useEffect(() => {
         fetchProjectDetails();
-        fetchActiveTimer();
+        const fetchCurrentTimer = async () => {
+            try {
+                const res = await api.get('/time/entries/current/');
+                if (res.data) {
+                    setActiveTimer(res.data);
+                    const start = new Date(res.data.start_time).getTime();
+                    setElapsedTime(Math.floor((new Date().getTime() - start) / 1000));
+                }
+            } catch (e) { }
+        };
+        fetchCurrentTimer();
     }, [id]);
 
     useEffect(() => {
-        if (selectedTask) {
-            fetchTaskSideData(selectedTask);
-        }
+        if (selectedTask) fetchTaskSideData(selectedTask);
     }, [selectedTask]);
 
-    // Timer Ticking Logic
     useEffect(() => {
         let interval;
-        if (activeTimer) {
-            interval = setInterval(() => {
-                setElapsedTime(prev => prev + 1);
-            }, 1000);
-        }
+        if (activeTimer) interval = setInterval(() => setElapsedTime(prev => prev + 1), 1000);
         return () => clearInterval(interval);
     }, [activeTimer]);
+
+    useEffect(() => {
+        const handleClickOutside = () => {
+            if (showMoreMenu) setShowMoreMenu(false);
+        };
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, [showMoreMenu]);
 
     const handleCreateTask = async (e) => {
         e.preventDefault();
@@ -103,366 +122,827 @@ const ProjectDetails = () => {
             setIsTaskModalOpen(false);
             setNewTask({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', due_date: '' });
             fetchProjectDetails();
-        } catch (error) {
-            console.error('Failed to create task', error);
-        }
+        } catch (error) { }
+    };
+
+    const handleQuickAddCard = async (columnId) => {
+        if (!isAddingCard.title.trim()) return;
+        try {
+            await api.post('/projects/tasks/', {
+                title: isAddingCard.title,
+                project: id,
+                status: columnId,
+                priority: 'MEDIUM'
+            });
+            setIsAddingCard({ columnId: null, title: '' });
+            fetchProjectDetails();
+        } catch (error) { }
+    };
+
+    const handleUpdateTask = async (taskId, data) => {
+        try {
+            await api.patch(`/projects/tasks/${taskId}/`, data);
+            fetchProjectDetails();
+            if (selectedTask && selectedTask.id === taskId) {
+                setSelectedTask({ ...selectedTask, ...data });
+            }
+        } catch (error) { }
+    };
+
+    const startTimer = async (taskId) => {
+        try {
+            const res = await api.post('/time/entries/start_timer/', { task_id: taskId });
+            setActiveTimer(res.data);
+            setElapsedTime(0);
+        } catch (error) { }
+    };
+
+    const stopTimer = async () => {
+        try {
+            await api.post('/time/entries/stop_timer/');
+            setActiveTimer(null);
+            setElapsedTime(0);
+            fetchProjectDetails();
+        } catch (error) { }
     };
 
     const handlePostComment = async () => {
         if (!newComment.trim()) return;
         try {
-            const res = await api.post('/activity/comments/', {
+            await api.post('/activity/comments/', {
                 text: newComment,
-                content_type: 'task',
+                content_type_name: 'task',
                 object_id: selectedTask.id
             });
-            setComments(prev => [...prev, res.data]);
             setNewComment('');
-            commentEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            fetchTaskSideData(selectedTask);
         } catch (error) {
-            console.error('Failed to post comment', error);
+            console.error('Failed to post comment:', error);
         }
     };
 
-    const toggleTimer = async () => {
+    const handleAssignMember = async (userId) => {
         try {
-            if (activeTimer && activeTimer.task === selectedTask.id) {
-                // Stop
-                await api.post('/time/entries/stop_timer/');
-                setActiveTimer(null);
-                setElapsedTime(0);
-            } else {
-                // Start (or switch)
-                const res = await api.post('/time/entries/start_timer/', { task_id: selectedTask.id });
-                setActiveTimer(res.data);
-                setElapsedTime(0);
-            }
+            await handleUpdateTask(selectedTask.id, { assigned_to: userId });
+            setShowMembersModal(false);
+        } catch (error) { }
+    };
+
+    const handleUpdatePriority = async (priority) => {
+        try {
+            await handleUpdateTask(selectedTask.id, { priority });
+            setShowLabelsModal(false);
+        } catch (error) { }
+    };
+
+    const handleUpdateDueDate = async () => {
+        if (!tempDueDate) return;
+        try {
+            await handleUpdateTask(selectedTask.id, { due_date: tempDueDate });
+            setShowDatesModal(false);
+            setTempDueDate('');
+        } catch (error) { }
+    };
+
+    // More Menu Actions
+    const copyBoardLink = () => {
+        const link = window.location.href;
+        navigator.clipboard.writeText(link).then(() => {
+            alert('Board link copied to clipboard!');
+            setShowMoreMenu(false);
+        });
+    };
+
+    const printBoard = () => {
+        window.print();
+        setShowMoreMenu(false);
+    };
+
+    const toggleWatch = async () => {
+        // In a real app, this would update watch status in backend
+        alert('Watch feature toggled!');
+        setShowMoreMenu(false);
+    };
+
+    const changeBackground = () => {
+        alert('Background customization coming soon!');
+        setShowMoreMenu(false);
+    };
+
+    const openSettings = () => {
+        alert('Project settings coming soon!');
+        setShowMoreMenu(false);
+    };
+
+    // Share functionality
+    const [shareEmail, setShareEmail] = useState('');
+
+    const handleShareBoard = async (e) => {
+        e.preventDefault();
+        if (!shareEmail.trim()) return;
+
+        try {
+            // Send invitation email - you can implement this with your backend
+            await api.post('/users/invites/', {
+                email: shareEmail,
+                role_name: 'DEVELOPER'
+            });
+            alert(`Invitation sent to ${shareEmail}!`);
+            setShareEmail('');
+            setShowShareModal(false);
+            fetchProjectDetails();
         } catch (error) {
-            console.error('Timer action failed', error);
+            alert('Failed to send invitation. Please try again.');
+        }
+    };
+
+    const copyShareLink = () => {
+        const link = window.location.href;
+        navigator.clipboard.writeText(link).then(() => {
+            alert('Share link copied to clipboard!');
+        });
+    };
+
+    if (!project) return <div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#0079BF] to-[#026AA7]"><div className="text-white">Loading...</div></div>;
+
+    const columns = [
+        { id: 'TODO', title: 'To Do' },
+        { id: 'IN_PROGRESS', title: 'Doing' },
+        { id: 'REVIEW', title: 'Review' },
+        { id: 'DONE', title: 'Done' }
+    ];
+
+    const rootTasks = tasks.filter(t => !t.parent_task);
+
+    const getPriorityColor = (p) => {
+        switch (p) {
+            case 'CRITICAL': return '#EB5A46';
+            case 'HIGH': return '#FF9F1A';
+            case 'MEDIUM': return '#F2D600';
+            default: return '#61BD4F';
         }
     };
 
     const formatTime = (seconds) => {
-        const hrs = Math.floor(seconds / 3600);
-        const mins = Math.floor((seconds % 3600) / 60);
-        const secs = seconds % 60;
-        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
-    const columns = [
-        { id: 'TODO', title: 'To Do', icon: ListTodo },
-        { id: 'IN_PROGRESS', title: 'In Progress', icon: PlayCircle },
-        { id: 'REVIEW', title: 'Review', icon: Clock },
-        { id: 'DONE', title: 'Done', icon: CheckCircle2 },
-    ];
-
-    if (!project) return null;
-
     return (
-        <div className="flex h-screen bg-white overflow-hidden animate-fade-in">
-            {/* Main Content */}
-            <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedTask ? 'mr-[400px]' : ''}`}>
-                {/* Header */}
-                <header className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between shrink-0 h-16">
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => navigate('/projects')} className="text-zinc-400 hover:text-zinc-600">
-                            <ChevronLeft size={20} />
+        <div className="h-screen flex flex-col bg-gradient-to-br from-[#0079BF] to-[#026AA7] overflow-hidden">
+            {/* Trello Board Header */}
+            <header className="h-12 px-2 py-1.5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                    {/* Board Title */}
+                    <button className="px-3 h-8 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-sm font-semibold text-sm transition-colors flex items-center gap-2">
+                        {project.name}
+                    </button>
+
+                    {/* Star */}
+                    <button className="p-2 hover:bg-white/20 rounded-sm transition-colors">
+                        <Star size={16} className="text-white" />
+                    </button>
+
+                    {/* View Selector */}
+                    <div className="flex items-center gap-0.5 bg-white/10 p-0.5 rounded-sm ml-2">
+                        <button
+                            onClick={() => setViewMode('board')}
+                            className={`px-2 py-1 rounded-sm text-xs font-medium transition-colors ${viewMode === 'board' ? 'bg-white/30 text-white' : 'text-white/80 hover:bg-white/20'
+                                }`}
+                        >
+                            <Layout size={14} className="inline mr-1" />
+                            Board
                         </button>
-                        <div>
-                            <div className="flex items-center gap-2 mb-0.5">
-                                <h1 className="text-lg font-semibold text-zinc-900 leading-none">{project.name}</h1>
-                                <span className="bg-zinc-100 text-zinc-500 text-[10px] px-1.5 py-0.5 rounded border border-zinc-200 uppercase font-mono tracking-wide">
-                                    {project.key || 'PRJ'}
-                                </span>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`px-2 py-1 rounded-sm text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-white/30 text-white' : 'text-white/80 hover:bg-white/20'
+                                }`}
+                        >
+                            <List size={14} className="inline mr-1" />
+                            List
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    {/* Members */}
+                    <div className="flex -space-x-1">
+                        {project.members_details?.slice(0, 4).map((m, i) => (
+                            <div
+                                key={i}
+                                title={m.username}
+                                className="w-8 h-8 rounded-full bg-white text-[#0079BF] border-2 border-[#0079BF] flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-110 transition-transform"
+                            >
+                                {m.username[0].toUpperCase()}
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-zinc-500">
-                                <span>{tasks.length} issues</span>
-                                <span className="w-1 h-1 bg-zinc-300 rounded-full"></span>
-                                <span>{project.active_members} members</span>
-                            </div>
-                        </div>
+                        ))}
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        {/* Global Active Timer Display */}
-                        {activeTimer && (
-                            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100 animate-pulse">
-                                <div className="w-2 h-2 bg-indigo-500 rounded-full animate-ping"></div>
-                                <span className="text-xs font-mono font-bold">{formatTime(elapsedTime)}</span>
-                                <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Active</span>
+                    {/* Share */}
+                    <button
+                        onClick={() => setShowShareModal(true)}
+                        className="px-3 h-8 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-sm text-sm font-medium transition-colors flex items-center gap-1.5"
+                    >
+                        <Share2 size={14} />
+                        Share
+                    </button>
+
+                    {/* More */}
+                    <div className="relative">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowMoreMenu(!showMoreMenu);
+                            }}
+                            className="p-2 hover:bg-white/20 rounded-sm transition-colors"
+                        >
+                            <MoreHorizontal size={16} className="text-white" />
+                        </button>
+
+                        {/* More Menu Dropdown */}
+                        {showMoreMenu && (
+                            <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-lg shadow-lg py-2 z-50">
+                                <button
+                                    onClick={copyBoardLink}
+                                    className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7] transition-colors"
+                                >
+                                    Copy board link
+                                </button>
+                                <button
+                                    onClick={printBoard}
+                                    className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7] transition-colors"
+                                >
+                                    Print and export
+                                </button>
+                                <button
+                                    onClick={toggleWatch}
+                                    className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7] transition-colors"
+                                >
+                                    Watch
+                                </button>
+                                <div className="border-t border-[#DFE1E6] my-1"></div>
+                                <button
+                                    onClick={changeBackground}
+                                    className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7] transition-colors"
+                                >
+                                    Change background
+                                </button>
+                                <button
+                                    onClick={openSettings}
+                                    className="w-full text-left px-4 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7] transition-colors"
+                                >
+                                    Settings
+                                </button>
+                                <div className="border-t border-[#DFE1E6] my-1"></div>
+                                <button
+                                    onClick={() => navigate('/projects')}
+                                    className="w-full text-left px-4 py-2 text-sm text-[#EB5A46] hover:bg-[#F4F5F7] transition-colors"
+                                >
+                                    Close board
+                                </button>
                             </div>
                         )}
+                    </div>
+                </div>
+            </header>
 
-                        <div className="bg-zinc-100 p-0.5 rounded-lg flex items-center border border-zinc-200">
-                            <button
-                                onClick={() => setViewMode('board')}
-                                className={`p-1.5 rounded-md transition-all ${viewMode === 'board' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
-                            >
-                                <LayoutGrid size={16} />
-                            </button>
-                            <button
-                                onClick={() => setViewMode('list')}
-                                className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
-                            >
-                                <List size={16} />
+            {/* Board Content */}
+            <main className="flex-1 overflow-x-auto overflow-y-hidden p-3 flex gap-3">
+                {viewMode === 'board' && columns.map((col) => (
+                    <div key={col.id} className="flex flex-col w-72 shrink-0">
+                        {/* List Header */}
+                        <div className="bg-[#EBECF0] rounded-t-lg px-3 py-2 flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-[#172B4D]">
+                                {col.title} <span className="text-[#5E6C84] font-normal">{rootTasks.filter(t => t.status === col.id).length}</span>
+                            </h3>
+                            <button className="p-1 hover:bg-[#DFE1E6] rounded transition-colors">
+                                <MoreHorizontal size={16} className="text-[#5E6C84]" />
                             </button>
                         </div>
-                        <div className="h-6 w-[1px] bg-zinc-200 mx-1"></div>
-                        <button onClick={() => setIsTaskModalOpen(true)} className="btn btn-primary">
-                            <Plus size={16} /> New Issue
-                        </button>
-                    </div>
-                </header>
 
-                <div className="flex-1 overflow-x-auto bg-zinc-50 p-6">
-                    {/* ... (Board/List Views - same as before) ... */}
-                    {viewMode === 'board' ? (
-                        <div className="flex gap-6 h-full min-w-max">
-                            {columns.map(column => (
-                                <div key={column.id} className="w-[300px] flex flex-col">
-                                    <div className="flex items-center justify-between mb-3 px-1">
-                                        <div className="flex items-center gap-2 text-zinc-500">
-                                            <column.icon size={16} />
-                                            <span className="text-sm font-medium">{column.title}</span>
-                                            <span className="text-xs text-zinc-400 font-mono ml-1">{tasks.filter(t => t.status === column.id).length}</span>
+                        {/* Cards Container */}
+                        <div className="bg-[#EBECF0] flex-1 overflow-y-auto px-2 pb-2 space-y-2 rounded-b-lg custom-scrollbar">
+                            {rootTasks.filter(t => t.status === col.id).map((task) => (
+                                <div
+                                    key={task.id}
+                                    onClick={() => setSelectedTask(task)}
+                                    className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer p-2 group"
+                                >
+                                    {/* Label Strip */}
+                                    {task.priority && (
+                                        <div className="flex gap-1 mb-2">
+                                            <div
+                                                className="h-2 w-10 rounded-sm"
+                                                style={{ backgroundColor: getPriorityColor(task.priority) }}
+                                            />
                                         </div>
-                                        <button onClick={() => { setNewTask({ ...newTask, status: column.id }); setIsTaskModalOpen(true); }} className="text-zinc-400 hover:text-zinc-600">
-                                            <Plus size={16} />
+                                    )}
+
+                                    {/* Card Title */}
+                                    <p className="text-sm text-[#172B4D] mb-2 break-words">{task.title}</p>
+
+                                    {/* Card Badges */}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        {task.due_date && (
+                                            <div className="flex items-center gap-1 text-xs text-[#5E6C84] bg-[#F4F5F7] px-1.5 py-0.5 rounded hover:bg-[#EBECF0]">
+                                                <Clock size={12} />
+                                                {new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                            </div>
+                                        )}
+                                        {task.comment_count > 0 && (
+                                            <div className="flex items-center gap-1 text-xs text-[#5E6C84] hover:bg-[#F4F5F7] px-1 rounded">
+                                                <MessageSquare size={12} />
+                                                {task.comment_count}
+                                            </div>
+                                        )}
+                                        {task.assigned_to_details && (
+                                            <div
+                                                className="ml-auto w-6 h-6 rounded-full bg-[#DFE1E6] flex items-center justify-center text-[9px] font-semibold text-[#172B4D]"
+                                                title={task.assigned_to_details.username}
+                                            >
+                                                {task.assigned_to_details.username[0].toUpperCase()}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Add Card Button/Form */}
+                            {isAddingCard.columnId === col.id ? (
+                                <div className="bg-white rounded-lg shadow-sm p-2">
+                                    <textarea
+                                        autoFocus
+                                        placeholder="Enter a title for this card..."
+                                        className="w-full text-sm text-[#172B4D] outline-none resize-none mb-2"
+                                        rows="2"
+                                        value={isAddingCard.title}
+                                        onChange={(e) => setIsAddingCard({ ...isAddingCard, title: e.target.value })}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleQuickAddCard(col.id);
+                                            }
+                                            if (e.key === 'Escape') {
+                                                setIsAddingCard({ columnId: null, title: '' });
+                                            }
+                                        }}
+                                    />
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => handleQuickAddCard(col.id)}
+                                            className="px-3 py-1.5 bg-[#0079BF] text-white text-sm font-medium rounded hover:bg-[#026AA7] transition-colors"
+                                        >
+                                            Add card
+                                        </button>
+                                        <button
+                                            onClick={() => setIsAddingCard({ columnId: null, title: '' })}
+                                            className="p-1.5 hover:bg-[#EBECF0] rounded transition-colors"
+                                        >
+                                            <X size={16} className="text-[#5E6C84]" />
                                         </button>
                                     </div>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setIsAddingCard({ columnId: col.id, title: '' })}
+                                    className="w-full text-left px-2 py-2 text-[#5E6C84] hover:bg-[#DFE1E6] rounded-lg transition-colors flex items-center gap-1 text-sm font-medium"
+                                >
+                                    <Plus size={16} />
+                                    Add a card
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ))}
 
-                                    <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-                                        {tasks.filter(t => t.status === column.id).map(task => (
-                                            <div
-                                                key={task.id}
-                                                onClick={() => setSelectedTask(task)}
-                                                className={`group bg-white p-3 rounded-lg border border-zinc-200 shadow-sm hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer ${selectedTask?.id === task.id ? 'ring-2 ring-zinc-900 border-transparent' : ''}`}
-                                            >
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <span className="text-[10px] text-zinc-400 font-mono">TASK-{task.id.toString().slice(-4)}</span>
-                                                    <div className="relative">
-                                                        <div className="w-5 h-5 rounded bg-zinc-100 flex items-center justify-center text-[10px] text-zinc-600 font-medium">
-                                                            {task.assigned_to_details?.username?.[0]?.toUpperCase() || '-'}
-                                                        </div>
-                                                        {activeTimer?.task === task.id && (
-                                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 border-2 border-white rounded-full"></div>
-                                                        )}
-                                                    </div>
+                {/* List View */}
+                {viewMode === 'list' && (
+                    <div className="w-full bg-white rounded-lg m-2 overflow-hidden">
+                        <table className="w-full">
+                            <thead className="bg-[#F4F5F7] border-b border-[#DFE1E6]">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase">Card</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase">List</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase">Members</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-[#5E6C84] uppercase">Due Date</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#DFE1E6]">
+                                {rootTasks.map((task) => (
+                                    <tr
+                                        key={task.id}
+                                        onClick={() => setSelectedTask(task)}
+                                        className="hover:bg-[#F4F5F7] cursor-pointer"
+                                    >
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                {task.priority && (
+                                                    <div className="w-1 h-6 rounded" style={{ backgroundColor: getPriorityColor(task.priority) }} />
+                                                )}
+                                                <span className="text-sm text-[#172B4D] font-medium">{task.title}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-[#5E6C84]">
+                                            {columns.find(c => c.id === task.status)?.title}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {task.assigned_to_details && (
+                                                <div className="w-7 h-7 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
+                                                    {task.assigned_to_details.username[0].toUpperCase()}
                                                 </div>
-                                                <p className="text-sm font-medium text-zinc-900 mb-2 line-clamp-2">{task.title}</p>
-                                                <div className="flex items-center gap-2">
-                                                    {task.priority === 'CRITICAL' || task.priority === 'HIGH' ? (
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded">
-                                                            <Activity size={10} /> {task.priority}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="flex items-center gap-1 text-[10px] font-medium text-zinc-500 bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded">
-                                                            {task.priority}
-                                                        </span>
-                                                    )}
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-[#5E6C84]">
+                                            {task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {/* Add Another List */}
+                {viewMode === 'board' && (
+                    <div className="w-72 shrink-0">
+                        <button className="w-full bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors flex items-center gap-2">
+                            <Plus size={16} />
+                            Add another list
+                        </button>
+                    </div>
+                )}
+            </main>
+
+            {/* Card Detail Modal */}
+            {selectedTask && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-12 overflow-y-auto" onClick={() => setSelectedTask(null)}>
+                    <div className="bg-[#F4F5F7] rounded-lg w-full max-w-3xl mb-12 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div className="p-6">
+                            <div className="flex items-start gap-3">
+                                <Tag size={20} className="text-[#5E6C84] mt-1" />
+                                <div className="flex-1">
+                                    <input
+                                        type="text"
+                                        className="w-full text-xl font-semibold text-[#172B4D] bg-transparent border-none outline-none px-2 -ml-2 py-1 rounded hover:bg-white focus:bg-white"
+                                        value={selectedTask.title}
+                                        onChange={(e) => handleUpdateTask(selectedTask.id, { title: e.target.value })}
+                                    />
+                                    <p className="text-sm text-[#5E6C84] mt-1 px-2">
+                                        in list <span className="underline">{columns.find(c => c.id === selectedTask.status)?.title}</span>
+                                    </p>
+                                </div>
+                                <button onClick={() => setSelectedTask(null)} className="p-2 hover:bg-[#DFE1E6] rounded transition-colors">
+                                    <X size={20} className="text-[#5E6C84]" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 px-6 pb-6">
+                            {/* Main Content */}
+                            <div className="flex-1 space-y-6">
+                                {/* Labels */}
+                                {selectedTask.priority && (
+                                    <div>
+                                        <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Labels</h4>
+                                        <div className="flex gap-1">
+                                            <div
+                                                className="px-3 py-1.5 rounded text-white text-xs font-medium"
+                                                style={{ backgroundColor: getPriorityColor(selectedTask.priority) }}
+                                            >
+                                                {selectedTask.priority}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Description */}
+                                <div>
+                                    <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Description</h4>
+                                    <textarea
+                                        className="w-full min-h-[100px] p-3 bg-white border border-[#DFE1E6] rounded text-sm text-[#172B4D] outline-none hover:border-[#0079BF] focus:border-[#0079BF] resize-none"
+                                        placeholder="Add a more detailed description..."
+                                        value={selectedTask.description || ''}
+                                        onChange={(e) => handleUpdateTask(selectedTask.id, { description: e.target.value })}
+                                    />
+                                </div>
+
+                                {/* Activity */}
+                                <div>
+                                    <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-3">Activity</h4>
+                                    <div className="flex gap-2 mb-3">
+                                        <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
+                                            {user.username[0].toUpperCase()}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder="Write a comment..."
+                                            className="flex-1 px-3 py-2 bg-white border border-[#DFE1E6] rounded text-sm outline-none hover:border-[#0079BF] focus:border-[#0079BF]"
+                                            value={newComment}
+                                            onChange={(e) => setNewComment(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
+                                        />
+                                    </div>
+                                    <div className="space-y-3">
+                                        {comments.map((c, i) => (
+                                            <div key={i} className="flex gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
+                                                    {c.user_details.username[0].toUpperCase()}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-sm font-semibold text-[#172B4D]">{c.user_details.username}</span>
+                                                        <span className="text-xs text-[#5E6C84]">{new Date(c.created_at).toLocaleDateString()}</span>
+                                                    </div>
+                                                    <div className="bg-white p-2 rounded text-sm text-[#172B4D]">{c.text}</div>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="bg-white border text-left border-zinc-200 rounded-lg overflow-hidden w-full max-w-5xl mx-auto">
-                            <table className="w-full text-sm">
-                                <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left w-20">ID</th>
-                                        <th className="px-4 py-3 text-left">Title</th>
-                                        <th className="px-4 py-3 text-left w-32">Status</th>
-                                        <th className="px-4 py-3 text-left w-32">Priority</th>
-                                        <th className="px-4 py-3 text-left w-40">Assignee</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-zinc-100">
-                                    {tasks.map(task => (
-                                        <tr key={task.id} onClick={() => setSelectedTask(task)} className={`group hover:bg-zinc-50 cursor-pointer ${selectedTask?.id === task.id ? 'bg-zinc-50' : ''}`}>
-                                            <td className="px-4 py-3 text-zinc-400 font-mono text-xs">#{task.id.toString().slice(-4)}</td>
-                                            <td className="px-4 py-3 font-medium text-zinc-900">{task.title}</td>
-                                            <td className="px-4 py-3 text-zinc-600 text-xs">{task.status.replace('_', ' ')}</td>
-                                            <td className="px-4 py-3"><span className="text-[10px] border px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500">{task.priority}</span></td>
-                                            <td className="px-4 py-3 text-zinc-500 text-xs">{task.assigned_to_details?.username || 'Unassigned'}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Task Detail Panel (Right Sidebar) */}
-            {selectedTask && (
-                <div className="fixed top-0 right-0 h-full w-[400px] bg-white border-l border-zinc-200 shadow-xl z-50 flex flex-col animate-slide-in">
-                    <header className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-                        <div className="flex items-center gap-2 text-zinc-500 text-xs">
-                            <span className="font-mono">TASK-{selectedTask.id.toString().slice(-4)}</span>
-                            <span>/</span>
-                            <span>{selectedTask.status.replace('_', ' ')}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button className="p-1.5 hover:bg-zinc-200 rounded text-zinc-400 transition-colors"><MoreHorizontal size={16} /></button>
-                            <button onClick={() => setSelectedTask(null)} className="p-1.5 hover:bg-zinc-200 rounded text-zinc-400 transition-colors"><X size={16} /></button>
-                        </div>
-                    </header>
-
-                    <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-                        <div>
-                            <h2 className="text-xl font-semibold text-zinc-900 mb-4 leading-tight">{selectedTask.title}</h2>
-                            <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">{selectedTask.description || "No description provided."}</p>
-                        </div>
-
-                        {/* Time Tracking Control */}
-                        <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-4 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activeTimer?.task === selectedTask.id ? 'bg-indigo-100 text-indigo-600' : 'bg-white border border-zinc-200 text-zinc-400'}`}>
-                                    <TimerIcon size={20} />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-bold text-zinc-900 uppercase tracking-wide">Time Tracker</p>
-                                    <p className="text-sm font-mono text-zinc-600">
-                                        {activeTimer?.task === selectedTask.id ? formatTime(elapsedTime) : '00:00:00'}
-                                    </p>
-                                </div>
                             </div>
-                            <button
-                                onClick={toggleTimer}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${activeTimer?.task === selectedTask.id
-                                        ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
-                                        : 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm'
-                                    }`}
-                            >
+
+                            {/* Sidebar */}
+                            <div className="w-44 space-y-2 shrink-0">
+                                <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Add to card</p>
+                                <button
+                                    onClick={() => setShowMembersModal(true)}
+                                    className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                                >
+                                    <Users size={14} /> Members
+                                </button>
+                                <button
+                                    onClick={() => setShowLabelsModal(true)}
+                                    className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                                >
+                                    <Tag size={14} /> Labels
+                                </button>
+                                <button
+                                    onClick={() => setShowDatesModal(true)}
+                                    className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                                >
+                                    <Clock size={14} /> Dates
+                                </button>
+                                <button
+                                    onClick={() => setShowAttachmentModal(true)}
+                                    className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                                >
+                                    <Paperclip size={14} /> Attachment
+                                </button>
+
+                                <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-2">Actions</p>
                                 {activeTimer?.task === selectedTask.id ? (
-                                    <>
-                                        <StopCircle size={14} /> Stop
-                                    </>
+                                    <button
+                                        onClick={stopTimer}
+                                        className="w-full text-left px-3 py-2 bg-[#EB5A46] hover:bg-[#CF513D] text-white rounded text-sm font-medium flex items-center gap-2"
+                                    >
+                                        <Clock size={14} /> Stop Timer
+                                    </button>
                                 ) : (
-                                    <>
-                                        <PlayCircle size={14} /> Start
-                                    </>
+                                    <button
+                                        onClick={() => startTimer(selectedTask.id)}
+                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                                    >
+                                        <Clock size={14} /> Start Timer
+                                    </button>
                                 )}
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                            {/* ... (Existing Date/Assignee Logic) ... */}
-                            <div className="space-y-1">
-                                <span className="text-zinc-400 font-medium">Assignee</span>
-                                <div className="flex items-center gap-2">
-                                    <div className="w-5 h-5 rounded bg-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600">
-                                        {selectedTask.assigned_to_details?.username?.[0]?.toUpperCase() || '-'}
-                                    </div>
-                                    <span className="text-zinc-700 font-medium">{selectedTask.assigned_to_details?.username || 'Unassigned'}</span>
-                                </div>
                             </div>
-                            <div className="space-y-1">
-                                <span className="text-zinc-400 font-medium">Due Date</span>
-                                <div className="flex items-center gap-2 text-zinc-700">
-                                    <Calendar size={14} className="text-zinc-400" />
-                                    <span>{selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString() : 'None'}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="border-t border-zinc-100 pt-6">
-                            <h3 className="text-xs font-semibold text-zinc-900 mb-4">Activity</h3>
-                            <div className="space-y-6">
-                                {comments.map((comment, i) => (
-                                    <div key={i} className="flex gap-3">
-                                        <div className="w-6 h-6 rounded bg-zinc-100 flex items-center justify-center text-[10px] font-medium text-zinc-600 shrink-0">
-                                            {(comment.user_details?.username || 'U')[0].toUpperCase()}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-medium text-zinc-900">{comment.user_details?.username}</span>
-                                                <span className="text-[10px] text-zinc-400">{new Date(comment.created_at).toLocaleDateString()}</span>
-                                            </div>
-                                            <p className="text-sm text-zinc-600">{comment.text}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="mt-6 flex gap-2">
-                                <div className="w-6 h-6 rounded bg-zinc-900 text-white flex items-center justify-center text-[10px] font-medium mt-1">
-                                    {user?.username?.[0]?.toUpperCase()}
-                                </div>
-                                <div className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg p-2 focus-within:border-zinc-400 focus-within:ring-1 focus-within:ring-zinc-400 transition-all">
-                                    <textarea
-                                        rows="2"
-                                        placeholder="Add a comment..."
-                                        className="w-full bg-transparent border-none outline-none text-sm resize-none"
-                                        value={newComment}
-                                        onChange={(e) => setNewComment(e.target.value)}
-                                    ></textarea>
-                                    <div className="flex justify-end pt-2 border-t border-zinc-200/50 mt-2">
-                                        <button onClick={handlePostComment} disabled={!newComment.trim()} className="text-xs font-medium text-white bg-zinc-900 px-3 py-1 rounded hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed">
-                                            Comment
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div ref={commentEndRef} />
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Create Task Modal */}
-            {isTaskModalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
-                        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center">
-                            <h3 className="font-semibold text-zinc-900">Create Issue</h3>
-                            <button onClick={() => setIsTaskModalOpen(false)} className="text-zinc-400 hover:text-zinc-600"><X size={18} /></button>
+            {/* Share Modal */}
+            {showShareModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6" onClick={() => setShowShareModal(false)}>
+                    <div className="bg-white rounded-lg w-full max-w-md p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-[#172B4D]">Share board</h3>
+                            <button onClick={() => setShowShareModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                                <X size={20} className="text-[#5E6C84]" />
+                            </button>
                         </div>
-                        <form onSubmit={handleCreateTask} className="p-6 space-y-4">
-                            <div>
-                                <input
-                                    type="text"
-                                    className="w-full text-lg font-medium placeholder:text-zinc-300 outline-none"
-                                    placeholder="Issue title"
-                                    value={newTask.title}
-                                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                                    required
-                                    autoFocus
-                                />
+                        <p className="text-sm text-[#5E6C84] mb-4">Invite people to collaborate on this board</p>
+
+                        <form onSubmit={handleShareBoard} className="space-y-3 mb-4">
+                            <input
+                                type="email"
+                                placeholder="Email address"
+                                className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                                value={shareEmail}
+                                onChange={(e) => setShareEmail(e.target.value)}
+                                required
+                            />
+                            <button
+                                type="submit"
+                                className="w-full px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-medium"
+                            >
+                                Send Invitation
+                            </button>
+                        </form>
+
+                        <button
+                            onClick={copyShareLink}
+                            className="w-full px-4 py-2 bg-[#EBECF0] text-[#172B4D] rounded hover:bg-[#DFE1E6] transition-colors text-sm font-medium mb-4"
+                        >
+                            Copy board link
+                        </button>
+
+                        <div className="pt-4 border-t border-[#DFE1E6]">
+                            <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-3">Board members ({project.members_details?.length || 0})</p>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {project.members_details?.map((member, i) => (
+                                    <div key={i} className="flex items-center gap-3 p-2 rounded hover:bg-[#F4F5F7]">
+                                        <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
+                                            {member.username[0].toUpperCase()}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-medium text-[#172B4D]">{member.username}</p>
+                                            <p className="text-xs text-[#5E6C84]">{member.email || 'No email'}</p>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                            <div>
-                                <textarea
-                                    className="w-full text-sm text-zinc-600 placeholder:text-zinc-300 outline-none resize-none min-h-[80px]"
-                                    placeholder="Add description..."
-                                    value={newTask.description}
-                                    onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                                ></textarea>
-                            </div>
-                            <div className="flex gap-2 pt-2">
-                                <select
-                                    className="bg-zinc-50 border border-zinc-200 text-xs rounded px-2 py-1 outline-none"
-                                    value={newTask.priority}
-                                    onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Members Modal */}
+            {showMembersModal && selectedTask && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowMembersModal(false)}>
+                    <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Members</h3>
+                            <button onClick={() => setShowMembersModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                                <X size={16} className="text-[#5E6C84]" />
+                            </button>
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search members"
+                            className="w-full px-3 py-2 mb-3 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                        />
+                        <div className="space-y-1 max-h-64 overflow-y-auto">
+                            {allUsers.map((member) => (
+                                <button
+                                    key={member.id}
+                                    onClick={() => handleAssignMember(member.id)}
+                                    className="w-full flex items-center gap-3 p-2 rounded hover:bg-[#F4F5F7] transition-colors"
                                 >
-                                    <option value="LOW">Low</option>
-                                    <option value="MEDIUM">Medium</option>
-                                    <option value="HIGH">High</option>
-                                    <option value="CRITICAL">Critical</option>
-                                </select>
+                                    <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
+                                        {member.username[0].toUpperCase()}
+                                    </div>
+                                    <span className="text-sm text-[#172B4D]">{member.username}</span>
+                                    {selectedTask.assigned_to === member.id && (
+                                        <span className="ml-auto text-[#0079BF]">✓</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Labels Modal */}
+            {showLabelsModal && selectedTask && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowLabelsModal(false)}>
+                    <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Labels</h3>
+                            <button onClick={() => setShowLabelsModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                                <X size={16} className="text-[#5E6C84]" />
+                            </button>
+                        </div>
+                        <div className="space-y-2">
+                            {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((priority) => (
+                                <button
+                                    key={priority}
+                                    onClick={() => handleUpdatePriority(priority)}
+                                    className="w-full flex items-center gap-3 p-3 rounded hover:opacity-90 transition-opacity text-white font-medium"
+                                    style={{ backgroundColor: getPriorityColor(priority) }}
+                                >
+                                    {priority}
+                                    {selectedTask.priority === priority && <span className="ml-auto">✓</span>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Dates Modal */}
+            {showDatesModal && selectedTask && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowDatesModal(false)}>
+                    <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Dates</h3>
+                            <button onClick={() => setShowDatesModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                                <X size={16} className="text-[#5E6C84]" />
+                            </button>
+                        </div>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-[#5E6C84] mb-1">Due Date</label>
                                 <input
                                     type="date"
-                                    className="bg-zinc-50 border border-zinc-200 text-xs rounded px-2 py-1 outline-none"
-                                    value={newTask.due_date}
-                                    onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
+                                    className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                                    value={tempDueDate || selectedTask.due_date || ''}
+                                    onChange={(e) => setTempDueDate(e.target.value)}
                                 />
                             </div>
-                            <div className="flex justify-end pt-4 border-t border-zinc-50">
-                                <button type="submit" className="btn btn-primary">Create Issue</button>
+                            <button
+                                onClick={handleUpdateDueDate}
+                                className="w-full px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-medium"
+                            >
+                                Save
+                            </button>
+                            {selectedTask.due_date && (
+                                <button
+                                    onClick={() => {
+                                        handleUpdateTask(selectedTask.id, { due_date: null });
+                                        setShowDatesModal(false);
+                                        setTempDueDate('');
+                                    }}
+                                    className="w-full px-4 py-2 bg-[#EBECF0] text-[#172B4D] rounded hover:bg-[#DFE1E6] transition-colors text-sm font-medium"
+                                >
+                                    Remove
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Attachment Modal */}
+            {showAttachmentModal && selectedTask && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowAttachmentModal(false)}>
+                    <div className="bg-white rounded-lg w-full max-w-md p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Attachments</h3>
+                            <button onClick={() => setShowAttachmentModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                                <X size={16} className="text-[#5E6C84]" />
+                            </button>
+                        </div>
+
+                        {/* Upload Section */}
+                        <div className="mb-4">
+                            <label className="block text-xs font-semibold text-[#5E6C84] mb-2">Upload File</label>
+                            <div className="border-2 border-dashed border-[#DFE1E6] rounded-lg p-4 text-center hover:border-[#0079BF] transition-colors">
+                                <input
+                                    type="file"
+                                    id="fileInput"
+                                    className="hidden"
+                                    onChange={(e) => setSelectedFile(e.target.files[0])}
+                                />
+                                <label htmlFor="fileInput" className="cursor-pointer">
+                                    <Paperclip size={24} className="mx-auto text-[#5E6C84] mb-2" />
+                                    {selectedFile ? (
+                                        <p className="text-sm text-[#172B4D] font-medium">{selectedFile.name}</p>
+                                    ) : (
+                                        <p className="text-sm text-[#5E6C84]">Click to browse or drag and drop</p>
+                                    )}
+                                </label>
                             </div>
-                        </form>
+                            {selectedFile && (
+                                <button
+                                    onClick={handleFileUpload}
+                                    className="w-full mt-2 px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-medium"
+                                >
+                                    Upload
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Existing Attachments */}
+                        {attachments.length > 0 && (
+                            <div>
+                                <label className="block text-xs font-semibold text-[#5E6C84] uppercase mb-2">Current Attachments</label>
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {attachments.map((att, i) => (
+                                        <div key={i} className="flex items-center gap-3 p-2 bg-[#F4F5F7] rounded hover:bg-[#EBECF0] transition-colors">
+                                            <Paperclip size={16} className="text-[#5E6C84]" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm text-[#172B4D] truncate">{att.file_name || 'Attachment'}</p>
+                                                <p className="text-xs text-[#5E6C84]">
+                                                    {new Date(att.created_at).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <a
+                                                href={att.file}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[#0079BF] hover:text-[#026AA7] text-sm"
+                                            >
+                                                View
+                                            </a>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

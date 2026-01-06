@@ -12,8 +12,10 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        # Default to showing own entries or all if admin/manager
-        return TimeEntry.objects.filter(task__project__members=self.request.user)
+        user = self.request.user
+        if user.role and user.role.name in ['ADMIN', 'PROJECT_MANAGER']:
+            return TimeEntry.objects.all()
+        return TimeEntry.objects.filter(task__project__members=user)
 
     @action(detail=False, methods=['post'])
     def start_timer(self, request):

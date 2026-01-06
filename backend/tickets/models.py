@@ -2,6 +2,8 @@ from django.db import models
 from django.conf import settings
 from projects.models import Task, Tag
 from django.utils import timezone
+from django.contrib.contenttypes.fields import GenericRelation
+from activity.models import Comment, Attachment, AuditLog
 import datetime
 import random
 
@@ -57,6 +59,10 @@ class Ticket(models.Model):
     
     project_task = models.OneToOneField(Task, on_delete=models.SET_NULL, null=True, blank=True, related_name='source_ticket')
     tags = models.ManyToManyField(Tag, blank=True, related_name='tickets')
+    
+    comments = GenericRelation(Comment)
+    attachments = GenericRelation(Attachment)
+    audit_logs = GenericRelation(AuditLog)
     
     # SLA Fields
     sla_due_date = models.DateTimeField(null=True, blank=True)

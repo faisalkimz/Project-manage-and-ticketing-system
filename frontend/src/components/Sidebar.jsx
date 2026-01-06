@@ -1,75 +1,115 @@
+import { useState } from 'react';
+import { Layout, Briefcase, Users, Settings, LogOut, MessageSquare, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, FolderKanban, Users, LogOut, Settings, Command } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
 const Sidebar = () => {
     const location = useLocation();
     const { user, logout } = useAuthStore();
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     const links = [
-        { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-        { name: 'Tickets', path: '/tickets', icon: Ticket },
-        { name: 'Projects', path: '/projects', icon: FolderKanban },
+        { name: 'Boards', path: '/', icon: Layout },
+        { name: 'Projects', path: '/projects', icon: Briefcase },
+        { name: 'Tickets', path: '/tickets', icon: MessageSquare },
         { name: 'Team', path: '/team', icon: Users, roles: ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER'] },
-        { name: 'Settings', path: '/settings', icon: Settings },
     ];
 
+    const isActive = (path) => location.pathname === path;
+
     return (
-        <aside className="fixed left-0 top-0 h-full w-[240px] bg-zinc-50 border-r border-zinc-200 flex flex-col z-50">
-            {/* Header */}
-            <div className="h-14 flex items-center px-4 border-b border-zinc-200 bg-white">
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-zinc-900 rounded flex items-center justify-center text-white">
-                        <Command size={14} />
+        <aside className={`${isCollapsed ? 'w-16' : 'w-64'} h-screen bg-[#0079BF] flex flex-col shrink-0 transition-all duration-200 shadow-lg fixed left-0 top-0 z-50`}>
+            {/* Trello Header */}
+            <div className="h-14 flex items-center justify-between px-4 border-b border-[rgba(255,255,255,0.2)]">
+                {!isCollapsed && (
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[#0079BF] font-black text-base shadow-md">
+                            M
+                        </div>
+                        <span className="font-semibold text-white text-base tracking-tight">
+                            Mbabali
+                        </span>
                     </div>
-                    <span className="font-semibold text-sm text-zinc-900 tracking-tight">Mbabali</span>
-                </div>
+                )}
+                <button
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className="p-1.5 hover:bg-[rgba(255,255,255,0.2)] rounded-sm transition-colors text-white"
+                    aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                >
+                    {isCollapsed ? <Menu size={18} /> : <X size={18} />}
+                </button>
             </div>
 
             {/* Navigation */}
-            <div className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto custom-scrollbar">
-                <div className="px-2 mb-2">
-                    <span className="text-[11px] font-medium text-zinc-400">Workspace</span>
-                </div>
+            <div className="flex-1 py-4 overflow-y-auto custom-scrollbar px-3">
+                <nav className="space-y-0.5">
+                    {links.map((link) => {
+                        if (link.roles && !link.roles.includes(user?.role)) return null;
+                        const active = isActive(link.path);
+                        return (
+                            <Link
+                                key={link.path}
+                                to={link.path}
+                                className={`flex items-center gap-3 px-3 py-2 rounded-sm transition-all font-medium text-sm ${active
+                                    ? 'bg-[rgba(255,255,255,0.25)] text-white'
+                                    : 'text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.15)] hover:text-white'
+                                    }`}
+                                title={isCollapsed ? link.name : ''}
+                            >
+                                <link.icon size={18} strokeWidth={2} />
+                                {!isCollapsed && <span>{link.name}</span>}
+                            </Link>
+                        );
+                    })}
+                </nav>
 
-                {links.map((link) => {
-                    if (link.roles && !link.roles.includes(user?.role)) return null;
-                    const Icon = link.icon;
-                    const isActive = location.pathname === link.path;
-
-                    return (
+                {/* Workspace Section */}
+                {!isCollapsed && (
+                    <div className="mt-8">
+                        <div className="px-3 mb-2">
+                            <p className="text-[11px] font-semibold text-[rgba(255,255,255,0.7)] uppercase tracking-wider">
+                                Workspace
+                            </p>
+                        </div>
                         <Link
-                            key={link.path}
-                            to={link.path}
-                            className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive
-                                ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200'
-                                : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                            to="/settings"
+                            className={`flex items-center gap-3 px-3 py-2 rounded-sm transition-all font-medium text-sm ${isActive('/settings')
+                                ? 'bg-[rgba(255,255,255,0.25)] text-white'
+                                : 'text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.15)] hover:text-white'
                                 }`}
                         >
-                            <Icon size={16} className={isActive ? 'text-zinc-900' : 'text-zinc-500'} strokeWidth={2} />
-                            {link.name}
+                            <Settings size={18} strokeWidth={2} />
+                            <span>Settings</span>
                         </Link>
-                    );
-                })}
+                    </div>
+                )}
             </div>
 
-            {/* Footer */}
-            <div className="p-3 border-t border-zinc-200 bg-white">
-                <div className="flex items-center gap-3 p-2 rounded-md hover:bg-zinc-50 border border-transparent hover:border-zinc-200 transition-all cursor-pointer group">
-                    <div className="w-8 h-8 rounded bg-zinc-100 flex items-center justify-center text-zinc-600 text-xs font-semibold border border-zinc-200">
-                        {user?.username?.[0]?.toUpperCase()}
+            {/* User Profile */}
+            <div className="p-3 border-t border-[rgba(255,255,255,0.2)]">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.3)] border-2 border-white flex items-center justify-center text-xs font-bold text-white shrink-0">
+                        {user?.username?.[0]?.toUpperCase() || 'U'}
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-zinc-900 truncate">{user?.username}</p>
-                        <p className="text-[10px] text-zinc-500 truncate">{user?.role}</p>
-                    </div>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); logout(); }}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-400 hover:text-red-600 transition-all"
-                        title="Sign Out"
-                    >
-                        <LogOut size={14} />
-                    </button>
+                    {!isCollapsed && (
+                        <>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-white truncate">
+                                    {user?.username || 'User'}
+                                </p>
+                                <p className="text-[11px] text-[rgba(255,255,255,0.7)] truncate">
+                                    {user?.role?.replace('_', ' ') || 'Viewer'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={logout}
+                                className="p-1.5 hover:bg-[rgba(255,255,255,0.2)] rounded-sm transition-colors text-[rgba(255,255,255,0.85)] hover:text-white"
+                                title="Log out"
+                            >
+                                <LogOut size={16} />
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </aside>

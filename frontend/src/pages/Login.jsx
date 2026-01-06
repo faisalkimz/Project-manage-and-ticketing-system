@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
-import { LogIn, Lock, User as UserIcon, ArrowRight, ShieldCheck } from 'lucide-react';
+import { LogIn, AlertCircle, Loader } from 'lucide-react';
 
 const Login = () => {
     const [username, setUsername] = useState('');
@@ -17,126 +17,112 @@ const Login = () => {
         if (success) {
             navigate('/');
         } else {
-            setError('Check your username and password again.');
+            setError('Invalid username or password. Please try again.');
         }
     };
 
     return (
-        <div className="min-h-screen flex font-display bg-white overflow-hidden">
-            {/* Visual Side */}
-            <div className="hidden lg:flex lg:w-1/2 bg-slate-950 p-12 flex-col justify-between relative">
-                <div className="absolute inset-0 bg-indigo-600/10 mix-blend-overlay"></div>
-                <div className="absolute top-[20%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
-
-                <div className="relative z-10 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                        <div className="w-4 h-4 bg-slate-950 rounded-sm rotate-45"></div>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#0079BF] to-[#026AA7] p-6">
+            {/* Logo & Brand */}
+            <div className="mb-8 text-center">
+                <div className="flex items-center justify-center gap-3 mb-2">
+                    <div className="w-12 h-12 bg-white rounded flex items-center justify-center shadow-lg">
+                        <span className="text-2xl font-black text-[#0079BF]">M</span>
                     </div>
-                    <span className="text-xl font-bold tracking-tight text-white">Mbabali</span>
+                    <h1 className="text-4xl font-bold text-white">Mbabali</h1>
                 </div>
-
-                <div className="relative z-10">
-                    <h1 className="text-5xl font-bold text-white leading-tight mb-6">
-                        Everything you need,<br />
-                        in one workspace.
-                    </h1>
-                    <p className="text-slate-400 text-lg max-w-md">
-                        Manage your project timelines, dev activities, and support tickets in a clean, high-performance platform.
-                    </p>
-                </div>
-
-                <div className="relative z-10 flex items-center gap-8 text-white/40 font-bold text-xs uppercase tracking-[0.2em]">
-                    <span>Secure</span>
-                    <div className="w-1.5 h-1.5 bg-white/10 rounded-full"></div>
-                    <span>Fast</span>
-                    <div className="w-1.5 h-1.5 bg-white/10 rounded-full"></div>
-                    <span>Scalable</span>
-                </div>
+                <p className="text-white/90 text-sm">Project Management System</p>
             </div>
 
-            {/* Form Side */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-slate-50/50">
-                <div className="w-full max-w-md animate-fade-in">
-                    <div className="mb-10 lg:hidden flex items-center gap-3">
-                        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                            <div className="w-4 h-4 bg-white rounded-sm rotate-45"></div>
-                        </div>
-                        <span className="text-xl font-bold tracking-tight text-slate-900">Mbabali</span>
-                    </div>
+            {/* Login Card */}
+            <div className="trello-modal w-full max-w-md animate-scale-in">
+                <div className="p-8">
+                    <h2 className="text-xl font-semibold text-[#172B4D] mb-2 text-center">
+                        Log in to Mbabali
+                    </h2>
+                    <p className="text-sm text-[#5E6C84] mb-6 text-center">
+                        Continue to your workspace
+                    </p>
 
-                    <div className="mb-10">
-                        <h2 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">Login</h2>
-                        <p className="text-slate-500 font-medium">Please enter your account details.</p>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Username</label>
-                            <div className="relative group">
-                                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
-                                <input
-                                    type="text"
-                                    className="input-field pl-12 py-3.5 bg-white border-slate-200 text-base shadow-sm focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 placeholder:text-slate-300"
-                                    placeholder="e.g. adams"
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    required
-                                />
-                            </div>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-[#5E6C84] mb-1">
+                                Username
+                            </label>
+                            <input
+                                type="text"
+                                className="trello-input"
+                                placeholder="Enter your username"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                required
+                                autoFocus
+                            />
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center px-1">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Password</label>
-                                <button type="button" className="text-xs font-bold text-indigo-600 hover:underline">Forgot?</button>
-                            </div>
-                            <div className="relative group">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
-                                <input
-                                    type="password"
-                                    className="input-field pl-12 py-3.5 bg-white border-slate-200 text-base shadow-sm focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
-                                    placeholder="••••••••"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-[#5E6C84] mb-1">
+                                Password
+                            </label>
+                            <input
+                                type="password"
+                                className="trello-input"
+                                placeholder="Enter your password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
                         </div>
 
                         {error && (
-                            <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-4 rounded-xl flex items-start gap-3 animate-shake">
-                                <div className="p-1 bg-red-100 rounded-lg"><ShieldCheck size={14} /></div>
-                                <p className="font-semibold">{error}</p>
+                            <div className="flex items-start gap-2 p-3 bg-[#FFEBE6] border border-[#EB5A46] rounded-sm">
+                                <AlertCircle size={16} className="text-[#EB5A46] shrink-0 mt-0.5" />
+                                <p className="text-sm text-[#EB5A46]">{error}</p>
                             </div>
                         )}
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="btn btn-primary w-full py-4 text-base font-bold flex items-center justify-center gap-3 group shadow-xl shadow-indigo-200/50"
+                            className="w-full trello-btn trello-btn-primary py-3 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {loading ? 'Logging in...' : (
-                                <>
-                                    Log In <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                                </>
+                            {loading ? (
+                                <div className="flex items-center justify-center gap-2">
+                                    <Loader size={18} className="animate-spin" />
+                                    <span>Logging in...</span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-center gap-2">
+                                    <LogIn size={18} />
+                                    <span>Log In</span>
+                                </div>
                             )}
                         </button>
                     </form>
 
-
+                    <div className="mt-6 pt-6 border-t border-[#DFE1E6] text-center">
+                        <a href="#" className="text-sm text-[#0079BF] hover:underline">
+                            Can't log in? Contact support
+                        </a>
+                    </div>
                 </div>
             </div>
 
+            {/* Footer */}
+            <div className="mt-8 text-center">
+                <p className="text-xs text-white/70">
+                    © {new Date().getFullYear()} Mbabali. All rights reserved.
+                </p>
+            </div>
+
             <style jsx="true">{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
-          75% { transform: translateX(5px); }
-        }
-        .animate-shake {
-          animation: shake 0.4s ease-in-out;
-        }
-      `}</style>
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+                .animate-spin {
+                    animation: spin 1s linear infinite;
+                }
+            `}</style>
         </div>
     );
 };

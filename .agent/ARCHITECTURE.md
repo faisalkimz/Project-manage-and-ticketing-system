@@ -158,6 +158,8 @@ date: "2026-01-05"
 │ Create Task      │    ✗     │     ✓     │    ✓     │   ✓   │   ✗    │
 │ View Reports     │    ✗     │     ✓     │    ✓     │   ✓   │   ✗    │
 │ Manage Users     │    ✗     │     ✗     │    ✗     │   ✓   │   ✗    │
+│ View Gantt/Cal   │    ✗     │     ✓     │    ✓     │   ✓   │   ✗    │
+│ Manage Workload  │    ✗     │     ✗     │    ✓     │   ✓   │   ✗    │
 └──────────────────┴──────────┴───────────┴──────────┴───────┴────────┘
 ```
 
@@ -641,7 +643,9 @@ frontend/src/
 │   │   ├── ProjectBoard.jsx
 │   │   ├── KanbanColumn.jsx
 │   │   ├── TaskCard.jsx
-│   │   └── GanttChart.jsx
+│   │   ├── GanttChart.jsx
+│   │   ├── CalendarView.jsx
+│   │   └── ResourceTimeline.jsx
 │   └── dashboard/
 │       ├── StatsWidget.jsx
 │       ├── ActivityFeed.jsx

@@ -1,121 +1,197 @@
-import { useState, useEffect } from 'react';
-import { Search, X, Folder, Ticket, User, Command, ArrowRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+    Search,
+    X,
+    Briefcase,
+    CheckCircle2,
+    User,
+    ChevronRight,
+    Command,
+    Sparkles,
+    ArrowUpRight,
+    SearchSlash as NoResults,
+    Zap,
+    Box,
+    Layers
+} from 'lucide-react';
 import api from '../services/api';
 
 const GlobalSearch = ({ isOpen, onClose }) => {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState({ tasks: [], projects: [], people: [] });
+    const [loading, setLoading] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(0);
     const navigate = useNavigate();
+    const inputRef = useRef(null);
 
     useEffect(() => {
-        const handleEsc = (e) => {
-            if (e.key === 'Escape') onClose();
-            if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-            }
-        };
-        window.addEventListener('keydown', handleEsc);
-        return () => window.removeEventListener('keydown', handleEsc);
-    }, [onClose]);
+        if (isOpen) {
+            setTimeout(() => inputRef.current?.focus(), 100);
+            setQuery('');
+            setResults({ tasks: [], projects: [], people: [] });
+            setActiveIndex(0);
+        }
+    }, [isOpen]);
 
-    const handleSelect = (type, id) => {
-        if (type === 'task') navigate(`/projects`); // For now redirect to project
-        if (type === 'project') navigate(`/projects/${id}`);
+    useEffect(() => {
+        const fetchResults = async () => {
+            if (query.length < 2) {
+                setResults({ tasks: [], projects: [], people: [] });
+                return;
+            }
+            setLoading(true);
+            try {
+                const res = await api.get(`/users/search/?q=${query}`);
+                setResults(res.data);
+            } catch (err) { console.error(err); }
+            finally { setLoading(false); }
+        };
+
+        const timer = setTimeout(fetchResults, 300);
+        return () => clearTimeout(timer);
+    }, [query]);
+
+    // Flatten results for keyboard navigation
+    const flatResults = [
+        ...results.projects.map(p => ({ ...p, type: 'Project' })),
+        ...results.tasks.map(t => ({ ...t, type: 'Task' })),
+        ...results.people.map(u => ({ ...u, type: 'Person' }))
+    ];
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveIndex(prev => (prev + 1) % (flatResults.length || 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveIndex(prev => (prev - 1 + flatResults.length) % (flatResults.length || 1));
+        } else if (e.key === 'Enter') {
+            if (flatResults[activeIndex]) {
+                handleSelect(flatResults[activeIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            onClose();
+        }
+    };
+
+    const handleSelect = (item) => {
         onClose();
+        if (item.type === 'Project') navigate(`/projects/${item.id}`);
+        else if (item.type === 'Task') navigate(`/projects/${item.project}?task=${item.id}`);
+        else if (item.type === 'Person') navigate('/team');
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-[15vh] bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-            <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
-                <div className="p-4 border-b border-slate-100 flex items-center gap-4">
-                    <Search className="text-slate-400 shrink-0" size={20} />
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] p-6 animate-fade-in" onKeyDown={handleKeyDown}>
+            {/* Ultra-soft Backdrop */}
+            <div className="absolute inset-0 bg-zinc-900/40 backdrop-blur-2xl" onClick={onClose}></div>
+
+            <div className="relative w-full max-w-2xl bg-white rounded-[3.5rem] shadow-[0_0_100px_rgba(0,0,0,0.15)] border border-white/20 overflow-hidden animate-slide-up">
+                {/* Search Bar Canvas */}
+                <div className="relative flex items-center h-24 px-10 border-b border-zinc-50 bg-[#FDFCFB]/50">
+                    <div className="w-12 h-12 flex items-center justify-center text-zinc-300">
+                        {loading ? <Zap size={28} className="animate-pulse text-indigo-500" /> : <Search size={28} strokeWidth={1.5} />}
+                    </div>
                     <input
-                        autoFocus
+                        ref={inputRef}
                         type="text"
-                        placeholder="Search for tasks, projects, or team members..."
-                        className="flex-1 text-lg border-none outline-none text-slate-900 placeholder:text-slate-300 py-1"
+                        placeholder="Search initiatives, tasks, or teammates..."
+                        className="flex-1 h-full bg-transparent border-none outline-none text-xl font-serif italic text-zinc-900 placeholder:text-zinc-200 px-6"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                     />
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-400 font-bold text-[10px]">
-                        <Command size={10} /> K
+                    <div className="flex items-center gap-4">
+                        <div className="px-3 py-1.5 bg-zinc-50 border border-zinc-100 rounded-xl flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-zinc-400">ESC</span>
+                        </div>
+                        <button onClick={onClose} className="w-12 h-12 flex items-center justify-center hover:bg-white rounded-2xl transition-all shadow-sm">
+                            <X size={24} />
+                        </button>
                     </div>
                 </div>
 
-                <div className="max-h-[60vh] overflow-y-auto p-4 custom-scrollbar">
-                    {query.length === 0 ? (
-                        <div className="py-20 text-center space-y-4">
-                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
-                                <Search size={32} />
+                {/* Results Storyboard */}
+                <div className="max-h-[60vh] overflow-y-auto p-10 custom-scrollbar bg-white">
+                    {query.length < 2 ? (
+                        <div className="py-20 flex flex-col items-center justify-center text-center space-y-6">
+                            <div className="w-20 h-20 bg-zinc-50 rounded-[2rem] flex items-center justify-center text-zinc-100">
+                                <Sparkles size={40} />
                             </div>
-                            <div>
-                                <p className="font-bold text-slate-900">What are you looking for?</p>
-                                <p className="text-sm text-slate-400">Search across your entire workspace in real-time.</p>
+                            <div className="space-y-1">
+                                <p className="text-xl font-serif italic text-zinc-400">Discover your workspace</p>
+                                <p className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest leading-relaxed">Type to find what you're looking for</p>
                             </div>
                         </div>
+                    ) : flatResults.length === 0 && !loading ? (
+                        <div className="py-20 flex flex-col items-center justify-center text-center space-y-6">
+                            <NoResults size={48} className="text-zinc-100" />
+                            <p className="text-lg font-serif italic text-zinc-300">Nothing found for "{query}"</p>
+                        </div>
                     ) : (
-                        <div className="space-y-8">
-                            {/* Mock results based on query for demo */}
-                            <section>
-                                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 px-2">Tasks (3)</h3>
-                                <div className="space-y-1">
-                                    {['Orphan Task', 'Implement Navigation Component', 'Fix Responsive Issues'].map((t, i) => (
-                                        <button key={i} className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 group text-left transition-all border border-transparent hover:border-slate-100">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Ticket size={16} /></div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-slate-900">{t}</p>
-                                                    <p className="text-[10px] text-slate-400 font-medium">Updated 2 days ago • High Priority</p>
-                                                </div>
-                                            </div>
-                                            <ArrowRight className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" size={16} />
-                                        </button>
-                                    ))}
+                        <div className="space-y-10">
+                            {flatResults.map((item, index) => (
+                                <div
+                                    key={`${item.type}-${item.id}`}
+                                    onMouseEnter={() => setActiveIndex(index)}
+                                    onClick={() => handleSelect(item)}
+                                    className={`group flex items-center gap-6 p-6 rounded-[2.5rem] transition-all cursor-pointer ${activeIndex === index
+                                            ? 'bg-zinc-900 text-white shadow-2xl scale-[1.02]'
+                                            : 'hover:bg-zinc-50/50 grayscale hover:grayscale-0'
+                                        }`}
+                                >
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${activeIndex === index ? 'bg-white/10' : 'bg-zinc-50 border border-zinc-100 text-zinc-300'
+                                        }`}>
+                                        {item.type === 'Project' && <Layers size={24} strokeWidth={1.5} />}
+                                        {item.type === 'Task' && <Briefcase size={24} strokeWidth={1.5} />}
+                                        {item.type === 'Person' && <User size={24} strokeWidth={1.5} />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-3">
+                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${activeIndex === index ? 'text-indigo-400' : 'text-zinc-300'}`}>
+                                                {item.type}
+                                            </span>
+                                            {item.status && (
+                                                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-md border ${activeIndex === index ? 'border-white/20 bg-white/10' : 'border-zinc-100 bg-zinc-50 text-zinc-400'
+                                                    }`}>
+                                                    {item.status}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <h4 className={`text-xl font-serif italic tracking-tight mt-1 truncate ${activeIndex === index ? 'text-white' : 'text-zinc-900'}`}>
+                                            {item.name || item.title || item.username}
+                                        </h4>
+                                    </div>
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeIndex === index ? 'bg-white/10 text-white' : 'text-zinc-100 opacity-0'
+                                        }`}>
+                                        <ArrowUpRight size={20} />
+                                    </div>
                                 </div>
-                            </section>
-
-                            <section>
-                                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 px-2">People (2)</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {['Alice Engineer', 'Bob Designer'].map((p, i) => (
-                                        <button key={i} className="flex items-center gap-4 p-3 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all text-left">
-                                            <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-bold">
-                                                {p.split(' ').map(n => n[0]).join('')}
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900">{p}</p>
-                                                <p className="text-[10px] text-slate-400 font-medium">{p.split(' ')[1]}</p>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </section>
+                            ))}
                         </div>
                     )}
                 </div>
 
-                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    <div className="flex gap-4">
-                        <span className="flex items-center gap-1"><Command size={10} className="mt-[-2px]" /> S Save</span>
-                        <span className="flex items-center gap-1">↑↓ Navigate</span>
-                        <span className="flex items-center gap-1">Enter Select</span>
+                {/* Command Footer */}
+                <div className="px-10 py-6 border-t border-zinc-50 bg-[#FDFCFB]/50 flex items-center justify-between">
+                    <div className="flex items-center gap-8">
+                        <div className="flex items-center gap-3 text-zinc-400">
+                            <div className="px-2 py-1 bg-white border border-zinc-100 rounded-lg text-[9px] font-bold">↑↓</div>
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Navigate</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-zinc-400">
+                            <div className="px-2 py-1 bg-white border border-zinc-100 rounded-lg text-[9px] font-bold">ENTER</div>
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Select</span>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="hover:text-slate-600">Close</button>
+                    <div className="flex items-center gap-3">
+                        <Command size={14} className="text-zinc-200" />
+                        <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest italic">Mbabali Studio Portal</span>
+                    </div>
                 </div>
             </div>
-
-            <style jsx="true">{`
-                .custom-scrollbar::-webkit-scrollbar {
-                    width: 4px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: #e2e8f0;
-                    border-radius: 10px;
-                }
-            `}</style>
         </div>
     );
 };

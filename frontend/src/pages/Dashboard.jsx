@@ -1,178 +1,240 @@
 import { useState, useEffect } from 'react';
-import { Ticket, FolderKanban, CheckCircle2, Clock, Plus, Users, FileText, Settings, ArrowUpRight, Activity, GitCommit, Layout } from 'lucide-react';
+import {
+    Star, Clock, CheckCircle2, ListTodo, Activity, ArrowRight,
+    Briefcase, MessageSquare, ChevronRight, TrendingUp, Users, Plus
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
+import TimerWidget from '../components/TimerWidget';
 
 const Dashboard = () => {
-    const [stats, setStats] = useState({
-        tickets: 0,
-        activeProjects: 0,
-        completedTasks: 0,
-        pendingActions: 0,
-        completionRate: 0,
-        highPriority: 0,
-        totalTasks: 0
-    });
-    const [activities, setActivities] = useState([]);
-    const [upcomingTasks, setUpcomingTasks] = useState([]);
     const { user } = useAuthStore();
+    const [stats, setStats] = useState({ tickets: 0, projects: 0, tasks: 0 });
+    const [recentProjects, setRecentProjects] = useState([]);
+    const [upcomingTasks, setUpcomingTasks] = useState([]);
+    const [recentActivity, setRecentActivity] = useState([]);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
+        const fetchData = async () => {
             try {
-                const [ticketsRes, projectsRes, tasksRes, activityRes] = await Promise.all([
+                const [tRes, pRes, tkRes, actRes] = await Promise.all([
                     api.get('/tickets/tickets/'),
                     api.get('/projects/projects/'),
                     api.get('/projects/tasks/'),
                     api.get('/activity/audit-logs/')
                 ]);
-
-                const tickets = ticketsRes.data;
-                const projects = projectsRes.data;
-                const tasks = tasksRes.data;
-
-                const highPriorityTasks = tasks.filter(t => t.priority === 'HIGH' || t.priority === 'CRITICAL').length;
-                const completedTasks = tasks.filter(t => t.status === 'DONE').length;
-                const rate = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
-
                 setStats({
-                    tickets: tickets.length,
-                    activeProjects: projects.filter(p => p.status === 'ACTIVE').length,
-                    completedTasks: completedTasks,
-                    pendingActions: tickets.filter(t => t.status === 'OPEN').length,
-                    completionRate: rate,
-                    highPriority: highPriorityTasks,
-                    totalTasks: tasks.length
+                    tickets: tRes.data.length,
+                    projects: pRes.data.length,
+                    tasks: tkRes.data.filter(t => t.status !== 'DONE').length
                 });
-
-                setActivities(activityRes.data.slice(0, 8));
-                setUpcomingTasks(tasks.filter(t => t.status !== 'DONE').slice(0, 5));
-            } catch (error) {
-                console.error('Failed to fetch dashboard data', error);
-            }
+                setRecentProjects(pRes.data.slice(0, 6));
+                setUpcomingTasks(tkRes.data.filter(t => t.status !== 'DONE').slice(0, 5));
+                setRecentActivity(actRes.data.slice(0, 6));
+            } catch (error) { console.error(error); }
         };
-        fetchDashboardData();
+        fetchData();
     }, []);
 
-    const MetricCard = ({ label, value, icon: Icon, trend }) => (
-        <div className="card h-24 flex flex-col justify-between">
-            <div className="flex justify-between items-start">
-                <span className="text-zinc-500 text-xs font-medium">{label}</span>
-                <Icon size={14} className="text-zinc-400" />
+    const StatCard = ({ label, value, icon: Icon, color, link }) => (
+        <Link to={link} className="bg-white border border-[#DFE1E6] rounded-sm p-4 hover:shadow-md transition-shadow group">
+            <div className="flex items-center justify-between mb-3">
+                <div className={`p-2 rounded-sm ${color}`}>
+                    <Icon size={20} className="text-white" />
+                </div>
+                <ArrowRight size={16} className="text-[#5E6C84] group-hover:text-[#172B4D] transition-colors" />
             </div>
-            <div className="flex items-end gap-2">
-                <span className="text-2xl font-semibold text-zinc-900 tracking-tight">{value}</span>
-                {trend && <span className="text-xs text-emerald-600 mb-1 font-medium">{trend}</span>}
+            <div className="space-y-1">
+                <h3 className="text-2xl font-semibold text-[#172B4D]">{value}</h3>
+                <p className="text-xs font-medium text-[#5E6C84] uppercase">{label}</p>
             </div>
-        </div>
+        </Link>
     );
 
     return (
-        <div className="layout-container p-6 min-h-screen space-y-8 animate-fade-in">
+        <div className="min-h-screen bg-[#FAFBFC] p-6">
             {/* Header */}
-            <header className="flex justify-between items-end border-b border-zinc-100 pb-6">
-                <div>
-                    <div className="flex items-center gap-2 text-zinc-500 mb-2">
-                        <Layout size={14} />
-                        <span className="text-xs font-medium">Workspace / Overview</span>
-                    </div>
-                    <h1 className="text-xl font-semibold text-zinc-900">Dashboard</h1>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button className="btn btn-secondary">
-                        <Settings size={14} />
-                        Customize
-                    </button>
-                    <button className="btn btn-primary">
-                        <Plus size={14} />
-                        New Issue
-                    </button>
-                </div>
+            <header className="mb-8">
+                <h1 className="text-2xl font-semibold text-[#172B4D] mb-1">
+                    Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {user?.username}
+                </h1>
+                <p className="text-sm text-[#5E6C84]">Here's what's happening in your workspace</p>
             </header>
 
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard label="Active Projects" value={stats.activeProjects} icon={FolderKanban} />
-                <MetricCard label="Open Tickets" value={stats.tickets} icon={Ticket} trend="+2 new" />
-                <MetricCard label="Task Completion" value={`${stats.completionRate}%`} icon={CheckCircle2} />
-                <MetricCard label="High Priority" value={stats.highPriority} icon={Activity} />
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <StatCard label="Active Projects" value={stats.projects} icon={Briefcase} color="bg-[#0079BF]" link="/projects" />
+                <StatCard label="Pending Tasks" value={stats.tasks} icon={ListTodo} color="bg-[#FF9F1A]" link="/projects" />
+                <StatCard label="Open Tickets" value={stats.tickets} icon={MessageSquare} color="bg-[#61BD4F]" link="/tickets" />
+                <StatCard label="In Progress" value={upcomingTasks.length} icon={TrendingUp} color="bg-[#C377E0]" link="/projects" />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Main Content: Tasks */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Main Content */}
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-sm font-semibold text-zinc-900">My Tasks</h2>
-                        <Link to="/projects" className="text-xs text-zinc-500 hover:text-zinc-900 flex items-center gap-1">
-                            View All <ArrowUpRight size={12} />
-                        </Link>
-                    </div>
+                    {/* Recent Boards */}
+                    <section>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-base font-semibold text-[#172B4D] flex items-center gap-2">
+                                <Star size={16} className="text-[#F2D600]" fill="#F2D600" />
+                                Recent Boards
+                            </h2>
+                            <Link to="/projects" className="text-sm text-[#0079BF] hover:underline">
+                                View all →
+                            </Link>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {recentProjects.map((project) => (
+                                <Link
+                                    key={project.id}
+                                    to={`/projects/${project.id}`}
+                                    className="group bg-gradient-to-br from-[#0079BF] to-[#026AA7] rounded-sm p-4 hover:shadow-lg transition-all min-h-[100px] flex flex-col justify-between"
+                                >
+                                    <h3 className="text-white font-semibold text-base mb-2">{project.name}</h3>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-white/80">{project.key}</span>
+                                        <div className="flex -space-x-1">
+                                            {project.members_details?.slice(0, 3).map((m, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="w-6 h-6 rounded-full bg-white text-[#0079BF] border border-[#0079BF] flex items-center justify-center text-[10px] font-semibold"
+                                                    title={m.username}
+                                                >
+                                                    {m.username[0].toUpperCase()}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                            <Link
+                                to="/projects"
+                                className="border-2 border-dashed border-[#DFE1E6] rounded-sm p-4 hover:bg-[#F4F5F7] transition-colors min-h-[100px] flex flex-col items-center justify-center gap-2 group"
+                            >
+                                <Plus size={24} className="text-[#5E6C84] group-hover:text-[#172B4D]" />
+                                <span className="text-sm font-medium text-[#5E6C84] group-hover:text-[#172B4D]">
+                                    Create new board
+                                </span>
+                            </Link>
+                        </div>
+                    </section>
 
-                    <div className="border border-zinc-200 rounded-lg overflow-hidden bg-white">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
-                                <tr>
-                                    <th className="px-4 py-3 w-10"></th>
-                                    <th className="px-4 py-3">Task Title</th>
-                                    <th className="px-4 py-3">Project</th>
-                                    <th className="px-4 py-3">Priority</th>
-                                    <th className="px-4 py-3 text-right">Due Date</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-100">
-                                {upcomingTasks.length > 0 ? upcomingTasks.map(task => (
-                                    <tr key={task.id} className="group hover:bg-zinc-50 transition-colors">
-                                        <td className="px-4 py-3">
-                                            <div className={`w-2 h-2 rounded-full ${task.priority === 'HIGH' || task.priority === 'CRITICAL' ? 'bg-orange-500' : 'bg-zinc-300'}`}></div>
-                                        </td>
-                                        <td className="px-4 py-3 font-medium text-zinc-900">{task.title}</td>
-                                        <td className="px-4 py-3 text-zinc-500">{task.project_details?.name || 'Unknown'}</td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-[10px] bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200 text-zinc-600 font-mono">
-                                                {task.priority}
+                    {/* Upcoming Tasks */}
+                    <section className="bg-white border border-[#DFE1E6] rounded-sm">
+                        <div className="px-4 py-3 border-b border-[#DFE1E6]">
+                            <h2 className="text-sm font-semibold text-[#172B4D] uppercase">Your Tasks</h2>
+                        </div>
+                        <div className="divide-y divide-[#DFE1E6]">
+                            {upcomingTasks.map((task, i) => (
+                                <div key={i} className="px-4 py-3 hover:bg-[#F4F5F7] cursor-pointer transition-colors group">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1">
+                                            <p className="text-sm font-medium text-[#172B4D] group-hover:text-[#0079BF] transition-colors mb-1">
+                                                {task.title}
+                                            </p>
+                                            <div className="flex items-center gap-2 text-xs text-[#5E6C84]">
+                                                <span className="font-medium">TASK-{task.id}</span>
+                                                {task.due_date && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <Clock size={12} />
+                                                        <span>{new Date(task.due_date).toLocaleDateString()}</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`trello-badge ${task.status === 'IN_PROGRESS' ? 'bg-[#0079BF] text-white' : 'bg-[#EBECF0] text-[#172B4D]'
+                                                }`}>
+                                                {task.status.replace('_', ' ')}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-zinc-500 font-mono text-xs">
-                                            {task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}
-                                        </td>
-                                    </tr>
-                                )) : (
-                                    <tr>
-                                        <td colSpan="5" className="px-4 py-12 text-center text-zinc-400">No tasks assigned.</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                            {task.assigned_to_details && (
+                                                <div
+                                                    className="w-6 h-6 rounded-full bg-[#DFE1E6] flex items-center justify-center text-[10px] font-semibold"
+                                                    title={task.assigned_to_details.username}
+                                                >
+                                                    {task.assigned_to_details.username[0].toUpperCase()}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {upcomingTasks.length === 0 && (
+                                <div className="px-4 py-8 text-center text-[#5E6C84] text-sm">
+                                    No pending tasks. You're all caught up! 🎉
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    {/* Recent Activity */}
+                    <section className="bg-white border border-[#DFE1E6] rounded-sm">
+                        <div className="px-4 py-3 border-b border-[#DFE1E6]">
+                            <h2 className="text-sm font-semibold text-[#172B4D] uppercase">Recent Activity</h2>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            {recentActivity.map((log, i) => (
+                                <div key={i} className="flex gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold text-[#172B4D] shrink-0">
+                                        {log.user_details?.username?.[0]?.toUpperCase() || 'U'}
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-sm text-[#172B4D]">
+                                            <span className="font-semibold">{log.user_details?.username}</span>
+                                            <span className="text-[#5E6C84]"> {log.action.toLowerCase()}</span>
+                                        </p>
+                                        <span className="text-xs text-[#5E6C84]">
+                                            {new Date(log.timestamp).toLocaleString()}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
                 </div>
 
-                {/* Sidebar: Activity Stream */}
+                {/* Sidebar */}
                 <div className="space-y-6">
-                    <h2 className="text-sm font-semibold text-zinc-900">Activity Stream</h2>
-                    <div className="border border-zinc-200 rounded-lg bg-white p-4 space-y-6">
-                        {activities.length > 0 ? activities.map((log) => (
-                            <div key={log.id} className="flex gap-3 relative">
-                                <div className="absolute left-[9px] top-6 bottom-[-24px] w-[1px] bg-zinc-100 last:hidden"></div>
-                                <div className="mt-1">
-                                    <GitCommit size={14} className="text-zinc-400" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-zinc-900">
-                                        <span className="font-medium">{log.user_details?.username}</span> <span className="text-zinc-500">{log.action.toLowerCase()}</span>
-                                    </p>
-                                    <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">
-                                        {log.details?.message || 'Updated entity details'}
-                                    </p>
-                                    <p className="text-[10px] text-zinc-400 mt-1 font-mono">
-                                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                </div>
-                            </div>
-                        )) : (
-                            <p className="text-xs text-zinc-400 text-center py-4">No recent activity.</p>
-                        )}
-                    </div>
+                    {/* Time Tracking Widget */}
+                    <section className="bg-white border border-[#DFE1E6] rounded-sm p-4">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Clock size={16} className="text-[#5E6C84]" />
+                            <h3 className="text-xs font-semibold text-[#5E6C84] uppercase">Time Tracking</h3>
+                        </div>
+                        <TimerWidget />
+                    </section>
+
+                    {/* Quick Actions */}
+                    <section className="bg-white border border-[#DFE1E6] rounded-sm p-4">
+                        <h3 className="text-xs font-semibold text-[#5E6C84] uppercase mb-3">Quick Actions</h3>
+                        <div className="space-y-2">
+                            <Link to="/projects" className="trello-btn trello-btn-primary w-full justify-start">
+                                <Plus size={14} />
+                                <span>Create Board</span>
+                            </Link>
+                            <Link to="/tickets" className="trello-btn trello-btn-secondary w-full justify-start">
+                                <MessageSquare size={14} />
+                                <span>New Ticket</span>
+                            </Link>
+                            <Link to="/team" className="trello-btn trello-btn-secondary w-full justify-start">
+                                <Users size={14} />
+                                <span>Invite Team</span>
+                            </Link>
+                        </div>
+                    </section>
+
+                    {/* Workspace Info */}
+                    <section className="bg-gradient-to-br from-[#0079BF] to-[#026AA7] rounded-sm p-6 text-white">
+                        <h3 className="text-lg font-semibold mb-2">Workspace Premium</h3>
+                        <p className="text-sm text-white/90 mb-4 leading-relaxed">
+                            Unlock advanced features for your team with Mbabali Premium.
+                        </p>
+                        <button className="w-full py-2 bg-white text-[#0079BF] rounded-sm font-medium text-sm hover:bg-white/90 transition-colors">
+                            Learn More
+                        </button>
+                    </section>
                 </div>
             </div>
         </div>

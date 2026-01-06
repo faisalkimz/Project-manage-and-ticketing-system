@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Role, Permission
+from .models import User, Role, Permission, TeamInvite, Team
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
@@ -40,3 +40,21 @@ class RegisterSerializer(serializers.ModelSerializer):
             role=role
         )
         return user
+
+class TeamSerializer(serializers.ModelSerializer):
+    member_count = serializers.IntegerField(source='members.count', read_only=True)
+    lead_name = serializers.CharField(source='lead.username', read_only=True)
+    members_details = UserSerializer(source='members', many=True, read_only=True)
+
+    class Meta:
+        model = Team
+        fields = ['id', 'name', 'description', 'members', 'lead', 'member_count', 'lead_name', 'members_details', 'created_at']
+
+class TeamInviteSerializer(serializers.ModelSerializer):
+    invited_by_username = serializers.CharField(source='invited_by.username', read_only=True)
+    role_name = serializers.CharField(source='role.name', read_only=True)
+    
+    class Meta:
+        model = TeamInvite
+        fields = '__all__'
+        read_only_fields = ['invited_by', 'token', 'status', 'created_at']

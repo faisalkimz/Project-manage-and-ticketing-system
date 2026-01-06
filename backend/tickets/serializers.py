@@ -2,13 +2,19 @@ from rest_framework import serializers
 from .models import Ticket
 from users.serializers import UserSerializer
 from projects.serializers import TaskSerializer, TagSerializer
+from activity.serializers import CommentSerializer, AttachmentSerializer, AuditLogSerializer
 from django.utils import timezone
 
 class TicketSerializer(serializers.ModelSerializer):
     submitted_by_username = serializers.CharField(source='submitted_by.username', read_only=True)
     assigned_to_username = serializers.CharField(source='assigned_to.username', read_only=True)
+    submitted_by_details = UserSerializer(source='submitted_by', read_only=True)
+    assigned_to_details = UserSerializer(source='assigned_to', read_only=True)
     project_task_details = TaskSerializer(source='project_task', read_only=True)
     tags_details = TagSerializer(source='tags', many=True, read_only=True)
+    audit_logs_details = AuditLogSerializer(source='audit_logs', many=True, read_only=True)
+    attachments_details = AttachmentSerializer(source='attachments', many=True, read_only=True)
+    comments_details = CommentSerializer(source='comments', many=True, read_only=True)
     time_remaining_hours = serializers.SerializerMethodField()
     sla_status = serializers.SerializerMethodField()
     

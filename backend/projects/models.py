@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 class Project(models.Model):
     class Status(models.TextChoices):
@@ -10,12 +11,13 @@ class Project(models.Model):
         CANCELLED = 'CANCELLED', 'Cancelled'
 
     name = models.CharField(max_length=255)
+    key = models.CharField(max_length=10, unique=True, blank=True, null=True)
     description = models.TextField(blank=True)
-    start_date = models.DateField()
+    start_date = models.DateField(default=timezone.now)
     end_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PLANNING)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_projects')
-    members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='projects')
+    members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='projects', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -51,6 +53,7 @@ class Task(models.Model):
     due_date = models.DateTimeField(null=True, blank=True)
     tags = models.ManyToManyField(Tag, blank=True, related_name='tasks')
     dependencies = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='dependents')
+    parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

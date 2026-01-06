@@ -11,7 +11,13 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     def get_queryset(self):
+        user = self.request.user
         queryset = super().get_queryset()
+        
+        # Visibility logic for internal comments
+        if not (user.role and user.role.name in ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER']):
+            queryset = queryset.filter(is_internal=False)
+            
         content_type = self.request.query_params.get('content_type')
         object_id = self.request.query_params.get('object_id')
         if content_type and object_id:
