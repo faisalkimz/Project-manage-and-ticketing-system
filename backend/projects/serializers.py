@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Project, Task, Tag, Milestone, ProjectCategory, 
-    Portfolio, Program, ProjectGoal, Deliverable
+    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus
 )
 from users.serializers import UserSerializer
 
@@ -45,6 +45,11 @@ class DeliverableSerializer(serializers.ModelSerializer):
         model = Deliverable
         fields = '__all__'
 
+class ProjectStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectStatus
+        fields = ['id', 'name', 'color', 'order']
+
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
@@ -68,7 +73,7 @@ class SubTaskSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Task
-        fields = ['id', 'title', 'status', 'priority', 'assigned_to_details', 'due_date']
+        fields = ['id', 'title', 'status', 'priority', 'assigned_to_details', 'due_date', 'issue_type']
 
 class TaskSerializer(serializers.ModelSerializer):
     assigned_to_details = UserSerializer(source='assigned_to', read_only=True)
@@ -79,10 +84,19 @@ class TaskSerializer(serializers.ModelSerializer):
     # Dependencies
     dependencies_details = SubTaskSerializer(source='dependencies', many=True, read_only=True)
     dependents_details = SubTaskSerializer(source='dependents', many=True, read_only=True)
+    
+    watchers_details = UserSerializer(source='watchers', many=True, read_only=True)
+    is_watching = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = '__all__'
+        
+    def get_is_watching(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.watchers.filter(id=request.user.id).exists()
+        return False
         
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -95,6 +109,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     milestones = MilestoneSerializer(many=True, read_only=True)
     goals = ProjectGoalSerializer(many=True, read_only=True)
     deliverables = DeliverableSerializer(many=True, read_only=True)
+    custom_statuses = ProjectStatusSerializer(many=True, read_only=True)
     members_details = UserSerializer(source='members', many=True, read_only=True)
     created_by_details = UserSerializer(source='created_by', read_only=True)
     

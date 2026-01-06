@@ -121,6 +121,19 @@ class Deliverable(models.Model):
     def __str__(self):
         return self.name
 
+class ProjectStatus(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='custom_statuses')
+    name = models.CharField(max_length=50)
+    color = models.CharField(max_length=20, default='#DFE1E6')
+    order = models.IntegerField(default=0)
+    
+    class Meta:
+        ordering = ['order']
+        unique_together = ['project', 'name']
+
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"
+
 class Task(models.Model):
     class Priority(models.TextChoices):
         LOW = 'LOW', 'Low'
@@ -134,10 +147,21 @@ class Task(models.Model):
         REVIEW = 'REVIEW', 'Review'
         DONE = 'DONE', 'Done'
 
+    class IssueType(models.TextChoices):
+        EPIC = 'EPIC', 'Epic'
+        STORY = 'STORY', 'User Story'
+        TASK = 'TASK', 'Task'
+        BUG = 'BUG', 'Bug'
+        FEATURE = 'FEATURE', 'Feature Request'
+
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
+    issue_type = models.CharField(max_length=20, choices=IssueType.choices, default=IssueType.TASK)
+    story_points = models.IntegerField(default=0, blank=True)
+    
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks')
+    watchers = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='watched_tasks', blank=True)
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO)
     due_date = models.DateTimeField(null=True, blank=True)
@@ -145,6 +169,13 @@ class Task(models.Model):
     dependencies = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='dependents')
     parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     milestone = models.ForeignKey(Milestone, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
+    is_archived = models.BooleanField(default=False)
+    
+    # Recurrence fields
+    is_recurring = models.BooleanField(default=False)
+    recurrence_rule = models.CharField(max_length=100, blank=True, null=True) # e.g., 'DAILY', 'WEEKLY', 'MONTHLY'
+    next_recurrence = models.DateTimeField(null=True, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

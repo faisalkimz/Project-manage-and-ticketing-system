@@ -3,12 +3,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import (
     Project, Task, Tag, Milestone, ProjectCategory,
-    Portfolio, Program, ProjectGoal, Deliverable
+    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus
 )
 from .serializers import (
     ProjectSerializer, TaskSerializer, TagSerializer, MilestoneSerializer,
     ProjectCategorySerializer, PortfolioSerializer, ProgramSerializer,
-    ProjectGoalSerializer, DeliverableSerializer
+    ProjectGoalSerializer, DeliverableSerializer, ProjectStatusSerializer
 )
 
 class ProjectCategoryViewSet(viewsets.ModelViewSet):
@@ -72,6 +72,17 @@ class DeliverableViewSet(viewsets.ModelViewSet):
         if project_id:
             return Deliverable.objects.filter(project_id=project_id)
         return Deliverable.objects.all()
+
+class ProjectStatusViewSet(viewsets.ModelViewSet):
+    queryset = ProjectStatus.objects.all()
+    serializer_class = ProjectStatusSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            return ProjectStatus.objects.filter(project_id=project_id)
+        return ProjectStatus.objects.all()
 
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
@@ -162,3 +173,93 @@ class TaskViewSet(viewsets.ModelViewSet):
         if project_id:
             return Task.objects.filter(project_id=project_id)
         return Task.objects.all()
+
+    @action(detail=True, methods=['post'])
+    def toggle_watch(self, request, pk=None):
+        task = self.get_object()
+        user = request.user
+        if user in task.watchers.all():
+            task.watchers.remove(user)
+            return Response({'status': 'unwatched'})
+        else:
+            task.watchers.add(user)
+            return Response({'status': 'watched'})
+
+    def perform_update(self, serializer):
+        from activity.models import AuditLog
+        from django.contrib.contenttypes.models import ContentType
+        
+        old_instance = self.get_object()
+        new_instance = serializer.save()
+        
+        # Track changes for audit log
+        changes = {}
+        for field in serializer.validated_data:
+            old_val = getattr(old_instance, field)
+            new_val = getattr(new_instance, field)
+            if old_val != new_val:
+                changes[field] = {
+                    'old': str(old_val),
+                    'new': str(new_val)
+                }
+        
+        if changes:
+            AuditLog.objects.create(
+                user=self.request.user,
+                action='UPDATE_TASK',
+                content_type=ContentType.objects.get_for_model(Task),
+                object_id=new_instance.id,
+                details=changes
+            )
+        
+        # Handle Task Recurrence
+        if 'status' in changes and changes['status']['new'] == 'DONE' and new_instance.is_recurring:
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            new_due_date = None
+            if new_instance.due_date:
+                if new_instance.recurrence_rule == 'DAILY':
+                    new_due_date = new_instance.due_date + timedelta(days=1)
+                elif new_instance.recurrence_rule == 'WEEKLY':
+                    new_due_date = new_instance.due_date + timedelta(weeks=1)
+                elif new_instance.recurrence_rule == 'MONTHLY':
+                    # Simple monthly addition
+                    new_due_date = new_instance.due_date + timedelta(days=30)
+            
+            # Create the next recurrence
+            Task.objects.create(
+                project=new_instance.project,
+                title=new_instance.title,
+                description=new_instance.description,
+                status='TODO',
+                priority=new_instance.priority,
+                issue_type=new_instance.issue_type,
+                story_points=new_instance.story_points,
+                due_date=new_due_date,
+                is_recurring=True,
+                recurrence_rule=new_instance.recurrence_rule,
+                assigned_to=new_instance.assigned_to,
+                milestone=new_instance.milestone
+            )
+            
+            # Disable recurrence on the completed task instance
+            new_instance.is_recurring = False
+            new_instance.save()
+
+    @action(detail=False, methods=['post'])
+    def bulk_operation(self, request):
+        ids = request.data.get('ids', [])
+        operation = request.data.get('operation') # 'archive', 'delete', 'update_status'
+        value = request.data.get('value')
+        
+        queryset = Task.objects.filter(id__in=ids)
+        
+        if operation == 'archive':
+            queryset.update(is_archived=True)
+        elif operation == 'delete':
+            queryset.delete()
+        elif operation == 'update_status':
+            queryset.update(status=value)
+            
+        return Response({'status': 'Bulk operation successful'})

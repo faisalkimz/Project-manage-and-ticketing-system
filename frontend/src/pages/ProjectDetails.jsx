@@ -23,7 +23,15 @@ const ProjectDetails = () => {
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-    const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', due_date: '' });
+    const [newTask, setNewTask] = useState({
+        title: '',
+        description: '',
+        priority: 'MEDIUM',
+        status: 'TODO',
+        due_date: '',
+        issue_type: 'TASK',
+        story_points: 0
+    });
     const [viewMode, setViewMode] = useState('board');
     const [allUsers, setAllUsers] = useState([]);
     const [activeTimer, setActiveTimer] = useState(null);
@@ -57,6 +65,13 @@ const ProjectDetails = () => {
     const [showBackgroundModal, setShowBackgroundModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [settingsForm, setSettingsForm] = useState({ name: '', description: '' });
+    const [newStatusName, setNewStatusName] = useState('');
+    const [newStatusColor, setNewStatusColor] = useState('#DFE1E6');
+
+    // Bulk operations
+    const [selectedTaskIds, setSelectedTaskIds] = useState([]);
+    const [isBulkMode, setIsBulkMode] = useState(false);
+    const [auditLogs, setAuditLogs] = useState([]);
 
     const fetchProjectDetails = async () => {
         try {
@@ -73,12 +88,14 @@ const ProjectDetails = () => {
 
     const fetchTaskSideData = async (task) => {
         try {
-            const [commentsRes, attachmentsRes] = await Promise.all([
+            const [commentsRes, attachmentsRes, auditRes] = await Promise.all([
                 api.get(`/activity/comments/?content_type=task&object_id=${task.id}`),
-                api.get(`/activity/attachments/?content_type=task&object_id=${task.id}`)
+                api.get(`/activity/attachments/?content_type=task&object_id=${task.id}`),
+                api.get(`/activity/audit-logs/?content_type=task&object_id=${task.id}`)
             ]);
             setComments(commentsRes.data);
             setAttachments(attachmentsRes.data);
+            setAuditLogs(auditRes.data);
         } catch (error) { console.error(error); }
     };
 
@@ -148,7 +165,15 @@ const ProjectDetails = () => {
         try {
             await api.post('/projects/tasks/', { ...newTask, project: id });
             setIsTaskModalOpen(false);
-            setNewTask({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', due_date: '' });
+            setNewTask({
+                title: '',
+                description: '',
+                priority: 'MEDIUM',
+                status: 'TODO',
+                due_date: '',
+                issue_type: 'TASK',
+                story_points: 0
+            });
             fetchProjectDetails();
         } catch (error) { }
     };
@@ -175,6 +200,22 @@ const ProjectDetails = () => {
                 setSelectedTask({ ...selectedTask, ...data });
             }
         } catch (error) { }
+    };
+
+    const handleBulkOperation = async (operation, value = null) => {
+        try {
+            await api.post('/projects/tasks/bulk_operation/', {
+                ids: selectedTaskIds,
+                operation,
+                value
+            });
+            showToast(`Bulk ${operation} successful`, 'success');
+            setSelectedTaskIds([]);
+            setIsBulkMode(false);
+            fetchProjectDetails();
+        } catch (error) {
+            showToast("Bulk operation failed", 'error');
+        }
     };
 
     const startTimer = async (taskId) => {
@@ -486,14 +527,38 @@ const ProjectDetails = () => {
         } catch (error) { alert('Failed to close board'); }
     };
 
+    const handleCreateStatus = async () => {
+        if (!newStatusName.trim()) return;
+        try {
+            await api.post('/projects/statuses/', {
+                project: id,
+                name: newStatusName,
+                color: newStatusColor,
+                order: project.custom_statuses?.length || 0
+            });
+            setNewStatusName('');
+            fetchProjectDetails();
+        } catch (error) { showToast("Failed to create status", "error"); }
+    };
+
+    const handleDeleteStatus = async (statusId) => {
+        if (!window.confirm('Are you sure? Tasks in this status might become invisible.')) return;
+        try {
+            await api.delete(`/projects/statuses/${statusId}/`);
+            fetchProjectDetails();
+        } catch (error) { showToast("Failed to delete status", "error"); }
+    };
+
     if (!project) return <div className="h-screen w-full flex items-center justify-center bg-[#FAFBFC]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0052CC]"></div></div>;
 
-    const columns = [
-        { id: 'TODO', title: 'To Do', color: 'bg-[#DFE1E6] text-[#42526E]' },
-        { id: 'IN_PROGRESS', title: 'In Progress', color: 'bg-[#DEEBFF] text-[#0052CC]' },
-        { id: 'REVIEW', title: 'Ready for Review', color: 'bg-[#EAE6FF] text-[#403294]' },
-        { id: 'DONE', title: 'Done', color: 'bg-[#E3FCEF] text-[#006644]' }
-    ];
+    const columns = project.custom_statuses?.length > 0
+        ? project.custom_statuses.map(s => ({ id: s.name, title: s.name, color: s.color, isCustom: true }))
+        : [
+            { id: 'TODO', title: 'To Do', color: '#DFE1E6' },
+            { id: 'IN_PROGRESS', title: 'In Progress', color: '#DEEBFF' },
+            { id: 'REVIEW', title: 'Ready for Review', color: '#EAE6FF' },
+            { id: 'DONE', title: 'Done', color: '#E3FCEF' }
+        ];
 
     const rootTasks = tasks.filter(t => !t.parent_task);
 
@@ -511,6 +576,16 @@ const ProjectDetails = () => {
         const m = Math.floor((seconds % 3600) / 60);
         const s = seconds % 60;
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const getIssueTypeIcon = (type) => {
+        switch (type) {
+            case 'EPIC': return <div className="w-3.5 h-3.5 bg-[#89609E] rounded-[2px] flex items-center justify-center text-white"><Layers size={10} /></div>;
+            case 'STORY': return <div className="w-3.5 h-3.5 bg-[#61BD4F] rounded-[2px] flex items-center justify-center text-white"><CheckSquare size={10} /></div>;
+            case 'BUG': return <div className="w-3.5 h-3.5 bg-[#EB5A46] rounded-[2px] flex items-center justify-center text-white"><AlertCircle size={10} /></div>;
+            case 'FEATURE': return <div className="w-3.5 h-3.5 bg-[#00A3BF] rounded-[2px] flex items-center justify-center text-white"><Star size={10} /></div>;
+            default: return <div className="w-3.5 h-3.5 bg-[#4C9AFF] rounded-[2px] flex items-center justify-center text-white"><Check size={10} /></div>;
+        }
     };
 
     return (
@@ -657,24 +732,52 @@ const ProjectDetails = () => {
                                     {tasks.filter(t => t.status === col.id && !t.parent_task).map((task) => (
                                         <div
                                             key={task.id}
-                                            onClick={() => setSelectedTask(task)}
-                                            className="bg-white rounded-[3px] border border-[#DFE1E6] hover:border-[#4C9AFF] hover:bg-[#FAFBFC] transition-all cursor-pointer p-3 group relative shadow-sm"
+                                            onClick={(e) => {
+                                                if (isBulkMode) {
+                                                    e.stopPropagation();
+                                                    const newSelected = selectedTaskIds.includes(task.id)
+                                                        ? selectedTaskIds.filter(id => id !== task.id)
+                                                        : [...selectedTaskIds, task.id];
+                                                    setSelectedTaskIds(newSelected);
+                                                    if (newSelected.length === 0) setIsBulkMode(false);
+                                                } else {
+                                                    setSelectedTask(task);
+                                                }
+                                            }}
+                                            className={`bg-white rounded-[3px] border ${selectedTaskIds.includes(task.id) ? 'border-[#4C9AFF] bg-[#E6F0FF]' : 'border-[#DFE1E6]'} hover:border-[#4C9AFF] hover:bg-[#FAFBFC] transition-all cursor-pointer p-3 group relative shadow-sm`}
                                         >
+                                            {/* Bulk Selection Checkbox */}
+                                            <div
+                                                className={`absolute top-2 right-2 z-10 ${selectedTaskIds.includes(task.id) || isBulkMode ? 'block' : 'hidden group-hover:block'}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsBulkMode(true);
+                                                    const newSelected = selectedTaskIds.includes(task.id)
+                                                        ? selectedTaskIds.filter(id => id !== task.id)
+                                                        : [...selectedTaskIds, task.id];
+                                                    setSelectedTaskIds(newSelected);
+                                                    if (newSelected.length === 0) setIsBulkMode(false);
+                                                }}
+                                            >
+                                                <div className={`w-4 h-4 rounded border ${selectedTaskIds.includes(task.id) ? 'bg-[#0052CC] border-[#0052CC]' : 'bg-white border-[#DFE1E6]'} flex items-center justify-center text-white transition-colors`}>
+                                                    {selectedTaskIds.includes(task.id) && <Check size={10} />}
+                                                </div>
+                                            </div>
+
                                             <div className="flex flex-col gap-2">
                                                 <p className="text-sm text-[#172B4D] leading-snug">{task.title}</p>
 
                                                 <div className="flex items-center justify-between mt-1">
                                                     <div className="flex items-center gap-2">
-                                                        <div
-                                                            className={`w-3.5 h-3.5 rounded-[2px] flex items-center justify-center text-white
-                                                                    ${task.priority === 'CRITICAL' || task.priority === 'HIGH' ? 'bg-[#E54937]' :
-                                                                    task.priority === 'MEDIUM' ? 'bg-[#FF9F1A]' : 'bg-[#4C9AFF]'}`}
-                                                        >
-                                                            <TrendingUp size={10} strokeWidth={3} />
-                                                        </div>
+                                                        {getIssueTypeIcon(task.issue_type)}
                                                         <span className="text-[10px] font-bold text-[#5E6C84]">
                                                             {project.key || 'TASK'}-{task.id}
                                                         </span>
+                                                        {task.story_points > 0 && (
+                                                            <span className="ml-1 bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full" title="Story Points">
+                                                                {task.story_points}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         {task.comment_count > 0 && (
@@ -753,7 +856,23 @@ const ProjectDetails = () => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-[#FAFBFC] sticky top-0 z-10 border-b border-[#DFE1E6]">
                                         <tr>
-                                            <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-12">Type</th>
+                                            <th className="px-4 py-2 w-10">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedTaskIds.length > 0 && selectedTaskIds.length === rootTasks.length}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedTaskIds(rootTasks.map(t => t.id));
+                                                            setIsBulkMode(true);
+                                                        } else {
+                                                            setSelectedTaskIds([]);
+                                                            setIsBulkMode(false);
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-[#0052CC]"
+                                                />
+                                            </th>
+                                            <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-12 text-center">T</th>
                                             <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-24">Key</th>
                                             <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase">Summary</th>
                                             <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-32">Status</th>
@@ -765,12 +884,44 @@ const ProjectDetails = () => {
                                         {rootTasks.map((task) => (
                                             <tr
                                                 key={task.id}
-                                                onClick={() => setSelectedTask(task)}
-                                                className="hover:bg-[#F4F5F7] cursor-pointer group transition-colors"
+                                                onClick={(e) => {
+                                                    if (isBulkMode) {
+                                                        const newSelected = selectedTaskIds.includes(task.id)
+                                                            ? selectedTaskIds.filter(id => id !== task.id)
+                                                            : [...selectedTaskIds, task.id];
+                                                        setSelectedTaskIds(newSelected);
+                                                        if (newSelected.length === 0) setIsBulkMode(false);
+                                                    } else {
+                                                        setSelectedTask(task);
+                                                    }
+                                                }}
+                                                className={`hover:bg-[#F4F5F7] cursor-pointer group transition-colors ${selectedTaskIds.includes(task.id) ? 'bg-[#E6F0FF]' : ''}`}
                                             >
-                                                <td className="px-4 py-3"><Kanban className="text-[#0052CC]" size={16} /></td>
+                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedTaskIds.includes(task.id)}
+                                                        onChange={() => {
+                                                            setIsBulkMode(true);
+                                                            const newSelected = selectedTaskIds.includes(task.id)
+                                                                ? selectedTaskIds.filter(id => id !== task.id)
+                                                                : [...selectedTaskIds, task.id];
+                                                            setSelectedTaskIds(newSelected);
+                                                            if (newSelected.length === 0) setIsBulkMode(false);
+                                                        }}
+                                                        className="w-4 h-4 rounded border-gray-300 text-[#0052CC]"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3 flex justify-center">{getIssueTypeIcon(task.issue_type)}</td>
                                                 <td className="px-4 py-3 text-xs font-bold text-[#5E6C84] group-hover:text-[#0052CC]">{project.key || 'TASK'}-{task.id}</td>
-                                                <td className="px-4 py-3 text-sm text-[#172B4D] font-medium">{task.title}</td>
+                                                <td className="px-4 py-3 text-sm text-[#172B4D] font-medium flex items-center gap-2">
+                                                    {task.title}
+                                                    {task.story_points > 0 && (
+                                                        <span className="bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full" title="Story Points">
+                                                            {task.story_points}
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-3">
                                                     <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase ${task.status === 'DONE' ? 'bg-[#E3FCEF] text-[#006644]' :
                                                         task.status === 'IN_PROGRESS' ? 'bg-[#DEEBFF] text-[#0052CC]' : 'bg-[#EBECF0] text-[#42526E]'
@@ -1045,6 +1196,58 @@ const ProjectDetails = () => {
                 )}
             </main>
 
+            {/* Floating Bulk Action Bar */}
+            {selectedTaskIds.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#172B4D] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-4">
+                    <div className="flex items-center gap-2 border-r border-[#42526E] pr-6">
+                        <span className="text-sm font-bold">{selectedTaskIds.length} tasks selected</span>
+                        <button
+                            onClick={() => { setSelectedTaskIds([]); setIsBulkMode(false); }}
+                            className="p-1 hover:bg-[#42526E] rounded text-[#A5ADBA]"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-[#A5ADBA] font-bold uppercase tracking-wider">Move to:</span>
+                            <div className="flex gap-1">
+                                {columns.map(col => (
+                                    <button
+                                        key={col.id}
+                                        onClick={() => handleBulkOperation('update_status', col.id)}
+                                        className="px-2 py-1 bg-[#42526E] hover:bg-[#5E6C84] rounded text-[10px] font-bold uppercase transition-colors"
+                                    >
+                                        {col.title}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="w-px h-6 bg-[#42526E]" />
+
+                        <button
+                            onClick={() => handleBulkOperation('archive')}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-[#42526E] hover:bg-amber-600 transition-colors rounded text-xs font-bold"
+                        >
+                            <Layers size={14} /> Archive Selected
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.length} tasks?`)) {
+                                    handleBulkOperation('delete');
+                                }
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-[#42526E] hover:bg-red-600 transition-colors rounded text-xs font-bold"
+                        >
+                            <Trash2 size={14} /> Delete
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Card Detail Modal */}
             {
                 selectedTask && (
@@ -1053,7 +1256,19 @@ const ProjectDetails = () => {
                             {/* Modal Header */}
                             <div className="p-6">
                                 <div className="flex items-start gap-3">
-                                    <Tag size={20} className="text-[#5E6C84] mt-1" />
+                                    <div className="mt-1">
+                                        <select
+                                            className="bg-transparent border-none outline-none cursor-pointer hover:bg-white rounded p-1 transition-colors"
+                                            value={selectedTask.issue_type}
+                                            onChange={(e) => handleUpdateTask(selectedTask.id, { issue_type: e.target.value })}
+                                        >
+                                            <option value="TASK">Task</option>
+                                            <option value="STORY">User Story</option>
+                                            <option value="BUG">Bug</option>
+                                            <option value="EPIC">Epic</option>
+                                            <option value="FEATURE">Feature Request</option>
+                                        </select>
+                                    </div>
                                     <div className="flex-1">
                                         <input
                                             type="text"
@@ -1070,6 +1285,17 @@ const ProjectDetails = () => {
                                             >
                                                 {columns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                                             </select>
+                                            <div className="h-4 w-px bg-[#DFE1E6] mx-1" />
+                                            <div className="flex items-center gap-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded px-2 py-0.5 cursor-pointer transition-colors group">
+                                                <TrendingUp size={12} className="text-[#5E6C84]" />
+                                                <input
+                                                    type="number"
+                                                    className="w-8 bg-transparent text-xs font-bold text-[#172B4D] outline-none"
+                                                    value={selectedTask.story_points || 0}
+                                                    onChange={(e) => handleUpdateTask(selectedTask.id, { story_points: parseInt(e.target.value) || 0 })}
+                                                />
+                                                <span className="text-[10px] font-bold text-[#5E6C84] group-hover:block hidden">Points</span>
+                                            </div>
                                         </div>
                                     </div>
                                     <button onClick={() => setSelectedTask(null)} className="p-2 hover:bg-[#DFE1E6] rounded transition-colors">
@@ -1265,27 +1491,58 @@ const ProjectDetails = () => {
                                                 onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
                                             />
                                         </div>
-                                        <div className="space-y-3">
-                                            {comments.map((c, i) => (
-                                                <div key={i} className="flex gap-2">
-                                                    <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
-                                                        {c.user_details.username[0].toUpperCase()}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className="text-sm font-semibold text-[#172B4D]">{c.user_details.username}</span>
-                                                            <span className="text-xs text-[#5E6C84]">{new Date(c.created_at).toLocaleDateString()}</span>
+                                        <div className="space-y-4">
+                                            {[...comments.map(c => ({ ...c, type: 'comment' })), ...auditLogs.map(a => ({ ...a, type: 'audit', created_at: a.timestamp }))]
+                                                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                                                .map((item, i) => (
+                                                    <div key={i} className="flex gap-2">
+                                                        <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
+                                                            {item.user_details?.username[0].toUpperCase() || 'S'}
                                                         </div>
-                                                        <div className="bg-white p-2 rounded text-sm text-[#172B4D]">{c.text}</div>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-sm font-semibold text-[#172B4D]">{item.user_details?.username || 'System'}</span>
+                                                                <span className="text-xs text-[#5E6C84]">
+                                                                    {new Date(item.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                                                </span>
+                                                            </div>
+                                                            {item.type === 'comment' ? (
+                                                                <div className="bg-white p-2 rounded text-sm text-[#172B4D] border border-[#DFE1E6]">{item.text}</div>
+                                                            ) : (
+                                                                <div className="text-xs text-[#5E6C84]">
+                                                                    <span className="font-bold">{item.action.replace('_', ' ')}:</span>
+                                                                    <ul className="mt-1 space-y-1">
+                                                                        {Object.entries(item.details || {}).map(([field, delta]) => (
+                                                                            <li key={field}>
+                                                                                Changed <span className="font-medium text-[#172B4D]">{field}</span> from <span className="italic">"{delta.old}"</span> to <span className="italic">"{delta.new}"</span>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                ))}
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Sidebar */}
                                 <div className="w-44 space-y-2 shrink-0">
+                                    <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Actions</p>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await api.post(`/projects/tasks/${selectedTask.id}/toggle_watch/`);
+                                                fetchProjectDetails();
+                                            } catch (e) { }
+                                        }}
+                                        className={`w-full text-left px-3 py-2 ${selectedTask.is_watching ? 'bg-[#EAE6FF] text-[#403294]' : 'bg-[#EBECF0] text-[#172B4D]'} hover:opacity-80 rounded text-sm font-medium flex items-center gap-2 transition-all`}
+                                    >
+                                        <Star size={14} className={selectedTask.is_watching ? 'fill-[#403294]' : ''} />
+                                        {selectedTask.is_watching ? 'Watching' : 'Watch'}
+                                    </button>
+                                    <div className="h-4" />
                                     <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Add to card</p>
                                     <button
                                         onClick={() => setShowMembersModal(true)}
@@ -1335,6 +1592,31 @@ const ProjectDetails = () => {
                                             <option key={m.id} value={m.id}>{m.name}</option>
                                         ))}
                                     </select>
+
+                                    <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-4">Recurrence</p>
+                                    <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-2 px-3 py-1 bg-[#EBECF0] rounded text-sm mb-1">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedTask.is_recurring}
+                                                onChange={(e) => handleUpdateTask(selectedTask.id, { is_recurring: e.target.checked })}
+                                                className="w-3 h-3 rounded border-gray-300 text-[#0079BF]"
+                                            />
+                                            <span className="text-[#172B4D] text-xs font-medium">Auto-repeat</span>
+                                        </div>
+                                        {selectedTask.is_recurring && (
+                                            <select
+                                                className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] outline-none appearance-none cursor-pointer"
+                                                value={selectedTask.recurrence_rule || ''}
+                                                onChange={(e) => handleUpdateTask(selectedTask.id, { recurrence_rule: e.target.value })}
+                                            >
+                                                <option value="">Select frequency...</option>
+                                                <option value="DAILY">Daily</option>
+                                                <option value="WEEKLY">Weekly</option>
+                                                <option value="MONTHLY">Monthly</option>
+                                            </select>
+                                        )}
+                                    </div>
 
                                     <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-2">Actions</p>
                                     {activeTimer?.task === selectedTask.id && (
@@ -1734,6 +2016,44 @@ const ProjectDetails = () => {
                                         value={settingsForm.description}
                                         onChange={e => setSettingsForm({ ...settingsForm, description: e.target.value })}
                                     />
+                                </div>
+
+                                <div className="border-t border-[#DFE1E6] pt-4">
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-3">Custom Workflow (Statuses)</label>
+                                    <div className="space-y-2 mb-4">
+                                        {project.custom_statuses?.map(s => (
+                                            <div key={s.id} className="flex items-center justify-between p-2 bg-[#F4F5F7] rounded">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
+                                                    <span className="text-sm font-medium text-[#172B4D]">{s.name}</span>
+                                                </div>
+                                                <button type="button" onClick={() => handleDeleteStatus(s.id)} className="text-[#5E6C84] hover:text-red-500"><Trash2 size={14} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Status name..."
+                                            className="flex-1 p-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                                            value={newStatusName}
+                                            onChange={e => setNewStatusName(e.target.value)}
+                                        />
+                                        <input
+                                            type="color"
+                                            className="w-10 h-10 p-1 border border-[#DFE1E6] rounded cursor-pointer"
+                                            value={newStatusColor}
+                                            onChange={e => setNewStatusColor(e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleCreateStatus}
+                                            className="px-3 py-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-bold text-[#42526E]"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-[#5E6C84] mt-2 italic">Note: Creating custom statuses will override the default To Do/In Progress/Done columns.</p>
                                 </div>
                                 <div className="flex justify-end gap-2 pt-2">
                                     <button
