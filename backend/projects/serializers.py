@@ -39,6 +39,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     # Extra field for dashboard
     active_members = serializers.SerializerMethodField()
     task_stats = serializers.SerializerMethodField()
+    is_watching = serializers.SerializerMethodField()
     
     start_date = serializers.DateField(required=False, allow_null=True)
     end_date = serializers.DateField(required=False, allow_null=True)
@@ -46,10 +47,16 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = '__all__'
-        read_only_fields = ['created_by', 'members']
+        read_only_fields = ['created_by', 'members', 'watchers']
         
     def get_active_members(self, obj):
         return obj.members.count()
+
+    def get_is_watching(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.watchers.filter(id=request.user.id).exists()
+        return False
         
     def get_task_stats(self, obj):
         tasks = obj.tasks.all()

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Users, UserPlus, Mail, Edit2, Trash2,
     Search, X, Check, Plus, Settings, MoreHorizontal,
@@ -8,6 +9,7 @@ import api from '../services/api';
 import useAuthStore from '../store/authStore';
 
 const Team = () => {
+    const navigate = useNavigate();
     const { user: currentUser } = useAuthStore();
     const [activeTab, setActiveTab] = useState('structure');
     const [users, setUsers] = useState([]);
@@ -23,6 +25,7 @@ const Team = () => {
     // Data States
     const [newTeam, setNewTeam] = useState({ name: '', description: '', members: [] });
     const [selectedTeam, setSelectedTeam] = useState(null);
+    const [editingTeamForm, setEditingTeamForm] = useState({ name: '', description: '' });
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState('EMPLOYEE');
     const [loading, setLoading] = useState(false);
@@ -89,7 +92,18 @@ const Team = () => {
     }
 
     const handleSettingsClick = () => {
-        alert("Team settings customization is coming soon!");
+        navigate('/settings');
+    };
+
+    const handleUpdateTeamDetails = async (e) => {
+        e.preventDefault();
+        try {
+            await api.patch(`/users/teams/${selectedTeam.id}/`, editingTeamForm);
+            // Update local state
+            setTeams(teams.map(t => t.id === selectedTeam.id ? { ...t, ...editingTeamForm } : t));
+            setSelectedTeam({ ...selectedTeam, ...editingTeamForm });
+            alert('Team updated successfully');
+        } catch (e) { alert('Failed to update team'); }
     };
 
     const handleUpdateUserRole = async (userId, newRole) => {
@@ -192,7 +206,11 @@ const Team = () => {
                                     <div className="flex justify-between items-start mb-3">
                                         <h3 className="text-lg font-semibold text-[#172B4D]">{team.name}</h3>
                                         <button
-                                            onClick={() => { setSelectedTeam(team); setIsManageTeamModalOpen(true); }}
+                                            onClick={() => {
+                                                setSelectedTeam(team);
+                                                setEditingTeamForm({ name: team.name, description: team.description });
+                                                setIsManageTeamModalOpen(true);
+                                            }}
                                             className="p-1.5 hover:bg-[#EBECF0] rounded text-[#5E6C84] transition-colors"
                                         >
                                             <Edit2 size={16} />
@@ -397,6 +415,32 @@ const Team = () => {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6 bg-[#F9FAFB]">
+                            {/* Team Details Form */}
+                            <form onSubmit={handleUpdateTeamDetails} className="mb-8 p-4 bg-white border border-[#DFE1E6] rounded-[3px]">
+                                <h4 className="text-xs font-bold text-[#5E6C84] uppercase mb-3">Team Details</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-[#5E6C84] mb-1">Name</label>
+                                        <input
+                                            className="w-full px-2 py-1.5 border border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] outline-none"
+                                            value={editingTeamForm.name}
+                                            onChange={e => setEditingTeamForm({ ...editingTeamForm, name: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-[#5E6C84] mb-1">Description</label>
+                                        <textarea
+                                            className="w-full px-2 py-1.5 border border-[#DFE1E6] rounded-[3px] text-sm focus:border-[#0079BF] outline-none resize-none h-20"
+                                            value={editingTeamForm.description}
+                                            onChange={e => setEditingTeamForm({ ...editingTeamForm, description: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button type="submit" className="px-3 py-1.5 bg-[#0079BF] text-white text-xs font-bold rounded-[3px] hover:bg-[#026AA7]">Save Details</button>
+                                    </div>
+                                </div>
+                            </form>
+
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="text-xs font-bold text-[#5E6C84] uppercase">Members</h4>
                                 <button onClick={() => handleDeleteTeam(selectedTeam.id)} className="text-xs text-red-600 hover:underline font-medium">Delete Team</button>
@@ -430,7 +474,7 @@ const Team = () => {
 
                         <div className="p-4 border-t border-[#DFE1E6] bg-white flex justify-end">
                             <button onClick={() => setIsManageTeamModalOpen(false)} className="px-4 py-2 bg-[#091E42] text-white rounded-[3px] font-medium hover:bg-[#253858] transition-colors text-sm">
-                                Done
+                                Close
                             </button>
                         </div>
                     </div>

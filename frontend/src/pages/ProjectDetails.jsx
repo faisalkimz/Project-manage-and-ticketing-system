@@ -40,6 +40,9 @@ const ProjectDetails = () => {
     const [activeListMenu, setActiveListMenu] = useState(null);
     const [activeCardMenu, setActiveCardMenu] = useState(null);
     const [shareEmail, setShareEmail] = useState('');
+    const [showBackgroundModal, setShowBackgroundModal] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [settingsForm, setSettingsForm] = useState({ name: '', description: '' });
 
     const fetchProjectDetails = async () => {
         try {
@@ -284,18 +287,26 @@ const ProjectDetails = () => {
     };
 
     const toggleWatch = async () => {
-        // In a real app, this would update watch status in backend
-        alert('Watch feature toggled!');
-        setShowMoreMenu(false);
+        try {
+            const res = await api.post(`/projects/projects/${id}/toggle_watch/`);
+            if (res.data.status === 'watched') {
+                alert('You are now watching this board.');
+            } else {
+                alert('You stopped watching this board.');
+            }
+            fetchProjectDetails(); // To update the state properly if we use is_watching prop
+            setShowMoreMenu(false);
+        } catch (e) { alert('Failed to toggle watch'); }
     };
 
     const changeBackground = () => {
-        alert('Background customization coming soon!');
+        setShowBackgroundModal(true);
         setShowMoreMenu(false);
     };
 
     const openSettings = () => {
-        alert('Project settings coming soon!');
+        setSettingsForm({ name: project.name, description: project.description });
+        setShowSettingsModal(true);
         setShowMoreMenu(false);
     };
 
@@ -307,7 +318,6 @@ const ProjectDetails = () => {
         if (!shareEmail.trim()) return;
 
         try {
-            // Send invitation email - you can implement this with your backend
             await api.post('/users/invites/', {
                 email: shareEmail,
                 role_name: 'DEVELOPER'
@@ -326,6 +336,31 @@ const ProjectDetails = () => {
         navigator.clipboard.writeText(link).then(() => {
             alert('Share link copied to clipboard!');
         });
+    };
+
+    const handleUpdateProjectSettings = async (e) => {
+        e.preventDefault();
+        try {
+            await api.patch(`/projects/projects/${id}/`, settingsForm);
+            setProject({ ...project, ...settingsForm });
+            setShowSettingsModal(false);
+        } catch (error) { alert('Failed to update settings'); }
+    };
+
+    const handleUpdateBackground = async (color) => {
+        try {
+            await api.patch(`/projects/projects/${id}/`, { background_color: color });
+            setProject({ ...project, background_color: color });
+            setShowBackgroundModal(false);
+        } catch (error) { alert('Failed to update background'); }
+    };
+
+    const handleCloseBoard = async () => {
+        if (!window.confirm('Are you sure you want to close this board? You can re-open it later.')) return;
+        try {
+            await api.patch(`/projects/projects/${id}/`, { status: 'COMPLETED' }); // Mapping Close to Completed/Archived
+            navigate('/projects');
+        } catch (error) { alert('Failed to close board'); }
     };
 
     if (!project) return <div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#0079BF] to-[#026AA7]"><div className="text-white">Loading...</div></div>;
@@ -356,7 +391,7 @@ const ProjectDetails = () => {
     };
 
     return (
-        <div className="h-screen flex flex-col bg-gradient-to-br from-[#0079BF] to-[#026AA7] overflow-hidden">
+        <div style={{ backgroundColor: project.background_color || '#0079BF' }} className="h-screen flex flex-col overflow-hidden transition-colors duration-300">
             {/* Trello Board Header */}
             <header className="h-12 px-2 py-1.5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
@@ -478,7 +513,7 @@ const ProjectDetails = () => {
                                 </button>
                                 <div className="border-t border-[#DFE1E6] my-1"></div>
                                 <button
-                                    onClick={() => navigate('/projects')}
+                                    onClick={() => handleCloseBoard()}
                                     className="w-full text-left px-4 py-2 text-sm text-[#EB5A46] hover:bg-[#F4F5F7] transition-colors"
                                 >
                                     Close board
@@ -1121,6 +1156,84 @@ const ProjectDetails = () => {
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+            {/* Background Modal */}
+            {showBackgroundModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowBackgroundModal(false)}>
+                    <div className="bg-white rounded w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-4 border-b border-[#DFE1E6]">
+                            <h3 className="font-semibold text-[#172B4D]">Change Background</h3>
+                            <button onClick={() => setShowBackgroundModal(false)} className="text-[#5E6C84] hover:text-[#172B4D]">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-4 grid grid-cols-3 gap-2">
+                            {['#0079BF', '#D29034', '#519839', '#B04632', '#89609E', '#CD5A91', '#00AECC', '#838C91', '#172B4D'].map(color => (
+                                <button
+                                    key={color}
+                                    onClick={() => handleUpdateBackground(color)}
+                                    className="h-16 rounded hover:opacity-90 transition-opacity relative"
+                                    style={{ backgroundColor: color }}
+                                >
+                                    {project.background_color === color && (
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <Check size={24} className="text-white" />
+                                        </div>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Settings Modal */}
+            {showSettingsModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowSettingsModal(false)}>
+                    <div className="bg-white rounded w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-4 border-b border-[#DFE1E6]">
+                            <h3 className="font-semibold text-[#172B4D]">Board Settings</h3>
+                            <button onClick={() => setShowSettingsModal(false)} className="text-[#5E6C84] hover:text-[#172B4D]">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleUpdateProjectSettings} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Board Name</label>
+                                <input
+                                    type="text"
+                                    className="w-full p-2 border border-[#DFE1E6] rounded text-[#172B4D] focus:border-[#0079BF] outline-none"
+                                    value={settingsForm.name}
+                                    onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                                <textarea
+                                    className="w-full p-2 border border-[#DFE1E6] rounded text-[#172B4D] focus:border-[#0079BF] outline-none h-24 resize-none"
+                                    value={settingsForm.description}
+                                    onChange={e => setSettingsForm({ ...settingsForm, description: e.target.value })}
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSettingsModal(false)}
+                                    className="px-4 py-2 text-[#172B4D] hover:bg-[#F4F5F7] rounded font-medium transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-[#0079BF] text-white rounded font-medium hover:bg-[#026AA7] transition-colors"
+                                >
+                                    Save Changes
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

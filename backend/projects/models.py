@@ -16,8 +16,10 @@ class Project(models.Model):
     start_date = models.DateField(default=timezone.now)
     end_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PLANNING)
+    background_color = models.CharField(max_length=20, default='#0079BF')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_projects')
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='projects', blank=True)
+    watchers = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='watched_projects', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

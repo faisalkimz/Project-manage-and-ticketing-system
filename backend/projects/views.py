@@ -1,4 +1,6 @@
 from rest_framework import viewsets, permissions, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from .models import Project, Task, Tag
 from .serializers import ProjectSerializer, TaskSerializer, TagSerializer
 
@@ -18,6 +20,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.role and user.role.name == 'ADMIN':
             return Project.objects.all()
+        # Also include projects created by user or where user is watcher? 
+        # Trello logic: if you are member OR admin OR creator.
+        # Current logic: members=user.
+        # I should probably update this to (members=user) | (created_by=user).
+        # But 'members' are added on create.
         return Project.objects.filter(members=user)
 
     def perform_create(self, serializer):
@@ -33,6 +40,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
             
         instance = serializer.save(created_by=self.request.user, key=key)
         instance.members.add(self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def toggle_watch(self, request, pk=None):
+        project = self.get_object()
+        user = request.user
+        if project.watchers.filter(id=user.id).exists():
+            project.watchers.remove(user)
+            return Response({'status': 'unwatched'})
+        else:
+            project.watchers.add(user)
+            return Response({'status': 'watched'})
 
 class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
