@@ -34,7 +34,7 @@ const Onboarding = () => {
 
             // 2. Create Project
             if (boardName) {
-                await api.post('/projects/', {
+                await api.post('/projects/projects/', {
                     name: boardName,
                     description: 'My first project board',
                     status: 'ACTIVE',
@@ -56,8 +56,14 @@ const Onboarding = () => {
 
             navigate('/');
         } catch (error) {
-            console.error('Onboarding failed', error);
-            alert("Something went wrong, but let's take you to the dashboard.");
+            console.error('Onboarding failed:', error);
+            if (error.response) {
+                console.error('Data:', error.response.data);
+                console.error('Status:', error.response.status);
+                alert(`Onboarding failed: ${JSON.stringify(error.response.data)}`);
+            } else {
+                alert("Something went wrong, but let's take you to the dashboard.");
+            }
             navigate('/');
         } finally {
             setLoading(false);
@@ -166,9 +172,10 @@ const Onboarding = () => {
                 </div>
             </div>
 
-            <div className="p-6 text-center">
-                <img src="https://a.trellocdn.com/prgb/dist/images/login/login-background.01b7c4a1b02170364c7e.svg" alt="" className="hidden" />
-                {/* Placeholder for illustration logic if desired */}
+            <div className="fixed bottom-0 left-0 w-full h-[30vh] opacity-10 pointer-events-none -z-10 bg-gradient-to-t from-[#0079BF] to-transparent" />
+
+            <div className="p-6 text-center text-[#5E6C84] text-sm">
+                Trust by over 1,000 teams worldwide.
             </div>
         </div>
     );

@@ -147,6 +147,17 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = '__all__'
         read_only_fields = ['created_by', 'members', 'watchers', 'starred_by']
+
+    def to_representation(self, instance):
+        # Fix for 'Expected a date, but got a datetime' crash
+        import datetime
+        if instance.start_date and isinstance(instance.start_date, datetime.datetime):
+            instance.start_date = instance.start_date.date()
+        if instance.end_date and isinstance(instance.end_date, datetime.datetime):
+            instance.end_date = instance.end_date.date()
+            
+        rep = super().to_representation(instance)
+        return rep
         
     def get_parent_project_details(self, obj):
         if obj.parent_project:

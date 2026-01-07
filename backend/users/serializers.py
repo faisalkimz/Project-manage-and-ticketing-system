@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import User, Role, Permission, TeamInvite, Team
 from projects.models import Project
+from django.core.exceptions import ValidationError
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
@@ -40,8 +41,8 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
-    role = serializers.CharField(required=False, default='EMPLOYEE')
-    token = serializers.CharField(write_only=True, required=False)
+    role = serializers.CharField(required=False, default='EMPLOYEE', allow_blank=True)
+    token = serializers.CharField(write_only=True, required=False, allow_blank=True)
     
     class Meta:
         model = User
@@ -66,9 +67,16 @@ class RegisterSerializer(serializers.ModelSerializer):
                 invite = TeamInvite.objects.get(token=token, status='PENDING')
                 if invite.email == input_email:
                     role = invite.role
-            except TeamInvite.DoesNotExist:
+            except (TeamInvite.DoesNotExist, ValidationError):
                 pass
             
+        # If this is the first user, make them an ADMIN
+        if not User.objects.exists():
+            try:
+                role = Role.objects.get(name='ADMIN')
+            except Role.DoesNotExist:
+                pass
+
         user = User.objects.create_user(
             username=validated_data['username'],
             email=input_email,

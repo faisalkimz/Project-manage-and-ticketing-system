@@ -52,6 +52,16 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = (permissions.AllowAny,)
     serializer_class = RegisterSerializer
 
+    def get(self, request, *args, **kwargs):
+        """
+        Allow GET requests to provide information about the registration endpoint.
+        This helps with the DRF Browsable API and prevents 405 errors when navigating.
+        """
+        return Response({
+            "message": "Registration endpoint. Send a POST request with username, email, and password to register.",
+            "fields": ["username", "email", "password", "role", "token (optional)"]
+        }, status=status.HTTP_200_OK)
+
 class UserProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = (permissions.IsAuthenticated,)
 
