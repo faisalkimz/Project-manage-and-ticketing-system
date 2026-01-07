@@ -16,6 +16,8 @@ import Signup from './pages/Signup';
 import Onboarding from './pages/Onboarding';
 import Portfolios from './pages/Portfolios';
 import PortfolioDetails from './pages/PortfolioDetails';
+import Notifications from './pages/Notifications';
+import Integrations from './pages/Integrations';
 import GlobalSearch from './components/GlobalSearch';
 import ProtectedRoute from './components/ProtectedRoute';
 import useAuthStore from './store/authStore';
@@ -101,6 +103,8 @@ function App() {
             <Route path="tickets/:id" element={<ProtectedRoute><TicketDetails /></ProtectedRoute>} />
             <Route path="team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+            <Route path="integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
             <Route path="jira" element={<ProtectedRoute><Jira /></ProtectedRoute>} />
           </Route>
         </Routes>

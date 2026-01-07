@@ -28,6 +28,10 @@ urlpatterns = [
     path('api/timetracking/', include('timetracking.urls')),
     path('api/reports/', include('reports.urls')),
     path('api/collaboration/', include('collaboration.urls')),
+    path('api/knowledge/', include('knowledge.urls')),
+    path('api/automation/', include('automation.urls')),
+    path('api/search/', include('search.urls')),
+    path('api/notifications/', include('notifications.urls')),
 ]
 
 if settings.DEBUG:

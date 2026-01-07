@@ -4,7 +4,7 @@ import {
     Plus, Star, MoreHorizontal, X, Users, Share2, Clock, MessageSquare,
     Paperclip, Tag, ChevronDown, ChevronRight, ChevronUp, List, Calendar as CalendarIcon, Layout, GitMerge, CheckSquare, Trash2,
     Flag, Target, TrendingUp, Shield, HelpCircle, AlertCircle, Package, BarChart, History,
-    Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check
+    Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check, Circle
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -1869,8 +1869,9 @@ const ProjectDetails = () => {
                                                                         d={`M ${reportData.burndown.actual.map((d, i) => {
                                                                             const daysCount = reportData.burndown.ideal?.length || 1;
                                                                             const x = (i / Math.max(daysCount - 1, 1)) * 100;
-                                                                            const totalPoints = reportData.burndown.ideal?.[0]?.points || 1;
-                                                                            const y = 100 - (d.points / totalPoints) * 100;
+                                                                            const totalPoints = parseFloat(reportData.burndown.ideal?.[0]?.points) || 1;
+                                                                            const points = parseFloat(d.points) || 0;
+                                                                            const y = 100 - (points / totalPoints) * 100;
                                                                             return `${x},${y}`;
                                                                         }).join(' L ')}`}
                                                                         fill="none"
@@ -1997,8 +1998,8 @@ const ProjectDetails = () => {
                                                         <path
                                                             d={`M ${reportData.burnup.map((d, i) => {
                                                                 const x = (i / Math.max(reportData.burnup.length - 1, 1)) * 100;
-                                                                const maxScope = Math.max(...reportData.burnup.map(b => b.total_scope), 1);
-                                                                const y = 100 - (d.total_scope / maxScope) * 100;
+                                                                const maxScope = Math.max(...reportData.burnup.map(b => parseFloat(b.total_scope) || 0), 1);
+                                                                const y = 100 - ((parseFloat(d.total_scope) || 0) / maxScope) * 100;
                                                                 return `${x},${y}`;
                                                             }).join(' L ')}`}
                                                             fill="none"

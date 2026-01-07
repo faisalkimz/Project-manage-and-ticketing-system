@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt',
+    'django_otp',
+    'django_otp.plugins.otp_totp',
 
     # Local
     'users.apps.UsersConfig',
@@ -51,17 +53,24 @@ INSTALLED_APPS = [
     'timetracking.apps.TimetrackingConfig',
     'reports.apps.ReportsConfig',
     'collaboration.apps.CollaborationConfig',
+    'knowledge.apps.KnowledgeConfig',
+    'automation.apps.AutomationConfig',
+    'search.apps.SearchConfig',
+    'notifications.apps.NotificationsConfig',
+    'audit.apps.AuditConfig',
+    'ai_assistant.apps.AiAssistantConfig',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'users.middleware.SecurityMiddleware',  # Custom security middleware
 ]
 
 ROOT_URLCONF = 'core_api.urls'

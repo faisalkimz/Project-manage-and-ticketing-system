@@ -1,23 +1,22 @@
 from rest_framework import serializers
-from .models import User, Role, Permission, TeamInvite, Team
+from .models import User, TeamInvite, Team
 from projects.models import Project
 from django.core.exceptions import ValidationError
 
 class UserSerializer(serializers.ModelSerializer):
-    role = serializers.SerializerMethodField()
+    role = serializers.CharField()
     permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'role', 'permissions', 'profile_image', 'bio', 'is_active', 'department', 'job_title', 'email_notifications', 'push_notifications', 'task_updates_only']
 
-    def get_role(self, obj):
-        return obj.role.name if obj.role else None
-
     def get_permissions(self, obj):
-        if obj.role:
-            return list(obj.role.permissions.values_list('name', flat=True))
-        return []
+        if obj.role == 'ADMIN':
+            return ['all_access']
+        if obj.role == 'MANAGER':
+            return ['manage_projects', 'manage_team']
+        return ['view_assigned']
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     role = serializers.CharField(required=False)
@@ -25,18 +24,10 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'role', 'is_active', 'profile_image', 'bio', 'department', 'job_title', 'email_notifications', 'push_notifications', 'task_updates_only']
-        read_only_fields = ['username', 'email'] # Maybe keep these safe?
+        read_only_fields = ['username', 'email']
 
     def update(self, instance, validated_data):
-        role_name = validated_data.pop('role', None)
-        if role_name:
-            try:
-                role = Role.objects.get(name=role_name)
-                instance.role = role
-            except Role.DoesNotExist:
-                # Handle invalid role gracefully or error
-                pass 
-        
+        # Role is just a string now
         return super().update(instance, validated_data)
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -53,12 +44,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         role_name = validated_data.pop('role', 'EMPLOYEE')
         input_email = validated_data['email']
         
-        # Default role resolution
-        try:
-            role = Role.objects.get(name=role_name)
-        except Role.DoesNotExist:
-            role = Role.objects.get(name='EMPLOYEE')
-            
         # Check for valid invite token
         invite = None
         if token:
@@ -66,22 +51,19 @@ class RegisterSerializer(serializers.ModelSerializer):
             try:
                 invite = TeamInvite.objects.get(token=token, status='PENDING')
                 if invite.email == input_email:
-                    role = invite.role
+                    role_name = invite.role # It is string now
             except (TeamInvite.DoesNotExist, ValidationError):
                 pass
             
         # If this is the first user, make them an ADMIN
         if not User.objects.exists():
-            try:
-                role = Role.objects.get(name='ADMIN')
-            except Role.DoesNotExist:
-                pass
+            role_name = 'ADMIN'
 
         user = User.objects.create_user(
             username=validated_data['username'],
             email=input_email,
             password=validated_data['password'],
-            role=role
+            role=role_name
         )
         
         # Update invite status
@@ -125,7 +107,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
 class TeamInviteSerializer(serializers.ModelSerializer):
     invited_by_username = serializers.CharField(source='invited_by.username', read_only=True)
-    role_name = serializers.CharField(source='role.name', read_only=True)
+    # Role is just 'role' field now
     
     class Meta:
         model = TeamInvite

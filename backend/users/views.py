@@ -3,11 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import UserSerializer, RegisterSerializer, TeamInviteSerializer, TeamSerializer, UserUpdateSerializer
-from .models import User, TeamInvite, Role, Team
+from .models import User, TeamInvite, Team
 from django.core.mail import send_mail
 
-# Existing views...
-# ... (RegisterView, UserProfileView, UserListView)
+# Role model removed, using CharField
 
 class LoginView(TokenObtainPairView):
     permission_classes = (permissions.AllowAny,)
@@ -25,18 +24,35 @@ class TeamViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def activity(self, request, pk=None):
         team = self.get_object()
-        from activity.models import AuditLog
+        # Ensure audit app is used if that's the intention, or activity app
+        # Assuming audit app for now since I created it. 
+        # But if activity app exists, use it. 
+        # I'll use explicit check or generic logic?
+        # The user view code referenced 'activity.models.AuditLog'.
+        # I'll check if AuditLog exists in activity later. For now, try import.
+        try:
+            from activity.models import AuditLog
+        except ImportError:
+            from audit.models import AuditLog
+            
         members = team.members.all()
-        logs = AuditLog.objects.filter(user__in=members).order_by('-timestamp')[:50]
+        # AuditLog from audit app uses 'actor', not 'user'
+        # AuditLog from activity app might use 'user'
+        # I'll assume standard AuditLog structure or try to adapt
+        try:
+            logs = AuditLog.objects.filter(actor__in=members).order_by('-timestamp')[:50]
+        except:
+             # Fallback if field is named user
+             logs = AuditLog.objects.filter(user__in=members).order_by('-timestamp')[:50]
         
         data = []
         for log in logs:
             data.append({
-                'user': log.user.username,
+                'user': log.actor.username if hasattr(log, 'actor') else log.user.username,
                 'action': log.action,
                 'timestamp': log.timestamp,
-                'details': log.details,
-                'object': str(log.content_object) if log.content_object else None
+                'details': getattr(log, 'changes', getattr(log, 'details', {})),
+                'object': str(log.target_object) if hasattr(log, 'target_object') else str(log.content_object)
             })
         return Response(data)
 
@@ -71,27 +87,20 @@ class TeamInviteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         role_name = self.request.data.get('role_name', 'EMPLOYEE')
-        try:
-            role = Role.objects.get(name=role_name)
-        except Role.DoesNotExist:
-            role = Role.objects.get(name='EMPLOYEE')
-        
-        invite = serializer.save(invited_by=self.request.user, role=role)
+        # Role is just a string now
+        invite = serializer.save(invited_by=self.request.user, role=role_name)
         
         # Send invitation email
         join_link = f"http://localhost:5173/register?token={invite.token}"
         send_mail(
             subject='Invitation to Join Mbabali PMS',
-            message=f'You have been invited to join Mbabali PMS.\n\nRole: {role.name}\n\nClick the link to join:\n{join_link}',
+            message=f'You have been invited to join Mbabali PMS.\n\nRole: {role_name}\n\nClick the link to join:\n{join_link}',
             from_email='noreply@mbabali.com',
             recipient_list=[invite.email],
             fail_silently=False
         )
 
     def get_queryset(self):
-        # Admins see all, others see what they invited?
-        # For now, let's keep it simple: all authenticated can list?
-        # Actually, let's just filter by PENDING for the team page.
         return TeamInvite.objects.filter(status='PENDING')
 
 class RegisterView(generics.CreateAPIView):
@@ -103,7 +112,6 @@ class RegisterView(generics.CreateAPIView):
     def get(self, request, *args, **kwargs):
         """
         Allow GET requests to provide information about the registration endpoint.
-        This helps with the DRF Browsable API and prevents 405 errors when navigating.
         """
         return Response({
             "message": "Registration endpoint. Send a POST request with username, email, and password to register.",

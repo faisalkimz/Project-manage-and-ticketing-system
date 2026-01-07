@@ -189,6 +189,7 @@ class Task(models.Model):
     milestone = models.ForeignKey(Milestone, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     is_archived = models.BooleanField(default=False)
+    custom_fields = models.JSONField(default=dict, blank=True)
     
     # Recurrence fields
     is_recurring = models.BooleanField(default=False)
@@ -243,3 +244,32 @@ class TaskHistory(models.Model):
 
     def __str__(self):
         return f"{self.task.title} changed at {self.changed_at}"
+
+class CustomFieldDefinition(models.Model):
+    FIELD_TYPES = [
+        ('TEXT', 'Text'),
+        ('NUMBER', 'Number'),
+        ('DATE', 'Date'),
+        ('BOOLEAN', 'Checkbox'),
+        ('SELECT', 'Dropdown'),
+    ]
+    
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='custom_field_definitions')
+    name = models.CharField(max_length=100)
+    field_type = models.CharField(max_length=20, choices=FIELD_TYPES)
+    options = models.JSONField(default=list, blank=True, help_text="List of options for dropdown")
+    is_required = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"
+
+class Report(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    report_type = models.CharField(max_length=50) # AI, Custom
+    config = models.JSONField(default=dict)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return self.name

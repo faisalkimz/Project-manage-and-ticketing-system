@@ -2,10 +2,18 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Count, Q, Avg, F
+from django.db.models import Count, Q, Avg, F, Sum
 from django.utils import timezone
+from django.http import HttpResponse
 from datetime import timedelta
 from projects.models import Project, Task, Sprint, TaskHistory
+from tickets.models import Ticket
+import csv
+import io
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 
 class ReportsViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
@@ -93,28 +101,12 @@ class ReportsViewSet(viewsets.ViewSet):
             })
             
         # Calculate actual burndown
-        # We need TaskHistory entries for tasks in this sprint
         actual_line = []
         current_points = total_points
         
         for i in range(days):
             current_day = sprint.start_date + timedelta(days=i)
-            # Find points completed on this day
-            completed_that_day = TaskHistory.objects.filter(
-                task__sprint=sprint,
-                status='DONE',
-                changed_at__date=current_day
-            ).count() # This is a simplification; should use story_points
             
-            # Better approach: sum story points of tasks that became DONE
-            completed_points = TaskHistory.objects.filter(
-                task__sprint=sprint,
-                status='DONE',
-                changed_at__date=current_day
-            ).aggregate(total=Count('story_points'))['total'] or 0 # Wait, story_points is in TaskHistory now
-            
-            # Re-fetch with sum
-            from django.db.models import Sum
             completed_points = TaskHistory.objects.filter(
                 task__sprint=sprint,
                 status='DONE',
@@ -143,7 +135,6 @@ class ReportsViewSet(viewsets.ViewSet):
         sprints = Sprint.objects.filter(project_id=project_id, status='COMPLETED').order_by('end_date')
         data = []
         
-        from django.db.models import Sum
         for sprint in sprints:
             completed_points = Task.objects.filter(sprint=sprint, status='DONE').aggregate(total=Sum('story_points'))['total'] or 0
             data.append({
@@ -161,7 +152,6 @@ class ReportsViewSet(viewsets.ViewSet):
         if project_id:
             projects = projects.filter(id=project_id)
             
-        from django.db.models import Sum
         distribution = Task.objects.filter(project__in=projects).exclude(assigned_to=None).values(
             'assigned_to__username', 'assigned_to__id'
         ).annotate(
@@ -188,7 +178,6 @@ class ReportsViewSet(viewsets.ViewSet):
         days = (sprint.end_date - sprint.start_date).days + 1
         data = []
         
-        from django.db.models import Sum
         total_scope = Task.objects.filter(sprint=sprint).aggregate(total=Sum('story_points'))['total'] or 0
         completed_acc = 0
         
@@ -211,3 +200,229 @@ class ReportsViewSet(viewsets.ViewSet):
             })
             
         return Response(data)
+    
+    @action(detail=False, methods=['get'])
+    def export_csv(self, request):
+        """Export reports to CSV"""
+        report_type = request.query_params.get('type', 'tasks')
+        project_id = request.query_params.get('project_id')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{report_type}_report.csv"'
+        
+        writer = csv.writer(response)
+        
+        if report_type == 'tasks':
+            # Export tasks
+            tasks = Task.objects.filter(project__members=request.user)
+            if project_id:
+                tasks = tasks.filter(project_id=project_id)
+            
+            writer.writerow(['ID', 'Title', 'Project', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Story Points'])
+            for task in tasks:
+                writer.writerow([
+                    task.id,
+                    task.title,
+                    task.project.name,
+                    task.status,
+                    task.priority,
+                    task.assigned_to.username if task.assigned_to else 'Unassigned',
+                    task.due_date.strftime('%Y-%m-%d') if task.due_date else '',
+                    task.story_points
+                ])
+        
+        elif report_type == 'projects':
+            # Export projects
+            projects = Project.objects.filter(members=request.user)
+            writer.writerow(['ID', 'Name', 'Status', 'Start Date', 'End Date', 'Total Tasks', 'Completed Tasks', 'Members'])
+            for project in projects:
+                total_tasks = project.tasks.count()
+                completed = project.tasks.filter(status='DONE').count()
+                writer.writerow([
+                    project.id,
+                    project.name,
+                    project.status,
+                    project.start_date.strftime('%Y-%m-%d'),
+                    project.end_date.strftime('%Y-%m-%d') if project.end_date else '',
+                    total_tasks,
+                    completed,
+                    project.members.count()
+                ])
+        
+        elif report_type == 'workload':
+            # Export workload
+            projects = Project.objects.filter(members=request.user)
+            if project_id:
+                projects = projects.filter(id=project_id)
+            
+            distribution = Task.objects.filter(project__in=projects).exclude(assigned_to=None).values(
+                'assigned_to__username'
+            ).annotate(
+                total_tasks=Count('id'),
+                open_tasks=Count('id', filter=Q(status__in=['TODO', 'IN_PROGRESS'])),
+                total_points=Sum('story_points')
+            )
+            
+            writer.writerow(['User', 'Total Tasks', 'Open Tasks', 'Total Story Points'])
+            for item in distribution:
+                writer.writerow([
+                    item['assigned_to__username'],
+                    item['total_tasks'],
+                    item['open_tasks'],
+                    item['total_points'] or 0
+                ])
+        
+        return response
+    
+    @action(detail=False, methods=['get'])
+    def export_pdf(self, request):
+        """Export reports to PDF"""
+        report_type = request.query_params.get('type', 'tasks')
+        project_id = request.query_params.get('project_id')
+        
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{report_type}_report.pdf"'
+        
+        doc = SimpleDocTemplate(response, pagesize=landscape(letter))
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Title
+        title_text = f"{report_type.title()} Report"
+        if project_id:
+            try:
+                project = Project.objects.get(id=project_id)
+                title_text += f" - {project.name}"
+            except Project.DoesNotExist:
+                pass
+        
+        elements.append(Paragraph(title_text, styles['Title']))
+        elements.append(Spacer(1, 20))
+        
+        data = []
+        
+        if report_type == 'tasks':
+            # Header
+            headers = ['ID', 'Title', 'Status', 'Priority', 'Assigned To', 'Due Date']
+            data.append(headers)
+            
+            # Content
+            tasks = Task.objects.filter(project__members=request.user).distinct()
+            if project_id:
+                tasks = tasks.filter(project_id=project_id)
+                
+            for task in tasks:
+                assignee = task.assigned_to.username if task.assigned_to else 'Unassigned'
+                due_date = task.due_date.strftime('%Y-%m-%d') if task.due_date else '-'
+                data.append([
+                    str(task.id),
+                    task.title[:30] + '...' if len(task.title) > 30 else task.title,
+                    task.status,
+                    task.priority,
+                    assignee,
+                    due_date
+                ])
+                
+        elif report_type == 'projects':
+            headers = ['Name', 'Status', 'Start Date', 'Tasks', 'Progress']
+            data.append(headers)
+            
+            projects = Project.objects.filter(members=request.user).distinct()
+            for p in projects:
+                total = p.tasks.count()
+                done = p.tasks.filter(status='DONE').count()
+                progress = f"{int(done/total*100)}%" if total > 0 else "0%"
+                start_date = p.start_date.strftime('%Y-%m-%d') if p.start_date else '-'
+                
+                data.append([
+                    p.name,
+                    p.status,
+                    start_date,
+                    f"{done}/{total}",
+                    progress
+                ])
+        
+        # Create Table
+        if len(data) > 1:
+            table = Table(data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.gray),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ]))
+            elements.append(table)
+        else:
+            elements.append(Paragraph("No data found for this report.", styles['Normal']))
+            
+        elements.append(Spacer(1, 20))
+        elements.append(Paragraph(f"Generated on {timezone.now().strftime('%Y-%m-%d %H:%M')}", styles['Normal']))
+        
+        doc.build(elements)
+        return response
+
+    @action(detail=False, methods=['get'])
+    def kpis(self, request):
+        """Get Key Performance Indicators"""
+        user = request.user
+        projects = Project.objects.filter(members=user)
+        tasks = Task.objects.filter(project__in=projects)
+        
+        now = timezone.now()
+        start_of_week = now - timedelta(days=now.weekday())
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Calculate KPIs
+        kpis = {
+            'task_completion_rate': {
+                'label': 'Task Completion Rate',
+                'value': 0,
+                'unit': '%',
+                'trend': 'up'
+            },
+            'average_velocity': {
+                'label': 'Average Velocity',
+                'value': 0,
+                'unit': 'pts/sprint',
+                'trend': 'up'
+            },
+            'on_time_delivery': {
+                'label': 'On-Time Delivery',
+                'value': 0,
+                'unit': '%',
+                'trend': 'up'
+            },
+            'team_utilization': {
+                'label': 'Team Utilization',
+                'value': 0,
+                'unit': '%',
+                'trend': 'neutral'
+            }
+        }
+        
+        # Task Completion Rate
+        total_tasks = tasks.count()
+        completed_tasks = tasks.filter(status='DONE').count()
+        if total_tasks > 0:
+            kpis['task_completion_rate']['value'] = int((completed_tasks / total_tasks) * 100)
+        
+        # Average Velocity
+        completed_sprints = Sprint.objects.filter(project__in=projects, status='COMPLETED')
+        if completed_sprints.exists():
+            total_velocity = 0
+            for sprint in completed_sprints:
+                points = Task.objects.filter(sprint=sprint, status='DONE').aggregate(total=Sum('story_points'))['total'] or 0
+                total_velocity += points
+            kpis['average_velocity']['value'] = int(total_velocity / completed_sprints.count())
+        
+        # On-Time Delivery
+        completed_with_due_date = tasks.filter(status='DONE', due_date__isnull=False)
+        if completed_with_due_date.exists():
+            on_time = completed_with_due_date.filter(updated_at__lte=F('due_date')).count()
+            kpis['on_time_delivery']['value'] = int((on_time / completed_with_due_date.count()) * 100)
+        
+        return Response(kpis)
+
