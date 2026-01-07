@@ -181,6 +181,7 @@ class Task(models.Model):
     watchers = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='watched_tasks', blank=True)
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO)
+    start_date = models.DateTimeField(null=True, blank=True)
     due_date = models.DateTimeField(null=True, blank=True)
     tags = models.ManyToManyField(Tag, blank=True, related_name='tasks')
     dependencies = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='dependents')
@@ -199,3 +200,46 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+class Release(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='releases')
+    name = models.CharField(max_length=100)
+    version = models.CharField(max_length=20, blank=True)
+    description = models.TextField(blank=True)
+    release_date = models.DateField()
+    is_released = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"
+
+class SprintRetrospective(models.Model):
+    sprint = models.OneToOneField(Sprint, on_delete=models.CASCADE, related_name='retrospective')
+    went_well = models.TextField(help_text="What went well during the sprint?")
+    could_be_improved = models.TextField(help_text="What could be improved?")
+    action_items = models.TextField(help_text="Actions for the next sprint.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Retrospective for {self.sprint.name}"
+
+class SprintCapacity(models.Model):
+    sprint = models.ForeignKey(Sprint, on_delete=models.CASCADE, related_name='capacities')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    hours_per_day = models.DecimalField(max_digits=4, decimal_places=1, default=8.0)
+    days_off = models.IntegerField(default=0)
+    
+    class Meta:
+        unique_together = ['sprint', 'user']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.sprint.name} Capacity"
+
+class TaskHistory(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='history')
+    status = models.CharField(max_length=20)
+    story_points = models.IntegerField(null=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+
+    def __str__(self):
+        return f"{self.task.title} changed at {self.changed_at}"

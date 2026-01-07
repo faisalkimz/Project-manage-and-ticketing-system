@@ -54,6 +54,7 @@ const ProjectDetails = () => {
     const [showDatesModal, setShowDatesModal] = useState(false);
     const [showAttachmentModal, setShowAttachmentModal] = useState(false);
     const [tempDueDate, setTempDueDate] = useState('');
+    const [tempStartDate, setTempStartDate] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
     const [attachments, setAttachments] = useState([]);
     const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -276,9 +277,16 @@ const ProjectDetails = () => {
 
     const handleAssignMember = async (userId) => {
         try {
-            await handleUpdateTask(selectedTask.id, { assigned_to: userId });
+            if (selectedTask) {
+                await handleUpdateTask(selectedTask.id, { assigned_to: userId });
+            } else {
+                await api.post(`/projects/projects/${id}/add_member/`, { user_id: userId });
+                fetchProjectDetails();
+            }
             setShowMembersModal(false);
-        } catch (error) { }
+        } catch (error) {
+            console.error("Failed to update members", error);
+        }
     };
 
     const handleUpdatePriority = async (priority) => {
@@ -288,11 +296,17 @@ const ProjectDetails = () => {
         } catch (error) { }
     };
 
-    const handleUpdateDueDate = async () => {
-        if (!tempDueDate) return;
+    const handleUpdateDates = async () => {
+        const data = {};
+        if (tempStartDate) data.start_date = tempStartDate;
+        if (tempDueDate) data.due_date = tempDueDate;
+
+        if (Object.keys(data).length === 0) return;
+
         try {
-            await handleUpdateTask(selectedTask.id, { due_date: tempDueDate });
+            await handleUpdateTask(selectedTask.id, data);
             setShowDatesModal(false);
+            setTempStartDate('');
             setTempDueDate('');
         } catch (error) { }
     };
@@ -1178,7 +1192,11 @@ const ProjectDetails = () => {
 
                 {viewMode === 'timeline' && (
                     <div className="flex-1 overflow-auto p-6 bg-white">
-                        <GanttChart tasks={tasks} />
+                        <GanttChart
+                            tasks={tasks}
+                            onTaskClick={setSelectedTask}
+                            onUpdateTask={handleUpdateTask}
+                        />
                     </div>
                 )}
 
@@ -1187,7 +1205,7 @@ const ProjectDetails = () => {
                         <div className="max-w-4xl mx-auto space-y-8">
                             <h2 className="text-2xl font-bold text-[#172B4D]">Resource Workload</h2>
                             <div className="grid gap-6">
-                                {allUsers.map(u => {
+                                {project.members_details?.map(u => {
                                     const userTasks = tasks.filter(t => t.assigned_to === u.id);
                                     const done = userTasks.filter(t => t.status === 'DONE').length;
                                     const total = userTasks.length;
@@ -1257,74 +1275,162 @@ const ProjectDetails = () => {
                 )}
 
                 {viewMode === 'roadmap' && (
-                    <div className="flex-1 overflow-y-auto p-8 bg-white">
-                        <div className="max-w-4xl">
-                            <h1 className="text-2xl font-bold text-[#172B4D] mb-2">Roadmap</h1>
-                            <p className="text-sm text-[#5E6C84] mb-8">Plan and track your project milestones and deliverables.</p>
+                    <div className="flex-1 overflow-y-auto p-8 bg-[#F4F5F7]">
+                        <div className="max-w-5xl mx-auto">
+                            {/* Roadmap Header Summary */}
+                            <div className="bg-white rounded-lg border border-[#DFE1E6] p-8 shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-8 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-[#0052CC]/5 rounded-full -mr-32 -mt-32" />
+                                <div className="relative z-10">
+                                    <h1 className="text-2xl font-bold text-[#172B4D] mb-2">Project Roadmap</h1>
+                                    <p className="text-sm text-[#5E6C84] max-w-md">Strategic milestones and key project outputs. Track progress across all major deliverables and objectives.</p>
+                                </div>
 
-                            <div className="space-y-8">
-                                {/* Milestones Section */}
-                                <section>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-sm font-bold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
-                                            <Flag size={16} /> Milestones
+                                <div className="flex items-center gap-12 relative z-10">
+                                    <div className="text-center">
+                                        <div className="text-3xl font-bold text-[#0052CC]">
+                                            {project.milestones?.filter(m => m.is_completed).length || 0} / {project.milestones?.length || 0}
+                                        </div>
+                                        <div className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mt-1">Milestones</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="text-3xl font-bold text-[#00875A]">
+                                            {project.deliverables?.filter(d => d.is_completed).length || 0}
+                                        </div>
+                                        <div className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mt-1">Delivered</div>
+                                    </div>
+                                    <div className="w-32">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-bold text-[#5E6C84]">PROGRESS</span>
+                                            <span className="text-[10px] font-bold text-[#172B4D]">{(project.task_stats?.percentage || 0).toFixed(0)}%</span>
+                                        </div>
+                                        <div className="h-2 bg-[#EBECF0] rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-[#0052CC] transition-all duration-1000"
+                                                style={{ width: `${project.task_stats?.percentage || 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Left: Milestones Timeline */}
+                                <div className="lg:col-span-2 space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest flex items-center gap-2">
+                                            <Flag size={14} className="text-[#0052CC]" /> Milestones
                                         </h3>
                                         <button onClick={() => setIsRoadmapModalOpen(true)} className="text-xs font-bold text-[#0052CC] hover:underline flex items-center gap-1">
-                                            <Plus size={14} /> Add Milestone
+                                            <Plus size={14} /> New Milestone
                                         </button>
                                     </div>
-                                    <div className="space-y-4">
-                                        {project.milestones?.map((m) => (
-                                            <div key={m.id} className="relative pl-6 border-l-2 border-[#DFE1E6] pb-4 last:pb-0">
-                                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ${m.is_completed ? 'bg-green-500' : 'bg-[#0052CC]'}`} />
-                                                <div className="bg-[#FAFBFC] border border-[#DFE1E6] rounded p-3">
-                                                    <div className="flex justify-between items-start mb-1">
-                                                        <h4 className="font-bold text-[#172B4D] text-sm">{m.name}</h4>
-                                                        <span className="text-xs font-bold text-[#5E6C84]">{new Date(m.due_date).toLocaleDateString()}</span>
-                                                    </div>
-                                                    <p className="text-xs text-[#5E6C84]">{m.description}</p>
-                                                </div>
+
+                                    <div className="bg-white rounded-lg border border-[#DFE1E6] overflow-hidden">
+                                        {project.milestones && project.milestones.length > 0 ? (
+                                            <div className="divide-y divide-[#DFE1E6]">
+                                                {project.milestones.map((m) => {
+                                                    const milestoneTasks = tasks.filter(t => t.milestone === m.id);
+                                                    const completedTasks = milestoneTasks.filter(t => t.status === 'DONE').length;
+                                                    const progress = milestoneTasks.length > 0 ? (completedTasks / milestoneTasks.length) * 100 : 0;
+
+                                                    return (
+                                                        <div key={m.id} className="p-6 hover:bg-[#FAFBFC] transition-colors group">
+                                                            <div className="flex justify-between items-start mb-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${m.is_completed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
+                                                                        <Flag size={16} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="font-bold text-[#172B4D]">{m.name}</h4>
+                                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                                            <CalendarIcon size={12} className="text-[#5E6C84]" />
+                                                                            <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">
+                                                                                {new Date(m.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${m.is_completed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#EBECF0] text-[#5E6C84]'}`}>
+                                                                        {m.is_completed ? 'Completed' : 'Planned'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-sm text-[#5E6C84] mb-4">{m.description}</p>
+
+                                                            <div className="space-y-1.5">
+                                                                <div className="flex justify-between text-[10px] font-bold text-[#5E6C84]">
+                                                                    <span>OBJECTIVE PROGRESS</span>
+                                                                    <span>{Math.round(progress)}%</span>
+                                                                </div>
+                                                                <div className="h-1.5 bg-[#EBECF0] rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className={`h-full transition-all duration-700 ${progress === 100 ? 'bg-[#00875A]' : 'bg-[#0052CC]'}`}
+                                                                        style={{ width: `${progress}%` }}
+                                                                    />
+                                                                </div>
+                                                                <div className="flex justify-between text-[10px] text-[#5E6C84] pt-1">
+                                                                    <span>{completedTasks} of {milestoneTasks.length} tasks completed</span>
+                                                                    <button onClick={() => {
+                                                                        // Future: Filter tasks list by this milestone
+                                                                        setViewMode('list');
+                                                                    }} className="text-[#0052CC] hover:underline font-bold">View Tasks</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                        ))}
-                                        {(!project.milestones || project.milestones.length === 0) && (
-                                            <p className="text-sm text-[#5E6C84] italic">No milestones defined.</p>
+                                        ) : (
+                                            <div className="p-12 text-center">
+                                                <Flag size={48} className="mx-auto text-[#DFE1E6] mb-4" />
+                                                <p className="text-[#5E6C84]">Setting milestones helps keep the project on track.</p>
+                                                <button onClick={() => setIsRoadmapModalOpen(true)} className="mt-4 px-4 py-2 bg-[#0052CC] text-white rounded font-bold text-sm">Add First Milestone</button>
+                                            </div>
                                         )}
                                     </div>
-                                </section>
+                                </div>
 
-                                {/* Deliverables Section */}
-                                <section>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-sm font-bold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
-                                            <CheckSquare size={16} /> Deliverables
+                                {/* Right: Deliverables & Stats */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest flex items-center gap-2">
+                                            <Package size={14} className="text-[#0052CC]" /> Deliverables
                                         </h3>
                                         <button onClick={() => setShowDeliverableModal(true)} className="text-xs font-bold text-[#0052CC] hover:underline flex items-center gap-1">
-                                            <Plus size={14} /> Add Deliverable
+                                            <Plus size={14} /> New deliverable
                                         </button>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                                    <div className="space-y-3">
                                         {project.deliverables?.map((d) => (
-                                            <div key={d.id} className="flex gap-3 p-3 border border-[#DFE1E6] rounded bg-white relative overflow-hidden group">
-                                                <div className={`w-1 h-full absolute left-0 top-0 ${d.is_completed ? 'bg-green-500' : 'bg-[#FF9F1A]'}`} />
-                                                <div className="flex-1">
-                                                    <h4 className="font-bold text-[#172B4D] text-sm mb-1">{d.name}</h4>
-                                                    <p className="text-xs text-[#5E6C84] line-clamp-2">{d.description}</p>
-                                                    <div className="mt-2 flex items-center gap-2">
-                                                        <span className="text-[10px] font-bold uppercase text-[#5E6C84] bg-[#EBECF0] px-1.5 py-0.5 rounded">
-                                                            {d.due_date ? new Date(d.due_date).toLocaleDateString() : 'No Date'}
-                                                        </span>
-                                                        <button onClick={() => handleToggleDeliverable(d.id, d.is_completed)} className="text-[10px] text-[#0052CC] hover:underline">
-                                                            {d.is_completed ? 'Mark Incomplete' : 'Mark Complete'}
-                                                        </button>
+                                            <div key={d.id} className="bg-white border border-[#DFE1E6] rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${d.is_completed ? 'bg-[#00875A]' : 'bg-[#FF9F1A]'}`} />
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <h4 className="text-sm font-bold text-[#172B4D]">{d.name}</h4>
+                                                    <button
+                                                        onClick={() => handleToggleDeliverable(d.id, d.is_completed)}
+                                                        className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${d.is_completed ? 'bg-[#00875A] border-[#00875A] text-white' : 'border-[#DFE1E6] bg-white group-hover:border-[#0052CC]'}`}
+                                                    >
+                                                        {d.is_completed && <Check size={12} />}
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-[#5E6C84] mb-3 line-clamp-2">{d.description}</p>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#5E6C84] uppercase">
+                                                        <Clock size={10} />
+                                                        {d.due_date ? new Date(d.due_date).toLocaleDateString() : 'TBD'}
                                                     </div>
                                                 </div>
                                             </div>
                                         ))}
                                         {(!project.deliverables || project.deliverables.length === 0) && (
-                                            <p className="col-span-2 text-sm text-[#5E6C84] italic">No deliverables defined.</p>
+                                            <div className="bg-[#EBECF0]/30 border-2 border-dashed border-[#DFE1E6] rounded-lg p-8 text-center">
+                                                <p className="text-xs text-[#5E6C84]">Define concrete deliverables to measure project success.</p>
+                                            </div>
                                         )}
                                     </div>
-                                </section>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2065,7 +2171,7 @@ const ProjectDetails = () => {
 
             {/* Members Modal */}
             {
-                showMembersModal && selectedTask && (
+                showMembersModal && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowMembersModal(false)}>
                         <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
@@ -2080,21 +2186,29 @@ const ProjectDetails = () => {
                                 className="w-full px-3 py-2 mb-3 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
                             />
                             <div className="space-y-1 max-h-64 overflow-y-auto">
-                                {allUsers.map((member) => (
-                                    <button
-                                        key={member.id}
-                                        onClick={() => handleAssignMember(member.id)}
-                                        className="w-full flex items-center gap-3 p-2 rounded hover:bg-[#F4F5F7] transition-colors"
-                                    >
-                                        <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
-                                            {member.username[0].toUpperCase()}
-                                        </div>
-                                        <span className="text-sm text-[#172B4D]">{member.username}</span>
-                                        {selectedTask.assigned_to === member.id && (
-                                            <span className="ml-auto text-[#0079BF]">✓</span>
-                                        )}
-                                    </button>
-                                ))}
+                                {allUsers.map((member) => {
+                                    const isProjectMember = project.members?.includes(member.id);
+                                    const isAssigned = selectedTask?.assigned_to === member.id;
+
+                                    return (
+                                        <button
+                                            key={member.id}
+                                            onClick={() => handleAssignMember(member.id)}
+                                            className="w-full flex items-center gap-3 p-2 rounded hover:bg-[#F4F5F7] transition-colors"
+                                        >
+                                            <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
+                                                {member.username[0].toUpperCase()}
+                                            </div>
+                                            <div className="flex-1 text-left">
+                                                <p className="text-sm text-[#172B4D]">{member.username}</p>
+                                                {isProjectMember && !selectedTask && <p className="text-[10px] text-[#00875A] font-bold uppercase">Member</p>}
+                                            </div>
+                                            {(isAssigned || (isProjectMember && !selectedTask)) && (
+                                                <span className="ml-auto text-[#0079BF]">✓</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -2141,34 +2255,46 @@ const ProjectDetails = () => {
                                     <X size={16} className="text-[#5E6C84]" />
                                 </button>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 <div>
-                                    <label className="block text-xs font-semibold text-[#5E6C84] mb-1">Due Date</label>
+                                    <label className="block text-xs font-semibold text-[#5E6C84] mb-1 uppercase tracking-wider">Start Date</label>
                                     <input
                                         type="date"
                                         className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={tempDueDate || selectedTask.due_date || ''}
+                                        value={tempStartDate || (selectedTask.start_date ? selectedTask.start_date.split('T')[0] : '')}
+                                        onChange={(e) => setTempStartDate(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#5E6C84] mb-1 uppercase tracking-wider">Due Date</label>
+                                    <input
+                                        type="date"
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                                        value={tempDueDate || (selectedTask.due_date ? selectedTask.due_date.split('T')[0] : '')}
                                         onChange={(e) => setTempDueDate(e.target.value)}
                                     />
                                 </div>
-                                <button
-                                    onClick={handleUpdateDueDate}
-                                    className="w-full px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-medium"
-                                >
-                                    Save
-                                </button>
-                                {selectedTask.due_date && (
+                                <div className="flex gap-2">
                                     <button
-                                        onClick={() => {
-                                            handleUpdateTask(selectedTask.id, { due_date: null });
-                                            setShowDatesModal(false);
-                                            setTempDueDate('');
-                                        }}
-                                        className="w-full px-4 py-2 bg-[#EBECF0] text-[#172B4D] rounded hover:bg-[#DFE1E6] transition-colors text-sm font-medium"
+                                        onClick={handleUpdateDates}
+                                        className="flex-1 px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-bold"
                                     >
-                                        Remove
+                                        Save Dates
                                     </button>
-                                )}
+                                    {(selectedTask.due_date || selectedTask.start_date) && (
+                                        <button
+                                            onClick={() => {
+                                                handleUpdateTask(selectedTask.id, { due_date: null, start_date: null });
+                                                setShowDatesModal(false);
+                                                setTempDueDate('');
+                                                setTempStartDate('');
+                                            }}
+                                            className="px-4 py-2 bg-[#EBECF0] text-[#172B4D] rounded hover:bg-[#FFEBE6] hover:text-[#BF2600] transition-colors text-sm font-bold"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2439,6 +2565,19 @@ const ProjectDetails = () => {
                                         onChange={e => setNewDeliverable({ ...newDeliverable, name: e.target.value })}
                                         placeholder="e.g. API Documentation"
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Link to Milestone</label>
+                                    <select
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] appearance-none bg-white"
+                                        value={newDeliverable.milestone || ''}
+                                        onChange={e => setNewDeliverable({ ...newDeliverable, milestone: e.target.value })}
+                                    >
+                                        <option value="">No Milestone</option>
+                                        {project.milestones?.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Due Date</label>

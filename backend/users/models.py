@@ -22,8 +22,18 @@ class Role(models.Model):
     def __str__(self):
         return self.name
 
+class Enterprise(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    domain = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    enterprise = models.ForeignKey(Enterprise, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     # Role is now a ForeignKey. We make it nullable temporarily for migration, 
     # but in practice every user should have a role.
     class Department(models.TextChoices):
@@ -57,6 +67,7 @@ class User(AbstractUser):
 
 class Team(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    enterprise = models.ForeignKey(Enterprise, on_delete=models.CASCADE, related_name='teams', null=True, blank=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     members = models.ManyToManyField(User, related_name='teams_membership')
