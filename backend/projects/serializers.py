@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import (
     Project, Task, Tag, Milestone, ProjectCategory, 
-    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint
+    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
+    Release, SprintRetrospective, SprintCapacity, TaskHistory
 )
 from users.serializers import UserSerializer
 
@@ -65,6 +66,23 @@ class SprintSerializer(serializers.ModelSerializer):
 
     def get_completed_tasks(self, obj):
         return obj.tasks.filter(status='DONE').count()
+
+class ReleaseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Release
+        fields = '__all__'
+
+class SprintRetrospectiveSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SprintRetrospective
+        fields = '__all__'
+
+class SprintCapacitySerializer(serializers.ModelSerializer):
+    user_details = UserSerializer(source='user', read_only=True)
+    class Meta:
+        model = SprintCapacity
+        fields = '__all__'
+
 
 class MilestoneSerializer(serializers.ModelSerializer):
     task_count = serializers.IntegerField(source='tasks.count', read_only=True)

@@ -4,7 +4,7 @@ from .views import (
     ProjectViewSet, TaskViewSet, TagViewSet, MilestoneViewSet,
     ProjectCategoryViewSet, PortfolioViewSet, ProgramViewSet,
     ProjectGoalViewSet, DeliverableViewSet, ProjectStatusViewSet,
-    SprintViewSet
+    SprintViewSet, ReleaseViewSet, SprintRetrospectiveViewSet, SprintCapacityViewSet
 )
 
 router = DefaultRouter()
@@ -19,6 +19,10 @@ router.register(r'goals', ProjectGoalViewSet)
 router.register(r'deliverables', DeliverableViewSet)
 router.register(r'statuses', ProjectStatusViewSet)
 router.register(r'sprints', SprintViewSet)
+router.register(r'releases', ReleaseViewSet)
+router.register(r'retrospectives', SprintRetrospectiveViewSet)
+router.register(r'capacities', SprintCapacityViewSet)
+
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -8,6 +8,10 @@ from django.core.mail import send_mail
 # Existing views...
 # ... (RegisterView, UserProfileView, UserListView)
 
+class LoginView(TokenObtainPairView):
+    permission_classes = (permissions.AllowAny,)
+    authentication_classes = ()
+
 class TeamViewSet(viewsets.ModelViewSet):
     queryset = Team.objects.all()
     serializer_class = TeamSerializer
@@ -50,6 +54,7 @@ class TeamInviteViewSet(viewsets.ModelViewSet):
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (permissions.AllowAny,)
+    authentication_classes = ()
     serializer_class = RegisterSerializer
 
     def get(self, request, *args, **kwargs):

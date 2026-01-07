@@ -3,13 +3,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import (
     Project, Task, Tag, Milestone, ProjectCategory,
-    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint
+    Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
+    Release, SprintRetrospective, SprintCapacity, TaskHistory
 )
 from .serializers import (
     ProjectSerializer, TaskSerializer, TagSerializer, MilestoneSerializer,
     ProjectCategorySerializer, PortfolioSerializer, ProgramSerializer,
     ProjectGoalSerializer, DeliverableSerializer, ProjectStatusSerializer,
-    SprintSerializer
+    SprintSerializer, ReleaseSerializer, SprintRetrospectiveSerializer,
+    SprintCapacitySerializer
 )
 
 class ProjectCategoryViewSet(viewsets.ModelViewSet):
@@ -92,9 +94,15 @@ class SprintViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         project_id = self.request.query_params.get('project_id')
+        user = self.request.user
+        qs = Sprint.objects.all()
+        
+        if user.enterprise:
+            qs = qs.filter(project__team__enterprise=user.enterprise)
+            
         if project_id:
-            return Sprint.objects.filter(project_id=project_id)
-        return Sprint.objects.all()
+            return qs.filter(project_id=project_id)
+        return qs
 
     @action(detail=True, methods=['post'])
     def start_sprint(self, request, pk=None):
@@ -121,8 +129,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.role and user.role.name == 'ADMIN':
             return Project.objects.all()
+            
         from django.db.models import Q
-        return Project.objects.filter(
+        base_query = Project.objects.all()
+        
+        # Filter by Enterprise if user belongs to one
+        if user.enterprise:
+            return base_query.filter(
+                Q(team__enterprise=user.enterprise) | Q(members=user) | Q(created_by=user)
+            ).distinct()
+            
+        return base_query.filter(
             Q(members=user) | Q(team__members=user) | Q(created_by=user)
         ).distinct()
 
@@ -192,9 +209,15 @@ class MilestoneViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         project_id = self.request.query_params.get('project_id')
+        user = self.request.user
+        qs = Milestone.objects.all()
+        
+        if user.enterprise:
+            qs = qs.filter(project__team__enterprise=user.enterprise)
+            
         if project_id:
-            return Milestone.objects.filter(project_id=project_id)
-        return Milestone.objects.filter(project__members=self.request.user)
+            return qs.filter(project_id=project_id)
+        return qs.filter(project__members=user)
 
 class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
@@ -205,9 +228,16 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         project_id = self.request.query_params.get('project_id')
+        user = self.request.user
+        
+        qs = Task.objects.all()
+        if user.enterprise:
+            qs = qs.filter(project__team__enterprise=user.enterprise)
+            
         if project_id:
-            return Task.objects.filter(project_id=project_id)
-        return Task.objects.all()
+            return qs.filter(project_id=project_id)
+        return qs
+
 
     @action(detail=True, methods=['post'])
     def toggle_watch(self, request, pk=None):
@@ -298,3 +328,35 @@ class TaskViewSet(viewsets.ModelViewSet):
             queryset.update(status=value)
             
         return Response({'status': 'Bulk operation successful'})
+
+class ReleaseViewSet(viewsets.ModelViewSet):
+    queryset = Release.objects.all()
+    serializer_class = ReleaseSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        project_id = self.request.query_params.get('project_id')
+        user = self.request.user
+        qs = Release.objects.all()
+        if user.enterprise:
+            qs = qs.filter(project__team__enterprise=user.enterprise)
+        if project_id:
+            return qs.filter(project_id=project_id)
+        return qs
+
+class SprintRetrospectiveViewSet(viewsets.ModelViewSet):
+    queryset = SprintRetrospective.objects.all()
+    serializer_class = SprintRetrospectiveSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class SprintCapacityViewSet(viewsets.ModelViewSet):
+    queryset = SprintCapacity.objects.all()
+    serializer_class = SprintCapacitySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        sprint_id = self.request.query_params.get('sprint_id')
+        if sprint_id:
+            return SprintCapacity.objects.filter(sprint_id=sprint_id)
+        return SprintCapacity.objects.all()
+

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Plus, Star, MoreHorizontal, X, Users, Share2, Clock, MessageSquare,
-    Paperclip, Tag, ChevronDown, List, Calendar as CalendarIcon, Layout, GitMerge, CheckSquare, Trash2,
-    Flag, Target, TrendingUp, Shield, HelpCircle, AlertCircle,
+    Paperclip, Tag, ChevronDown, ChevronRight, ChevronUp, List, Calendar as CalendarIcon, Layout, GitMerge, CheckSquare, Trash2,
+    Flag, Target, TrendingUp, Shield, HelpCircle, AlertCircle, Package, BarChart,
     Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check
 } from 'lucide-react';
 import api from '../services/api';
@@ -63,8 +63,19 @@ const ProjectDetails = () => {
     const [dependencySearch, setDependencySearch] = useState('');
     const [isRoadmapModalOpen, setIsRoadmapModalOpen] = useState(false);
     const [newMilestone, setNewMilestone] = useState({ name: '', due_date: '', description: '' });
-
-    const [activeListMenu, setActiveListMenu] = useState(null);
+    const [releases, setReleases] = useState([]);
+    const [showReleaseModal, setShowReleaseModal] = useState(false);
+    const [newRelease, setNewRelease] = useState({ name: '', version: '', release_date: '', description: '' });
+    const [retrospectives, setRetrospectives] = useState([]);
+    const [capacities, setCapacities] = useState([]);
+    const [showRetroModal, setShowRetroModal] = useState(false);
+    const [activeSprintForRetro, setActiveSprintForRetro] = useState(null);
+    const [newRetro, setNewRetro] = useState({ what_went_well: '', what_could_be_improved: '', action_items: '' });
+    const [selectedRetroSprint, setSelectedRetroSprint] = useState(null);
+    const [selectedReportSprint, setSelectedReportSprint] = useState(null);
+    const [reportType, setReportType] = useState('BURNDOWN');
+    const [showCapacityModal, setShowCapacityModal] = useState(false);
+    const [memberCapacities, setMemberCapacities] = useState({});
     const [activeCardMenu, setActiveCardMenu] = useState(null);
     const [shareEmail, setShareEmail] = useState('');
     const [showBackgroundModal, setShowBackgroundModal] = useState(false);
@@ -84,16 +95,21 @@ const ProjectDetails = () => {
 
     const fetchProjectDetails = async () => {
         try {
-            const [projectRes, tasksRes, userRes, sprintRes] = await Promise.all([
+            const [projectRes, tasksRes, userRes, sprintRes, releaseRes, retrosRes] = await Promise.all([
                 api.get(`/projects/projects/${id}/`),
                 api.get(`/projects/tasks/?project_id=${id}`),
                 api.get('/users/list/'),
-                api.get(`/projects/sprints/?project_id=${id}`)
+                api.get(`/projects/sprints/?project_id=${id}`),
+                api.get(`/projects/releases/?project_id=${id}`),
+                api.get('/projects/retrospectives/')
             ]);
             setProject(projectRes.data);
             setTasks(tasksRes.data);
             setAllUsers(userRes.data);
             setSprints(sprintRes.data);
+            setReleases(releaseRes.data);
+            setRetrospectives(retrosRes.data);
+
         } catch (error) { console.error(error); }
     };
 
@@ -433,6 +449,24 @@ const ProjectDetails = () => {
         } catch (error) { alert('Failed to create milestone'); }
     };
 
+    const handleCreateRelease = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post('/projects/releases/', { ...newRelease, project: id });
+            setNewRelease({ name: '', version: '', release_date: '', description: '' });
+            setShowReleaseModal(false);
+            fetchProjectDetails();
+        } catch (error) { alert('Failed to create release'); }
+    };
+
+    const handleToggleRelease = async (releaseId, currentStatus) => {
+        try {
+            await api.patch(`/projects/releases/${releaseId}/`, { is_released: !currentStatus });
+            fetchProjectDetails();
+        } catch (error) { }
+    };
+
+
     // More Menu Actions
     const copyBoardLink = () => {
         const link = window.location.href;
@@ -576,7 +610,21 @@ const ProjectDetails = () => {
             });
             setNewStatusName('');
             fetchProjectDetails();
-        } catch (error) { showToast("Failed to create status", "error"); }
+        } catch (error) {
+            showToast("Failed to create status", "error");
+        }
+    };
+
+    const handleCreateRetro = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post('/projects/retrospectives/', { ...newRetro, sprint: activeSprintForRetro.id });
+            setNewRetro({ what_went_well: '', what_could_be_improved: '', action_items: '' });
+            setShowRetroModal(false);
+            fetchProjectDetails();
+        } catch (error) {
+            showToast("Failed to save retrospective", "error");
+        }
     };
 
     const handleCreateSprint = async () => {
@@ -587,6 +635,18 @@ const ProjectDetails = () => {
             setShowSprintModal(false);
             fetchProjectDetails();
         } catch (error) { showToast("Failed to create sprint", "error"); }
+    };
+
+    const handleUpdateCapacity = async (memberId, hours) => {
+        try {
+            await api.post('/projects/capacities/', {
+                project: id,
+                user: memberId,
+                capacity_hours: hours,
+                sprint: sprints.find(s => s.status === 'ACTIVE')?.id
+            });
+            fetchProjectDetails();
+        } catch (error) { showToast("Failed to update capacity", "error"); }
     };
 
     const handleDeleteStatus = async (statusId) => {
@@ -834,6 +894,16 @@ const ProjectDetails = () => {
                     </div>
                     <div className="h-4 w-[1px] bg-[#DFE1E6] mx-2 shrink-0" />
                     <div className="flex items-center shrink-0">
+                        <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider px-2 self-center">Agile:</span>
+                        <button onClick={() => setViewMode('releases')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'releases' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
+                            Releases
+                        </button>
+                        <button onClick={() => setViewMode('reports')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'reports' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
+                            Agile Reports
+                        </button>
+                    </div>
+                    <div className="h-4 w-[1px] bg-[#DFE1E6] mx-2 shrink-0" />
+                    <div className="flex items-center shrink-0">
                         <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider px-2 self-center">Reports:</span>
                         <button onClick={() => setViewMode('workload')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'workload' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
                             Workload
@@ -1059,1722 +1129,2085 @@ const ProjectDetails = () => {
                             </div>
 
                             {/* Sprints List */}
-                            {sprints.map(sprint => (
-                                <div key={sprint.id} className="border-b border-[#DFE1E6] bg-white">
-                                    <div className="bg-[#F4F5F7] px-4 py-2 flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <ChevronRight size={14} className="text-[#5E6C84]" />
-                                            <span className="text-xs font-bold text-[#172B4D]">{sprint.name}</span>
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${sprint.status === 'ACTIVE' ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#EBECF0] text-[#42526E]'}`}>
-                                                {sprint.status}
-                                            </span>
-                                            <span className="text-[10px] text-[#5E6C84]">{sprint.tasks?.length || 0} tasks</span>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-[10px] text-[#5E6C84]">{new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}</span>
-                                            {sprint.status === 'PLANNED' && (
-                                                <button onClick={async () => {
-                                                    await api.post(`/projects/sprints/${sprint.id}/start_sprint/`);
-                                                    fetchProjectDetails();
-                                                }} className="px-2 py-0.5 bg-[#0052CC] text-white text-[10px] font-bold rounded-sm hover:bg-[#0747A6]">
-                                                    Start sprint
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {/* Sprint Tasks can go here... for now just keep simple */}
-                                </div>
-                            ))}
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-[#FAFBFC] sticky top-0 z-10 border-b border-[#DFE1E6]">
-                                        <tr>
-                                            <th className="px-4 py-2 w-10">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedTaskIds.length > 0 && selectedTaskIds.length === rootTasks.length}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setSelectedTaskIds(rootTasks.map(t => t.id));
-                                                            setIsBulkMode(true);
-                                                        } else {
-                                                            setSelectedTaskIds([]);
-                                                            setIsBulkMode(false);
+                                {sprints.filter(s => s.status !== 'COMPLETED').map(sprint => (
+                                    <div key={sprint.id} className="border-b border-[#DFE1E6] bg-white group/sprint">
+                                        <div className="bg-[#F4F5F7] px-4 py-2 flex items-center justify-between sticky top-0 z-20">
+                                            <div className="flex items-center gap-3">
+                                                <ChevronRight size={14} className="text-[#5E6C84] group-hover/sprint:text-[#0052CC]" />
+                                                <span className="text-xs font-bold text-[#172B4D]">{sprint.name}</span>
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${sprint.status === 'ACTIVE' ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#EBECF0] text-[#42526E]'}`}>
+                                                    {sprint.status}
+                                                </span>
+                                                <span className="text-[10px] text-[#5E6C84]">{(tasks.filter(t => t.sprint === sprint.id).length)} issues</span>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-[10px] text-[#5E6C84] font-medium">{new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}</span>
+                                                {sprint.status === 'PLANNED' && (
+                                                    <button onClick={async () => {
+                                                        await api.post(`/projects/sprints/${sprint.id}/start_sprint/`);
+                                                        fetchProjectDetails();
+                                                    }} className="px-3 py-1 bg-[#0052CC] text-white text-[10px] font-bold rounded hover:bg-[#0747A6] transition-colors">
+                                                        Start sprint
+                                                    </button>
+                                                )}
+                                                {sprint.status === 'ACTIVE' && (
+                                                    <button onClick={async () => {
+                                                        if (window.confirm("Complete sprint and move unfinished tasks to backlog?")) {
+                                                            await api.post(`/projects/sprints/${sprint.id}/complete_sprint/`);
+                                                            fetchProjectDetails();
                                                         }
-                                                    }}
-                                                    className="w-4 h-4 rounded border-gray-300 text-[#0052CC]"
-                                                />
-                                            </th>
-                                            <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-12 text-center">T</th>
-                                            <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-24">Key</th>
-                                            <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase">Summary</th>
-                                            <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-32">Status</th>
-                                            <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-32">Priority</th>
-                                            <th className="px-4 py-2 text-[11px] font-bold text-[#5E6C84] uppercase w-24">Assignee</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[#DFE1E6]">
-                                        {rootTasks.map((task) => (
-                                            <tr
-                                                key={task.id}
-                                                onClick={(e) => {
-                                                    if (isBulkMode) {
-                                                        const newSelected = selectedTaskIds.includes(task.id)
-                                                            ? selectedTaskIds.filter(id => id !== task.id)
-                                                            : [...selectedTaskIds, task.id];
-                                                        setSelectedTaskIds(newSelected);
-                                                        if (newSelected.length === 0) setIsBulkMode(false);
-                                                    } else {
-                                                        setSelectedTask(task);
-                                                    }
-                                                }}
-                                                className={`hover:bg-[#F4F5F7] cursor-pointer group transition-colors ${selectedTaskIds.includes(task.id) ? 'bg-[#E6F0FF]' : ''}`}
-                                            >
-                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedTaskIds.includes(task.id)}
-                                                        onChange={() => {
-                                                            setIsBulkMode(true);
-                                                            const newSelected = selectedTaskIds.includes(task.id)
-                                                                ? selectedTaskIds.filter(id => id !== task.id)
-                                                                : [...selectedTaskIds, task.id];
-                                                            setSelectedTaskIds(newSelected);
-                                                            if (newSelected.length === 0) setIsBulkMode(false);
-                                                        }}
-                                                        className="w-4 h-4 rounded border-gray-300 text-[#0052CC]"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-3 flex justify-center">{getIssueTypeIcon(task.issue_type)}</td>
-                                                <td className="px-4 py-3 text-xs font-bold text-[#5E6C84] group-hover:text-[#0052CC]">{project.key || 'TASK'}-{task.id}</td>
-                                                <td className="px-4 py-3 text-sm text-[#172B4D] font-medium flex items-center gap-2">
-                                                    {task.title}
-                                                    {task.story_points > 0 && (
-                                                        <span className="bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full" title="Story Points">
-                                                            {task.story_points}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase ${task.status === 'DONE' ? 'bg-[#E3FCEF] text-[#006644]' :
-                                                        task.status === 'IN_PROGRESS' ? 'bg-[#DEEBFF] text-[#0052CC]' : 'bg-[#EBECF0] text-[#42526E]'
-                                                        }`}>
-                                                        {task.status.replace('_', ' ')}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <div className={`w-2 h-2 rounded-full ${task.priority === 'CRITICAL' ? 'bg-[#E54937]' : task.priority === 'HIGH' ? 'bg-[#E54937]' : 'bg-[#FF9F1A]'}`} />
-                                                        <span className="text-xs text-[#172B4D]">{task.priority}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {task.assigned_to_details ? (
-                                                        <div className="w-6 h-6 rounded-full bg-[#F4F5F7] border border-[#DFE1E6] flex items-center justify-center text-[9px] font-bold text-[#172B4D]">
-                                                            {task.assigned_to_details.username[0].toUpperCase()}
-                                                        </div>
-                                                    ) : <span className="text-xs text-[#5E6C84]">None</span>}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {viewMode === 'calendar' && (
-                    <div className="flex-1 overflow-auto p-6 bg-white">
-                        <CalendarView tasks={tasks} />
-                    </div>
-                )}
-
-                {viewMode === 'timeline' && (
-                    <div className="flex-1 overflow-auto p-6 bg-white">
-                        <GanttChart
-                            tasks={tasks}
-                            onTaskClick={setSelectedTask}
-                            onUpdateTask={handleUpdateTask}
-                        />
-                    </div>
-                )}
-
-                {viewMode === 'workload' && (
-                    <div className="flex-1 p-8 overflow-y-auto">
-                        <div className="max-w-4xl mx-auto space-y-8">
-                            <h2 className="text-2xl font-bold text-[#172B4D]">Resource Workload</h2>
-                            <div className="grid gap-6">
-                                {project.members_details?.map(u => {
-                                    const userTasks = tasks.filter(t => t.assigned_to === u.id);
-                                    const done = userTasks.filter(t => t.status === 'DONE').length;
-                                    const total = userTasks.length;
-                                    const points = userTasks.reduce((acc, t) => acc + (t.story_points || 0), 0);
-
-                                    return (
-                                        <div key={u.id} className="bg-white border border-[#DFE1E6] rounded-sm p-6 shadow-sm">
-                                            <div className="flex items-start justify-between mb-4">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 bg-[#0052CC] text-white rounded-full flex items-center justify-center text-lg font-bold">
-                                                        {u.username[0].toUpperCase()}
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-bold text-[#172B4D]">{u.username}</h3>
-                                                        <p className="text-sm text-[#5E6C84]">{u.email}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-2xl font-bold text-[#172B4D]">{points}</p>
-                                                    <p className="text-[10px] font-bold text-[#5E6C84] uppercase">Story Points</p>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between text-xs font-bold text-[#5E6C84] uppercase">
-                                                    <span>Task Completion</span>
-                                                    <span>{done} / {total} Tasks</span>
-                                                </div>
-                                                <div className="h-2 bg-[#EBECF0] rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-[#61BD4F] transition-all duration-500"
-                                                        style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {viewMode === 'grid' && (
-                    <div className="flex-1 p-6 overflow-y-auto">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {rootTasks.map(task => (
-                                <div key={task.id} onClick={() => setSelectedTask(task)} className="bg-white border border-[#DFE1E6] rounded-sm p-4 hover:shadow-md transition-shadow cursor-pointer">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">{project.key}-{task.id}</span>
-                                        {getIssueTypeIcon(task.issue_type)}
-                                    </div>
-                                    <h3 className="font-bold text-[#172B4D] mb-4 min-h-[40px]">{task.title}</h3>
-                                    <div className="flex items-center justify-between">
-                                        <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase ${task.status === 'DONE' ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
-                                            {task.status}
-                                        </span>
-                                        {task.assigned_to_details && (
-                                            <div className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[10px] font-bold">
-                                                {task.assigned_to_details.username[0].toUpperCase()}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {viewMode === 'roadmap' && (
-                    <div className="flex-1 overflow-y-auto p-8 bg-[#F4F5F7]">
-                        <div className="max-w-5xl mx-auto">
-                            {/* Roadmap Header Summary */}
-                            <div className="bg-white rounded-lg border border-[#DFE1E6] p-8 shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-8 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-[#0052CC]/5 rounded-full -mr-32 -mt-32" />
-                                <div className="relative z-10">
-                                    <h1 className="text-2xl font-bold text-[#172B4D] mb-2">Project Roadmap</h1>
-                                    <p className="text-sm text-[#5E6C84] max-w-md">Strategic milestones and key project outputs. Track progress across all major deliverables and objectives.</p>
-                                </div>
-
-                                <div className="flex items-center gap-12 relative z-10">
-                                    <div className="text-center">
-                                        <div className="text-3xl font-bold text-[#0052CC]">
-                                            {project.milestones?.filter(m => m.is_completed).length || 0} / {project.milestones?.length || 0}
-                                        </div>
-                                        <div className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mt-1">Milestones</div>
-                                    </div>
-                                    <div className="text-center">
-                                        <div className="text-3xl font-bold text-[#00875A]">
-                                            {project.deliverables?.filter(d => d.is_completed).length || 0}
-                                        </div>
-                                        <div className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mt-1">Delivered</div>
-                                    </div>
-                                    <div className="w-32">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-[10px] font-bold text-[#5E6C84]">PROGRESS</span>
-                                            <span className="text-[10px] font-bold text-[#172B4D]">{(project.task_stats?.percentage || 0).toFixed(0)}%</span>
-                                        </div>
-                                        <div className="h-2 bg-[#EBECF0] rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-[#0052CC] transition-all duration-1000"
-                                                style={{ width: `${project.task_stats?.percentage || 0}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                {/* Left: Milestones Timeline */}
-                                <div className="lg:col-span-2 space-y-6">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest flex items-center gap-2">
-                                            <Flag size={14} className="text-[#0052CC]" /> Milestones
-                                        </h3>
-                                        <button onClick={() => setIsRoadmapModalOpen(true)} className="text-xs font-bold text-[#0052CC] hover:underline flex items-center gap-1">
-                                            <Plus size={14} /> New Milestone
-                                        </button>
-                                    </div>
-
-                                    <div className="bg-white rounded-lg border border-[#DFE1E6] overflow-hidden">
-                                        {project.milestones && project.milestones.length > 0 ? (
-                                            <div className="divide-y divide-[#DFE1E6]">
-                                                {project.milestones.map((m) => {
-                                                    const milestoneTasks = tasks.filter(t => t.milestone === m.id);
-                                                    const completedTasks = milestoneTasks.filter(t => t.status === 'DONE').length;
-                                                    const progress = milestoneTasks.length > 0 ? (completedTasks / milestoneTasks.length) * 100 : 0;
-
-                                                    return (
-                                                        <div key={m.id} className="p-6 hover:bg-[#FAFBFC] transition-colors group">
-                                                            <div className="flex justify-between items-start mb-4">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${m.is_completed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
-                                                                        <Flag size={16} />
-                                                                    </div>
-                                                                    <div>
-                                                                        <h4 className="font-bold text-[#172B4D]">{m.name}</h4>
-                                                                        <div className="flex items-center gap-2 mt-0.5">
-                                                                            <CalendarIcon size={12} className="text-[#5E6C84]" />
-                                                                            <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">
-                                                                                {new Date(m.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${m.is_completed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#EBECF0] text-[#5E6C84]'}`}>
-                                                                        {m.is_completed ? 'Completed' : 'Planned'}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            <p className="text-sm text-[#5E6C84] mb-4">{m.description}</p>
-
-                                                            <div className="space-y-1.5">
-                                                                <div className="flex justify-between text-[10px] font-bold text-[#5E6C84]">
-                                                                    <span>OBJECTIVE PROGRESS</span>
-                                                                    <span>{Math.round(progress)}%</span>
-                                                                </div>
-                                                                <div className="h-1.5 bg-[#EBECF0] rounded-full overflow-hidden">
-                                                                    <div
-                                                                        className={`h-full transition-all duration-700 ${progress === 100 ? 'bg-[#00875A]' : 'bg-[#0052CC]'}`}
-                                                                        style={{ width: `${progress}%` }}
-                                                                    />
-                                                                </div>
-                                                                <div className="flex justify-between text-[10px] text-[#5E6C84] pt-1">
-                                                                    <span>{completedTasks} of {milestoneTasks.length} tasks completed</span>
-                                                                    <button onClick={() => {
-                                                                        // Future: Filter tasks list by this milestone
-                                                                        setViewMode('list');
-                                                                    }} className="text-[#0052CC] hover:underline font-bold">View Tasks</button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="p-12 text-center">
-                                                <Flag size={48} className="mx-auto text-[#DFE1E6] mb-4" />
-                                                <p className="text-[#5E6C84]">Setting milestones helps keep the project on track.</p>
-                                                <button onClick={() => setIsRoadmapModalOpen(true)} className="mt-4 px-4 py-2 bg-[#0052CC] text-white rounded font-bold text-sm">Add First Milestone</button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Right: Deliverables & Stats */}
-                                <div className="space-y-6">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest flex items-center gap-2">
-                                            <Package size={14} className="text-[#0052CC]" /> Deliverables
-                                        </h3>
-                                        <button onClick={() => setShowDeliverableModal(true)} className="text-xs font-bold text-[#0052CC] hover:underline flex items-center gap-1">
-                                            <Plus size={14} /> New deliverable
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        {project.deliverables?.map((d) => (
-                                            <div key={d.id} className="bg-white border border-[#DFE1E6] rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${d.is_completed ? 'bg-[#00875A]' : 'bg-[#FF9F1A]'}`} />
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <h4 className="text-sm font-bold text-[#172B4D]">{d.name}</h4>
-                                                    <button
-                                                        onClick={() => handleToggleDeliverable(d.id, d.is_completed)}
-                                                        className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${d.is_completed ? 'bg-[#00875A] border-[#00875A] text-white' : 'border-[#DFE1E6] bg-white group-hover:border-[#0052CC]'}`}
-                                                    >
-                                                        {d.is_completed && <Check size={12} />}
+                                                    }} className="px-3 py-1 bg-[#F4F5F7] border border-[#DFE1E6] text-[#172B4D] text-[10px] font-bold rounded hover:bg-[#EBECF0]">
+                                                        Complete sprint
                                                     </button>
-                                                </div>
-                                                <p className="text-xs text-[#5E6C84] mb-3 line-clamp-2">{d.description}</p>
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#5E6C84] uppercase">
-                                                        <Clock size={10} />
-                                                        {d.due_date ? new Date(d.due_date).toLocaleDateString() : 'TBD'}
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="divide-y divide-[#F4F5F7]">
+                                            {tasks.filter(t => t.sprint === sprint.id).map(task => (
+                                                <div key={task.id} onClick={() => setSelectedTask(task)} className="px-10 py-2 flex items-center justify-between hover:bg-[#FAFBFC] cursor-pointer group/item">
+                                                    <div className="flex items-center gap-3">
+                                                        {getIssueTypeIcon(task.issue_type)}
+                                                        <span className="text-xs text-[#172B4D] group-hover/item:text-[#0052CC] transition-colors">{task.title}</span>
                                                     </div>
+                                                    <div className="flex items-center gap-3">
+                                                        {task.story_points > 0 && <span className="text-[10px] font-bold bg-[#DFE1E6] px-1.5 py-0.5 rounded-full">{task.story_points}</span>}
+                                                        <div className={`w-5 h-5 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[9px] font-bold`}>
+                                                            {task.assigned_to_details?.username?.[0].toUpperCase() || '?'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {tasks.filter(t => t.sprint === sprint.id).length === 0 && (
+                                                <div className="px-10 py-4 text-xs text-[#5E6C84] italic">Drag items here or edit issues to plan this sprint.</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* Backlog (No Sprint) */}
+                                <div className="bg-white">
+                                    <div className="bg-[#EBECF0] px-4 py-2 flex items-center justify-between sticky top-0 z-20">
+                                        <div className="flex items-center gap-3">
+                                            <ChevronDown size={14} className="text-[#5E6C84]" />
+                                            <span className="text-xs font-bold text-[#172B4D]">Backlog</span>
+                                            <span className="text-[10px] text-[#5E6C84]">{tasks.filter(t => !t.sprint).length} issues</span>
+                                        </div>
+                                    </div>
+                                    <div className="divide-y divide-[#F4F5F7]">
+                                        {tasks.filter(t => !t.sprint).map(task => (
+                                            <div key={task.id} onClick={() => setSelectedTask(task)} className="px-10 py-2 flex items-center justify-between hover:bg-[#FAFBFC] cursor-pointer group/item">
+                                                <div className="flex items-center gap-3">
+                                                    {getIssueTypeIcon(task.issue_type)}
+                                                    <span className="text-xs text-[#172B4D] group-hover/item:text-[#0052CC] transition-colors">{task.title}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-[10px] text-[#5E6C84] font-bold">
+                                                    <span className="uppercase">{task.priority}</span>
+                                                    {task.story_points > 0 && <span className="bg-[#DFE1E6] px-1.5 py-0.5 rounded-full">{task.story_points}</span>}
                                                 </div>
                                             </div>
                                         ))}
-                                        {(!project.deliverables || project.deliverables.length === 0) && (
-                                            <div className="bg-[#EBECF0]/30 border-2 border-dashed border-[#DFE1E6] rounded-lg p-8 text-center">
-                                                <p className="text-xs text-[#5E6C84]">Define concrete deliverables to measure project success.</p>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                            </div>
+                        </div >
+                    </div >
+                )}
+                            </div >
+                        </div >
+                    </div >
                 )}
 
-                {viewMode === 'overview' && (
-                    <div className="flex-1 overflow-y-auto p-8 bg-white">
-                        <div className="max-w-6xl">
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                <div className="lg:col-span-2 space-y-8">
-                                    <section>
-                                        <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest mb-4">Project Vitality</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div className="bg-white border border-[#DFE1E6] p-4 rounded-sm shadow-sm">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-[11px] font-bold text-[#5E6C84] uppercase">Health</span>
-                                                    <Activity size={14} className="text-green-500" />
-                                                </div>
-                                                <p className="text-lg font-bold text-[#172B4D]">Healthy</p>
-                                            </div>
-                                            <div className="bg-white border border-[#DFE1E6] p-4 rounded-sm shadow-sm">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-[11px] font-bold text-[#5E6C84] uppercase">Progress</span>
-                                                    <CheckSquare size={14} className="text-[#0052CC]" />
-                                                </div>
-                                                <p className="text-lg font-bold text-[#172B4D]">{(project.task_stats?.percentage || 0).toFixed(0)}%</p>
-                                            </div>
-                                            <div className="bg-white border border-[#DFE1E6] p-4 rounded-sm shadow-sm">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-[11px] font-bold text-[#5E6C84] uppercase">Members</span>
-                                                    <Users size={14} className="text-[#0052CC]" />
-                                                </div>
-                                                <p className="text-lg font-bold text-[#172B4D]">{project.members_details?.length || 0}</p>
-                                            </div>
-                                        </div>
-                                    </section>
+{
+    viewMode === 'calendar' && (
+        <div className="flex-1 overflow-auto p-6 bg-white">
+            <CalendarView tasks={tasks} />
+        </div>
+    )
+}
 
-                                    {/* Goals Section */}
-                                    <section className="bg-white border border-[#DFE1E6] p-6 rounded-sm">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="text-xs font-bold text-[#172B4D] uppercase tracking-widest flex items-center gap-2">
-                                                <Target size={14} /> Goals & Objectives
-                                            </h3>
-                                            <button onClick={() => setShowGoalModal(true)} className="text-[#0052CC] hover:underline text-xs font-bold flex items-center gap-1">
-                                                <Plus size={14} /> Add Goal
-                                            </button>
-                                        </div>
-                                        <div className="space-y-3">
-                                            {project.goals?.map(goal => (
-                                                <div key={goal.id} className="flex items-start gap-3 p-3 bg-[#FAFBFC] rounded border border-[#DFE1E6]">
-                                                    <div
-                                                        onClick={() => handleToggleGoal(goal.id, goal.is_achieved)}
-                                                        className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center cursor-pointer transition-colors ${goal.is_achieved ? 'bg-green-500 border-green-500 text-white' : 'border-[#DFE1E6] bg-white hover:border-[#0052CC]'}`}
-                                                    >
-                                                        {goal.is_achieved && <Check size={10} />}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <h4 className={`text-sm font-bold ${goal.is_achieved ? 'text-[#5E6C84] line-through' : 'text-[#172B4D]'}`}>{goal.title}</h4>
-                                                        <p className="text-xs text-[#5E6C84] mt-1">{goal.description}</p>
-                                                        {goal.target_date && (
-                                                            <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-[#5E6C84] uppercase">
-                                                                <CalendarIcon size={10} /> Target: {new Date(goal.target_date).toLocaleDateString()}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {(!project.goals || project.goals.length === 0) && (
-                                                <div className="text-center py-4 border-2 border-dashed border-[#DFE1E6] rounded">
-                                                    <Target size={20} className="mx-auto text-[#DFE1E6] mb-2" />
-                                                    <p className="text-xs text-[#5E6C84]">Define project goals to align your team.</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </section>
+{
+    viewMode === 'timeline' && (
+        <div className="flex-1 overflow-auto p-6 bg-white">
+            <GanttChart
+                tasks={tasks}
+                onTaskClick={setSelectedTask}
+                onUpdateTask={handleUpdateTask}
+            />
+        </div>
+    )
+}
 
-                                    <section className="bg-white border border-[#DFE1E6] p-6 rounded-sm">
-                                        <div className="flex items-center justify-between mb-6">
-                                            <h3 className="text-xs font-bold text-[#172B4D] uppercase tracking-widest">Sub-projects</h3>
-                                            <button onClick={() => navigate('/projects')} className="text-[#0052CC] hover:underline text-xs font-bold flex items-center gap-1">
-                                                <Plus size={14} /> Create
-                                            </button>
+{
+    viewMode === 'workload' && (
+        <div className="flex-1 p-8 overflow-y-auto">
+            <div className="max-w-4xl mx-auto space-y-8">
+                <h2 className="text-2xl font-bold text-[#172B4D]">Resource Workload</h2>
+                <div className="grid gap-6">
+                    {project.members_details?.map(u => {
+                        const userTasks = tasks.filter(t => t.assigned_to === u.id);
+                        const done = userTasks.filter(t => t.status === 'DONE').length;
+                        const total = userTasks.length;
+                        const points = userTasks.reduce((acc, t) => acc + (t.story_points || 0), 0);
+
+                        return (
+                            <div key={u.id} className="bg-white border border-[#DFE1E6] rounded-sm p-6 shadow-sm">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-[#0052CC] text-white rounded-full flex items-center justify-center text-lg font-bold">
+                                            {u.username[0].toUpperCase()}
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {project.child_projects_details?.map(sub => (
-                                                <div key={sub.id} onClick={() => navigate(`/projects/${sub.id}`)} className="p-3 border border-[#DFE1E6] rounded-sm hover:border-[#0052CC] cursor-pointer group transition-all">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <div className="w-4 h-4 bg-[#0052CC] rounded-[2px]" />
-                                                        <span className="text-sm font-bold text-[#172B4D] group-hover:text-[#0052CC]">{sub.name}</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-[#5E6C84] uppercase font-bold tracking-wider">{sub.key || 'SUB'}</p>
-                                                </div>
-                                            ))}
-                                            {(!project.child_projects_details || project.child_projects_details.length === 0) && (
-                                                <p className="col-span-2 text-xs text-[#5E6C84] italic py-2 text-center border border-dashed border-[#DFE1E6] rounded-sm">No sub-projects created yet.</p>
-                                            )}
+                                        <div>
+                                            <h3 className="font-bold text-[#172B4D]">{u.username}</h3>
+                                            <p className="text-sm text-[#5E6C84]">{u.email}</p>
                                         </div>
-                                    </section>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-bold text-[#172B4D]">{points}</p>
+                                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase">Story Points</p>
+                                    </div>
                                 </div>
-
-                                <div className="space-y-8">
-                                    <section>
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest">Details</h3>
-                                            <button onClick={openSettings} className="p-1 hover:bg-[#F4F5F7] rounded text-[#5E6C84]"><Edit2 size={14} /></button>
-                                        </div>
-                                        <div className="space-y-4 text-sm bg-[#FAFBFC] border border-[#DFE1E6] p-4 rounded-sm">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[#59667E] font-medium">Lead</span>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-5 h-5 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[8px] font-bold">
-                                                        {project.created_by_details?.username?.[0].toUpperCase()}
-                                                    </div>
-                                                    <span className="font-bold text-[#172B4D]">{project.created_by_details?.username}</span>
-                                                </div>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[#59667E] font-medium">Category</span>
-                                                <span className="px-2 py-0.5 bg-[#DFE1E6] text-[#42526E] rounded-sm text-[10px] font-bold uppercase">{project.category_details?.name || 'Software'}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[#59667E] font-medium">Visibility</span>
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-[#403294] uppercase bg-[#EAE6FF] px-2 py-0.5 rounded-sm">
-                                                    <Shield size={10} /> {project.visibility}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </section>
-
-                                    <section>
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest">Dependencies</h3>
-                                            <button onClick={() => showToast('Dependency Management coming soon', 'info')} className="text-[#0052CC] hover:underline text-[11px] font-bold">Manage</button>
-                                        </div>
-                                        <div className="bg-white border border-[#DFE1E6] p-4 rounded-sm shadow-sm space-y-3">
-                                            {project.dependencies_details?.length > 0 ? project.dependencies_details.map(dep => (
-                                                <div key={dep.id} className="flex items-center gap-3 text-sm group cursor-pointer" onClick={() => navigate(`/projects/${dep.id}`)}>
-                                                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                                                    <span className="font-medium text-[#172B4D] group-hover:text-[#0052CC] group-hover:underline truncate">{dep.name}</span>
-                                                </div>
-                                            )) : (
-                                                <div className="text-center py-4">
-                                                    <GitMerge size={24} className="text-[#DFE1E6] mx-auto mb-2 rotate-90" />
-                                                    <p className="text-[11px] text-[#5E6C84] italic">No active dependencies.</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </section>
-
-                                    <section className="bg-gradient-to-br from-[#0052CC] to-[#0747A6] p-4 rounded-sm text-white relative overflow-hidden group">
-                                        <div className="relative z-10">
-                                            <h4 className="font-bold text-sm mb-1">Try Atlas</h4>
-                                            <p className="text-[11px] text-blue-100 mb-3 leading-snug">Connect your project goals with team performance.</p>
-                                            <button className="text-[11px] font-bold bg-white text-[#0052CC] px-3 py-1.5 rounded-sm hover:bg-blue-50 transition-colors">Learn more</button>
-                                        </div>
-                                        <PieChart size={80} className="absolute -right-4 -bottom-4 text-white/10 group-hover:scale-110 transition-transform duration-500" />
-                                    </section>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between text-xs font-bold text-[#5E6C84] uppercase">
+                                        <span>Task Completion</span>
+                                        <span>{done} / {total} Tasks</span>
+                                    </div>
+                                    <div className="h-2 bg-[#EBECF0] rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-[#61BD4F] transition-all duration-500"
+                                            style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
+                                        />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                )}
-            </main>
-
-            {/* Floating Bulk Action Bar */}
-            {selectedTaskIds.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#172B4D] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-4">
-                    <div className="flex items-center gap-2 border-r border-[#42526E] pr-6">
-                        <span className="text-sm font-bold">{selectedTaskIds.length} tasks selected</span>
-                        <button
-                            onClick={() => { setSelectedTaskIds([]); setIsBulkMode(false); }}
-                            className="p-1 hover:bg-[#42526E] rounded text-[#A5ADBA]"
-                        >
-                            <X size={14} />
-                        </button>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-[#A5ADBA] font-bold uppercase tracking-wider">Move to:</span>
-                            <div className="flex gap-1">
-                                {columns.map(col => (
-                                    <button
-                                        key={col.id}
-                                        onClick={() => handleBulkOperation('update_status', col.id)}
-                                        className="px-2 py-1 bg-[#42526E] hover:bg-[#5E6C84] rounded text-[10px] font-bold uppercase transition-colors"
-                                    >
-                                        {col.title}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="w-px h-6 bg-[#42526E]" />
-
-                        <button
-                            onClick={() => handleBulkOperation('archive')}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-[#42526E] hover:bg-amber-600 transition-colors rounded text-xs font-bold"
-                        >
-                            <Layers size={14} /> Archive Selected
-                        </button>
-
-                        <button
-                            onClick={() => {
-                                if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.length} tasks?`)) {
-                                    handleBulkOperation('delete');
-                                }
-                            }}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-[#42526E] hover:bg-red-600 transition-colors rounded text-xs font-bold"
-                        >
-                            <Trash2 size={14} /> Delete
-                        </button>
-                    </div>
+                        );
+                    })}
                 </div>
-            )}
+            </div>
+        </div>
+    )
+}
 
-            {/* Card Detail Modal */}
-            {
-                selectedTask && (
-                    <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-12 overflow-y-auto" onClick={() => setSelectedTask(null)}>
-                        <div className="bg-[#F4F5F7] rounded-lg w-full max-w-3xl mb-12 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            {/* Modal Header */}
-                            <div className="p-6">
-                                <div className="flex items-start gap-3">
-                                    <div className="mt-1">
-                                        <select
-                                            className="bg-transparent border-none outline-none cursor-pointer hover:bg-white rounded p-1 transition-colors"
-                                            value={selectedTask.issue_type}
-                                            onChange={(e) => handleUpdateTask(selectedTask.id, { issue_type: e.target.value })}
-                                        >
-                                            <option value="TASK">Task</option>
-                                            <option value="STORY">User Story</option>
-                                            <option value="BUG">Bug</option>
-                                            <option value="EPIC">Epic</option>
-                                            <option value="FEATURE">Feature Request</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex-1">
-                                        <input
-                                            type="text"
-                                            className="w-full text-xl font-semibold text-[#172B4D] bg-transparent border-none outline-none px-2 -ml-2 py-1 rounded hover:bg-white focus:bg-white"
-                                            value={selectedTask.title}
-                                            onChange={(e) => handleUpdateTask(selectedTask.id, { title: e.target.value })}
-                                        />
-                                        <div className="flex items-center gap-2 mt-1 px-2">
-                                            <span className="text-sm text-[#5E6C84]">in list</span>
-                                            <select
-                                                className="text-sm font-medium text-[#172B4D] bg-transparent underline cursor-pointer outline-none hover:bg-[#EBECF0] rounded px-1"
-                                                value={selectedTask.status}
-                                                onChange={(e) => handleMoveCard(selectedTask.id, e.target.value)}
-                                            >
-                                                {columns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                                            </select>
-                                            <div className="h-4 w-px bg-[#DFE1E6] mx-1" />
-                                            <div className="flex items-center gap-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded px-2 py-0.5 cursor-pointer transition-colors group">
-                                                <TrendingUp size={12} className="text-[#5E6C84]" />
-                                                <input
-                                                    type="number"
-                                                    className="w-8 bg-transparent text-xs font-bold text-[#172B4D] outline-none"
-                                                    value={selectedTask.story_points || 0}
-                                                    onChange={(e) => handleUpdateTask(selectedTask.id, { story_points: parseInt(e.target.value) || 0 })}
-                                                />
-                                                <span className="text-[10px] font-bold text-[#5E6C84] group-hover:block hidden">Points</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => setSelectedTask(null)} className="p-2 hover:bg-[#DFE1E6] rounded transition-colors">
-                                        <X size={20} className="text-[#5E6C84]" />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4 px-6 pb-6">
-                                {/* Main Content */}
-                                <div className="flex-1 space-y-6">
-                                    {/* Labels */}
-                                    {selectedTask.priority && (
-                                        <div>
-                                            <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Labels</h4>
-                                            <div className="flex gap-1">
-                                                <div
-                                                    className="px-3 py-1.5 rounded text-white text-xs font-medium"
-                                                    style={{ backgroundColor: getPriorityColor(selectedTask.priority) }}
-                                                >
-                                                    {selectedTask.priority}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Description */}
-                                    <div>
-                                        <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Description</h4>
-                                        <textarea
-                                            className="w-full min-h-[100px] p-3 bg-white border border-[#DFE1E6] rounded text-sm text-[#172B4D] outline-none hover:border-[#0079BF] focus:border-[#0079BF] resize-none"
-                                            placeholder="Add a more detailed description..."
-                                            value={selectedTask.description || ''}
-                                            onChange={(e) => handleUpdateTask(selectedTask.id, { description: e.target.value })}
-                                        />
-                                    </div>
-
-                                    {/* Subtasks / Checklist */}
-                                    <div>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="text-xs font-semibold text-[#5E6C84] uppercase">Subtasks</h4>
-                                            {selectedTask.subtasks?.length > 0 && (
-                                                <span className="text-xs text-[#5E6C84]">
-                                                    {Math.round((selectedTask.subtasks.filter(t => t.status === 'DONE').length / selectedTask.subtasks.length) * 100)}% Done
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Progress Bar */}
-                                        {selectedTask.subtasks?.length > 0 && (
-                                            <div className="h-2 bg-[#EBECF0] rounded-full mb-3 overflow-hidden">
-                                                <div
-                                                    className="h-full bg-[#0079BF] transition-all duration-300"
-                                                    style={{ width: `${(selectedTask.subtasks.filter(t => t.status === 'DONE').length / selectedTask.subtasks.length) * 100}%` }}
-                                                />
-                                            </div>
-                                        )}
-
-                                        <div className="space-y-2 mb-3">
-                                            {selectedTask.subtasks?.map(sub => (
-                                                <div key={sub.id} className="flex items-center gap-3 p-2 hover:bg-[#F4F5F7] rounded group transition-colors">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={sub.status === 'DONE'}
-                                                        onChange={() => handleToggleSubtaskStatus(sub.id, sub.status)}
-                                                        className="w-4 h-4 rounded border-gray-300 text-[#0079BF] focus:ring-[#0079BF]"
-                                                    />
-                                                    <span className={`flex-1 text-sm ${sub.status === 'DONE' ? 'line-through text-[#5E6C84]' : 'text-[#172B4D]'}`}>
-                                                        {sub.title}
-                                                    </span>
-                                                    <button onClick={() => handleDeleteCard(sub.id)} className="opacity-0 group-hover:opacity-100 text-[#5E6C84] hover:text-red-600 transition-opacity">
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {showSubtaskInput ? (
-                                            <div className="mb-2">
-                                                <input
-                                                    autoFocus
-                                                    type="text"
-                                                    className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                                    placeholder="Enter subtask title..."
-                                                    value={newSubtaskTitle}
-                                                    onChange={e => setNewSubtaskTitle(e.target.value)}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter') handleAddSubtask();
-                                                        if (e.key === 'Escape') setShowSubtaskInput(false);
-                                                    }}
-                                                />
-                                                <div className="flex gap-2 mt-2">
-                                                    <button onClick={handleAddSubtask} className="px-3 py-1.5 bg-[#0079BF] text-white rounded text-xs font-bold hover:bg-[#026AA7]">Add</button>
-                                                    <button onClick={() => setShowSubtaskInput(false)} className="px-3 py-1.5 text-[#172B4D] hover:bg-[#EBECF0] rounded text-xs font-bold">Cancel</button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                onClick={() => setShowSubtaskInput(true)}
-                                                className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded text-sm font-medium transition-colors"
-                                            >
-                                                Add an item
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Dependencies */}
-                                    <div>
-                                        <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Dependencies</h4>
-                                        <div className="space-y-2 mb-3">
-                                            {selectedTask.dependencies_details?.map(dep => (
-                                                <div key={dep.id} className="flex items-center gap-3 p-2 bg-white border border-[#DFE1E6] rounded text-sm group hover:border-[#EB5A46] transition-colors">
-                                                    <GitMerge size={14} className="text-[#EB5A46]" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-medium text-[#172B4D] truncate">{dep.title}</p>
-                                                        <p className="text-[10px] text-[#5E6C84] uppercase">{dep.status.replace('_', ' ')}</p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => handleRemoveDependency(dep.id)}
-                                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-[#5E6C84] hover:text-[#EB5A46] rounded transition-all"
-                                                    >
-                                                        <X size={14} />
-                                                    </button>
-                                                </div>
-                                            ))}
-
-                                            {selectedTask.dependents_details?.length > 0 && (
-                                                <div className="pt-2">
-                                                    <p className="text-[10px] font-bold text-[#5E6C84] uppercase mb-2 italic">Blocking these tasks:</p>
-                                                    {selectedTask.dependents_details.map(dep => (
-                                                        <div key={dep.id} className="flex items-center gap-2 p-1.5 opacity-70">
-                                                            <GitMerge size={12} className="text-[#61BD4F] rotate-180" />
-                                                            <span className="text-xs text-[#172B4D] truncate">{dep.title}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {showDependencyInput ? (
-                                            <div className="bg-white border border-[#DFE1E6] rounded p-2 animate-in fade-in slide-in-from-top-1">
-                                                <input
-                                                    autoFocus
-                                                    type="text"
-                                                    className="w-full px-3 py-1.5 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] mb-2"
-                                                    placeholder="Search tasks in this board..."
-                                                    value={dependencySearch}
-                                                    onChange={e => setDependencySearch(e.target.value)}
-                                                />
-                                                <div className="max-h-32 overflow-y-auto mb-2 custom-scrollbar">
-                                                    {tasks
-                                                        .filter(t =>
-                                                            t.id !== selectedTask.id &&
-                                                            !selectedTask.dependencies?.includes(t.id) &&
-                                                            t.title.toLowerCase().includes(dependencySearch.toLowerCase())
-                                                        )
-                                                        .map(t => (
-                                                            <button
-                                                                key={t.id}
-                                                                onClick={() => handleAddDependency(t.id)}
-                                                                className="w-full text-left px-2 py-1.5 text-xs text-[#172B4D] hover:bg-[#F4F5F7] rounded flex items-center justify-between"
-                                                            >
-                                                                <span className="truncate">{t.title}</span>
-                                                                <span className="text-[10px] text-[#5E6C84] uppercase shrink-0 ml-2">{t.status}</span>
-                                                            </button>
-                                                        ))}
-                                                </div>
-                                                <button onClick={() => setShowDependencyInput(false)} className="text-xs text-[#5E6C84] hover:underline">Cancel</button>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                onClick={() => setShowDependencyInput(true)}
-                                                className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded text-sm font-medium transition-colors flex items-center gap-2"
-                                            >
-                                                <Plus size={14} /> Add dependency
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Activity */}
-                                    <div>
-                                        <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-3">Activity</h4>
-                                        <div className="flex gap-2 mb-3">
-                                            <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
-                                                {user.username[0].toUpperCase()}
-                                            </div>
-                                            <input
-                                                type="text"
-                                                placeholder="Write a comment..."
-                                                className="flex-1 px-3 py-2 bg-white border border-[#DFE1E6] rounded text-sm outline-none hover:border-[#0079BF] focus:border-[#0079BF]"
-                                                value={newComment}
-                                                onChange={(e) => setNewComment(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
-                                            />
-                                        </div>
-                                        <div className="space-y-4">
-                                            {[...comments.map(c => ({ ...c, type: 'comment' })), ...auditLogs.map(a => ({ ...a, type: 'audit', created_at: a.timestamp }))]
-                                                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                                                .map((item, i) => (
-                                                    <div key={i} className="flex gap-2">
-                                                        <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
-                                                            {item.user_details?.username[0].toUpperCase() || 'S'}
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <span className="text-sm font-semibold text-[#172B4D]">{item.user_details?.username || 'System'}</span>
-                                                                <span className="text-xs text-[#5E6C84]">
-                                                                    {new Date(item.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                                                                </span>
-                                                            </div>
-                                                            {item.type === 'comment' ? (
-                                                                <div className="bg-white p-2 rounded text-sm text-[#172B4D] border border-[#DFE1E6]">{item.text}</div>
-                                                            ) : (
-                                                                <div className="text-xs text-[#5E6C84]">
-                                                                    <span className="font-bold">{item.action.replace('_', ' ')}:</span>
-                                                                    <ul className="mt-1 space-y-1">
-                                                                        {Object.entries(item.details || {}).map(([field, delta]) => (
-                                                                            <li key={field}>
-                                                                                Changed <span className="font-medium text-[#172B4D]">{field}</span> from <span className="italic">"{delta.old}"</span> to <span className="italic">"{delta.new}"</span>
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Sidebar */}
-                                <div className="w-44 space-y-2 shrink-0">
-                                    <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Actions</p>
-                                    <button
-                                        onClick={async () => {
-                                            try {
-                                                await api.post(`/projects/tasks/${selectedTask.id}/toggle_watch/`);
-                                                fetchProjectDetails();
-                                            } catch (e) { }
-                                        }}
-                                        className={`w-full text-left px-3 py-2 ${selectedTask.is_watching ? 'bg-[#EAE6FF] text-[#403294]' : 'bg-[#EBECF0] text-[#172B4D]'} hover:opacity-80 rounded text-sm font-medium flex items-center gap-2 transition-all`}
-                                    >
-                                        <Star size={14} className={selectedTask.is_watching ? 'fill-[#403294]' : ''} />
-                                        {selectedTask.is_watching ? 'Watching' : 'Watch'}
-                                    </button>
-                                    <div className="h-4" />
-                                    <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Add to card</p>
-                                    <button
-                                        onClick={() => setShowMembersModal(true)}
-                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
-                                    >
-                                        <Users size={14} /> Members
-                                    </button>
-                                    <button
-                                        onClick={() => setShowLabelsModal(true)}
-                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
-                                    >
-                                        <Tag size={14} /> Labels
-                                    </button>
-                                    <button
-                                        onClick={() => setShowDatesModal(true)}
-                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
-                                    >
-                                        <Clock size={14} /> Dates
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteCard(selectedTask.id)}
-                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#EB5A46] hover:text-white rounded text-sm font-medium text-[#172B4D] flex items-center gap-2 transition-colors mt-4"
-                                    >
-                                        <X size={14} /> Delete Card
-                                    </button>
-                                    <button
-                                        onClick={() => setShowAttachmentModal(true)}
-                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
-                                    >
-                                        <Paperclip size={14} /> Attachment
-                                    </button>
-                                    <button
-                                        onClick={() => setShowSubtaskInput(true)}
-                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
-                                    >
-                                        <CheckSquare size={14} /> Checklist
-                                    </button>
-
-                                    <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-4">Milestone</p>
-                                    <select
-                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] outline-none appearance-none cursor-pointer"
-                                        value={selectedTask.milestone || ''}
-                                        onChange={(e) => handleUpdateTask(selectedTask.id, { milestone: e.target.value || null })}
-                                    >
-                                        <option value="">No Milestone</option>
-                                        {project.milestones?.map(m => (
-                                            <option key={m.id} value={m.id}>{m.name}</option>
-                                        ))}
-                                    </select>
-
-                                    <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-4">Recurrence</p>
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2 px-3 py-1 bg-[#EBECF0] rounded text-sm mb-1">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedTask.is_recurring}
-                                                onChange={(e) => handleUpdateTask(selectedTask.id, { is_recurring: e.target.checked })}
-                                                className="w-3 h-3 rounded border-gray-300 text-[#0079BF]"
-                                            />
-                                            <span className="text-[#172B4D] text-xs font-medium">Auto-repeat</span>
-                                        </div>
-                                        {selectedTask.is_recurring && (
-                                            <select
-                                                className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] outline-none appearance-none cursor-pointer"
-                                                value={selectedTask.recurrence_rule || ''}
-                                                onChange={(e) => handleUpdateTask(selectedTask.id, { recurrence_rule: e.target.value })}
-                                            >
-                                                <option value="">Select frequency...</option>
-                                                <option value="DAILY">Daily</option>
-                                                <option value="WEEKLY">Weekly</option>
-                                                <option value="MONTHLY">Monthly</option>
-                                            </select>
-                                        )}
-                                    </div>
-
-                                    <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-2">Actions</p>
-                                    {activeTimer?.task === selectedTask.id && (
-                                        <div className="bg-blue-50 p-3 rounded border border-blue-100 flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full bg-[#0079BF] animate-pulse" />
-                                                <span className="text-xs font-bold text-[#0079BF] uppercase">Timer Running</span>
-                                            </div>
-                                            <span className="text-lg font-mono font-bold text-[#0079BF]">{formatTime(elapsedTime)}</span>
-                                        </div>
-                                    )}
-                                    {activeTimer?.task === selectedTask.id ? (
-                                        <button
-                                            onClick={stopTimer}
-                                            className="w-full text-left px-3 py-2 bg-[#EB5A46] hover:bg-[#CF513D] text-white rounded text-sm font-medium flex items-center gap-2"
-                                        >
-                                            <Clock size={14} /> Stop Timer
-                                        </button>
-                                    ) : (
-                                        <button
-                                            onClick={() => startTimer(selectedTask.id)}
-                                            className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
-                                        >
-                                            <Clock size={14} /> Start Timer
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
+{
+    viewMode === 'grid' && (
+        <div className="flex-1 p-6 overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {rootTasks.map(task => (
+                    <div key={task.id} onClick={() => setSelectedTask(task)} className="bg-white border border-[#DFE1E6] rounded-sm p-4 hover:shadow-md transition-shadow cursor-pointer">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">{project.key}-{task.id}</span>
+                            {getIssueTypeIcon(task.issue_type)}
                         </div>
-                    </div>
-                )
-            }
-
-            {/* Share Modal (Redesigned) */}
-            {
-                showShareModal && (
-                    <div className="fixed inset-0 z-50 bg-[#091E42]/50 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowShareModal(false)}>
-                        <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-in" onClick={(e) => e.stopPropagation()}>
-                            <div className="bg-gradient-to-r from-[#0079BF] to-[#026AA7] p-6 text-white">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-xl font-bold flex items-center gap-2"><Share2 size={20} /> Share Board</h3>
-                                    <button onClick={() => setShowShareModal(false)} className="p-1 hover:bg-white/20 rounded-full transition-colors"><X size={20} /></button>
-                                </div>
-                                <p className="text-blue-100 text-sm">Collaborate with your team on <strong>{project.name}</strong></p>
-                            </div>
-
-                            <div className="p-6">
-                                <form onSubmit={handleShareBoard} className="flex gap-2 mb-6">
-                                    <input
-                                        type="email"
-                                        placeholder="Enter email address"
-                                        className="flex-1 px-4 py-2 border-2 border-[#DFE1E6] rounded-lg text-sm outline-none focus:border-[#0079BF] transition-colors"
-                                        value={shareEmail}
-                                        onChange={(e) => setShareEmail(e.target.value)}
-                                        required
-                                    />
-                                    <button
-                                        type="submit"
-                                        className="px-6 py-2 bg-[#0079BF] text-white rounded-lg hover:bg-[#026AA7] transition-colors text-sm font-bold shadow-md hover:shadow-lg"
-                                    >
-                                        Invite
-                                    </button>
-                                </form>
-
-                                <div className="flex items-center justify-between p-4 bg-[#F4F5F7] rounded-lg mb-6 border border-[#DFE1E6]">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-white rounded-full shadow-sm">
-                                            <Share2 size={16} className="text-[#0079BF]" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-[#5E6C84] uppercase">Public Link</p>
-                                            <p className="text-sm text-[#172B4D] font-medium truncate max-w-[200px]">{window.location.href}</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={copyShareLink} className="text-[#0079BF] text-sm font-bold hover:underline">
-                                        Copy Link
-                                    </button>
-                                </div>
-
-                                <div>
-                                    <h4 className="text-xs font-bold text-[#5E6C84] uppercase mb-4">Board Members</h4>
-                                    <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                                        {project.members_details?.map((member, i) => (
-                                            <div key={i} className="flex items-center gap-3 p-2 hover:bg-[#F4F5F7] rounded-lg transition-colors group">
-                                                <div className="w-10 h-10 rounded-full bg-[#DFE1E6] flex items-center justify-center text-sm font-bold text-[#172B4D] group-hover:bg-white group-hover:shadow-sm transition-all border-2 border-white">
-                                                    {member.username[0].toUpperCase()}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-bold text-[#172B4D]">{member.username}</p>
-                                                    <p className="text-xs text-[#5E6C84]">{member.email}</p>
-                                                </div>
-                                                <span className="px-2 py-1 bg-[#EBECF0] text-xs font-bold text-[#5E6C84] rounded">{member.role || 'Member'}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Milestone Modal */}
-            {
-                isRoadmapModalOpen && (
-                    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
-                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
-                                <h3 className="font-bold text-[#172B4D]">New Milestone</h3>
-                                <button onClick={() => setIsRoadmapModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
-                            </div>
-                            <form onSubmit={handleCreateMilestone} className="p-4 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Title</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={newMilestone.name}
-                                        onChange={e => setNewMilestone({ ...newMilestone, name: e.target.value })}
-                                        placeholder="e.g. Beta Launch"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Due Date</label>
-                                    <input
-                                        required
-                                        type="date"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={newMilestone.due_date}
-                                        onChange={e => setNewMilestone({ ...newMilestone, due_date: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
-                                    <textarea
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] min-h-[100px]"
-                                        value={newMilestone.description}
-                                        onChange={e => setNewMilestone({ ...newMilestone, description: e.target.value })}
-                                        placeholder="What does this milestone achieve?"
-                                    />
-                                </div>
-                                <div className="pt-2">
-                                    <button type="submit" className="w-full py-2 bg-[#0079BF] text-white font-bold rounded hover:bg-[#026AA7] transition-colors">
-                                        Create Milestone
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Members Modal */}
-            {
-                showMembersModal && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowMembersModal(false)}>
-                        <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Members</h3>
-                                <button onClick={() => setShowMembersModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
-                                    <X size={16} className="text-[#5E6C84]" />
-                                </button>
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Search members"
-                                className="w-full px-3 py-2 mb-3 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                            />
-                            <div className="space-y-1 max-h-64 overflow-y-auto">
-                                {allUsers.map((member) => {
-                                    const isProjectMember = project.members?.includes(member.id);
-                                    const isAssigned = selectedTask?.assigned_to === member.id;
-
-                                    return (
-                                        <button
-                                            key={member.id}
-                                            onClick={() => handleAssignMember(member.id)}
-                                            className="w-full flex items-center gap-3 p-2 rounded hover:bg-[#F4F5F7] transition-colors"
-                                        >
-                                            <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
-                                                {member.username[0].toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <p className="text-sm text-[#172B4D]">{member.username}</p>
-                                                {isProjectMember && !selectedTask && <p className="text-[10px] text-[#00875A] font-bold uppercase">Member</p>}
-                                            </div>
-                                            {(isAssigned || (isProjectMember && !selectedTask)) && (
-                                                <span className="ml-auto text-[#0079BF]">✓</span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Labels Modal */}
-            {
-                showLabelsModal && selectedTask && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowLabelsModal(false)}>
-                        <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Labels</h3>
-                                <button onClick={() => setShowLabelsModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
-                                    <X size={16} className="text-[#5E6C84]" />
-                                </button>
-                            </div>
-                            <div className="space-y-2">
-                                {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((priority) => (
-                                    <button
-                                        key={priority}
-                                        onClick={() => handleUpdatePriority(priority)}
-                                        className="w-full flex items-center gap-3 p-3 rounded hover:opacity-90 transition-opacity text-white font-medium"
-                                        style={{ backgroundColor: getPriorityColor(priority) }}
-                                    >
-                                        {priority}
-                                        {selectedTask.priority === priority && <span className="ml-auto">✓</span>}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Dates Modal */}
-            {
-                showDatesModal && selectedTask && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowDatesModal(false)}>
-                        <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Dates</h3>
-                                <button onClick={() => setShowDatesModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
-                                    <X size={16} className="text-[#5E6C84]" />
-                                </button>
-                            </div>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#5E6C84] mb-1 uppercase tracking-wider">Start Date</label>
-                                    <input
-                                        type="date"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={tempStartDate || (selectedTask.start_date ? selectedTask.start_date.split('T')[0] : '')}
-                                        onChange={(e) => setTempStartDate(e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#5E6C84] mb-1 uppercase tracking-wider">Due Date</label>
-                                    <input
-                                        type="date"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={tempDueDate || (selectedTask.due_date ? selectedTask.due_date.split('T')[0] : '')}
-                                        onChange={(e) => setTempDueDate(e.target.value)}
-                                    />
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={handleUpdateDates}
-                                        className="flex-1 px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-bold"
-                                    >
-                                        Save Dates
-                                    </button>
-                                    {(selectedTask.due_date || selectedTask.start_date) && (
-                                        <button
-                                            onClick={() => {
-                                                handleUpdateTask(selectedTask.id, { due_date: null, start_date: null });
-                                                setShowDatesModal(false);
-                                                setTempDueDate('');
-                                                setTempStartDate('');
-                                            }}
-                                            className="px-4 py-2 bg-[#EBECF0] text-[#172B4D] rounded hover:bg-[#FFEBE6] hover:text-[#BF2600] transition-colors text-sm font-bold"
-                                        >
-                                            Clear
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Attachment Modal */}
-            {
-                showAttachmentModal && selectedTask && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowAttachmentModal(false)}>
-                        <div className="bg-white rounded-lg w-full max-w-md p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Attachments</h3>
-                                <button onClick={() => setShowAttachmentModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
-                                    <X size={16} className="text-[#5E6C84]" />
-                                </button>
-                            </div>
-
-                            {/* Upload Section */}
-                            <div className="mb-4">
-                                <label className="block text-xs font-semibold text-[#5E6C84] mb-2">Upload File</label>
-                                <div className="border-2 border-dashed border-[#DFE1E6] rounded-lg p-4 text-center hover:border-[#0079BF] transition-colors">
-                                    <input
-                                        type="file"
-                                        id="fileInput"
-                                        className="hidden"
-                                        onChange={(e) => setSelectedFile(e.target.files[0])}
-                                    />
-                                    <label htmlFor="fileInput" className="cursor-pointer">
-                                        <Paperclip size={24} className="mx-auto text-[#5E6C84] mb-2" />
-                                        {selectedFile ? (
-                                            <p className="text-sm text-[#172B4D] font-medium">{selectedFile.name}</p>
-                                        ) : (
-                                            <p className="text-sm text-[#5E6C84]">Click to browse or drag and drop</p>
-                                        )}
-                                    </label>
-                                </div>
-                                {selectedFile && (
-                                    <button
-                                        onClick={handleFileUpload}
-                                        className="w-full mt-2 px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-medium"
-                                    >
-                                        Upload
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Existing Attachments */}
-                            {attachments.length > 0 && (
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#5E6C84] uppercase mb-2">Current Attachments</label>
-                                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                                        {attachments.map((att, i) => (
-                                            <div key={i} className="flex items-center gap-3 p-2 bg-[#F4F5F7] rounded hover:bg-[#EBECF0] transition-colors">
-                                                <Paperclip size={16} className="text-[#5E6C84]" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-[#172B4D] truncate">{att.file_name || 'Attachment'}</p>
-                                                    <p className="text-xs text-[#5E6C84]">
-                                                        {new Date(att.created_at).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-                                                <a
-                                                    href={att.file}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-[#0079BF] hover:text-[#026AA7] text-sm"
-                                                >
-                                                    View
-                                                </a>
-                                            </div>
-                                        ))}
-                                    </div>
+                        <h3 className="font-bold text-[#172B4D] mb-4 min-h-[40px]">{task.title}</h3>
+                        <div className="flex items-center justify-between">
+                            <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase ${task.status === 'DONE' ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
+                                {task.status}
+                            </span>
+                            {task.assigned_to_details && (
+                                <div className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[10px] font-bold">
+                                    {task.assigned_to_details.username[0].toUpperCase()}
                                 </div>
                             )}
                         </div>
                     </div>
-                )
-            }
+                ))}
+            </div>
+        </div>
+    )
+}
 
-            {/* Background Modal */}
-            {
-                showBackgroundModal && (
-                    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowBackgroundModal(false)}>
-                        <div className="bg-white rounded w-full max-w-sm" onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between p-4 border-b border-[#DFE1E6]">
-                                <h3 className="font-semibold text-[#172B4D]">Change Background</h3>
-                                <button onClick={() => setShowBackgroundModal(false)} className="text-[#5E6C84] hover:text-[#172B4D]">
-                                    <X size={20} />
-                                </button>
+{
+    viewMode === 'roadmap' && (
+        <div className="flex-1 overflow-y-auto p-8 bg-[#F4F5F7]">
+            <div className="max-w-5xl mx-auto">
+                {/* Roadmap Header Summary */}
+                <div className="bg-white rounded-lg border border-[#DFE1E6] p-8 shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-8 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-[#0052CC]/5 rounded-full -mr-32 -mt-32" />
+                    <div className="relative z-10">
+                        <h1 className="text-2xl font-bold text-[#172B4D] mb-2">Project Roadmap</h1>
+                        <p className="text-sm text-[#5E6C84] max-w-md">Strategic milestones and key project outputs. Track progress across all major deliverables and objectives.</p>
+                    </div>
+
+                    <div className="flex items-center gap-12 relative z-10">
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-[#0052CC]">
+                                {project.milestones?.filter(m => m.is_completed).length || 0} / {project.milestones?.length || 0}
                             </div>
-                            <div className="p-4 grid grid-cols-3 gap-2">
-                                {['#0079BF', '#D29034', '#519839', '#B04632', '#89609E', '#CD5A91', '#00AECC', '#838C91', '#172B4D'].map(color => (
-                                    <button
-                                        key={color}
-                                        onClick={() => handleUpdateBackground(color)}
-                                        className="h-16 rounded hover:opacity-90 transition-opacity relative"
-                                        style={{ backgroundColor: color }}
-                                    >
-                                        {project.background_color === color && (
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <Check size={24} className="text-white" />
-                                            </div>
-                                        )}
-                                    </button>
-                                ))}
+                            <div className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mt-1">Milestones</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-[#00875A]">
+                                {project.deliverables?.filter(d => d.is_completed).length || 0}
+                            </div>
+                            <div className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mt-1">Delivered</div>
+                        </div>
+                        <div className="w-32">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-bold text-[#5E6C84]">PROGRESS</span>
+                                <span className="text-[10px] font-bold text-[#172B4D]">{(project.task_stats?.percentage || 0).toFixed(0)}%</span>
+                            </div>
+                            <div className="h-2 bg-[#EBECF0] rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-[#0052CC] transition-all duration-1000"
+                                    style={{ width: `${project.task_stats?.percentage || 0}%` }}
+                                />
                             </div>
                         </div>
                     </div>
-                )
-            }
+                </div>
 
-            {/* Settings Modal */}
-            {
-                showSettingsModal && (
-                    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowSettingsModal(false)}>
-                        <div className="bg-white rounded w-full max-w-lg" onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between p-4 border-b border-[#DFE1E6]">
-                                <h3 className="font-semibold text-[#172B4D]">Board Settings</h3>
-                                <button onClick={() => setShowSettingsModal(false)} className="text-[#5E6C84] hover:text-[#172B4D]">
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <form onSubmit={handleUpdateProjectSettings} className="p-6 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Board Name</label>
-                                    <input
-                                        type="text"
-                                        className="w-full p-2 border border-[#DFE1E6] rounded text-[#172B4D] focus:border-[#0079BF] outline-none"
-                                        value={settingsForm.name}
-                                        onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })}
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
-                                    <textarea
-                                        className="w-full p-2 border border-[#DFE1E6] rounded text-[#172B4D] focus:border-[#0079BF] outline-none h-24 resize-none"
-                                        value={settingsForm.description}
-                                        onChange={e => setSettingsForm({ ...settingsForm, description: e.target.value })}
-                                    />
-                                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Left: Milestones Timeline */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest flex items-center gap-2">
+                                <Flag size={14} className="text-[#0052CC]" /> Milestones
+                            </h3>
+                            <button onClick={() => setIsRoadmapModalOpen(true)} className="text-xs font-bold text-[#0052CC] hover:underline flex items-center gap-1">
+                                <Plus size={14} /> New Milestone
+                            </button>
+                        </div>
 
-                                <div className="border-t border-[#DFE1E6] pt-4">
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-3">Custom Workflow (Statuses)</label>
-                                    <div className="space-y-2 mb-4">
-                                        {project.custom_statuses?.map(s => (
-                                            <div key={s.id} className="flex items-center justify-between p-2 bg-[#F4F5F7] rounded">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
-                                                    <span className="text-sm font-medium text-[#172B4D]">{s.name}</span>
+                        <div className="bg-white rounded-lg border border-[#DFE1E6] overflow-hidden">
+                            {project.milestones && project.milestones.length > 0 ? (
+                                <div className="divide-y divide-[#DFE1E6]">
+                                    {project.milestones.map((m) => {
+                                        const milestoneTasks = tasks.filter(t => t.milestone === m.id);
+                                        const completedTasks = milestoneTasks.filter(t => t.status === 'DONE').length;
+                                        const progress = milestoneTasks.length > 0 ? (completedTasks / milestoneTasks.length) * 100 : 0;
+
+                                        return (
+                                            <div key={m.id} className="p-6 hover:bg-[#FAFBFC] transition-colors group">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${m.is_completed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
+                                                            <Flag size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="font-bold text-[#172B4D]">{m.name}</h4>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <CalendarIcon size={12} className="text-[#5E6C84]" />
+                                                                <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">
+                                                                    {new Date(m.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${m.is_completed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#EBECF0] text-[#5E6C84]'}`}>
+                                                            {m.is_completed ? 'Completed' : 'Planned'}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <button type="button" onClick={() => handleDeleteStatus(s.id)} className="text-[#5E6C84] hover:text-red-500"><Trash2 size={14} /></button>
+                                                <p className="text-sm text-[#5E6C84] mb-4">{m.description}</p>
+
+                                                <div className="space-y-1.5">
+                                                    <div className="flex justify-between text-[10px] font-bold text-[#5E6C84]">
+                                                        <span>OBJECTIVE PROGRESS</span>
+                                                        <span>{Math.round(progress)}%</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-[#EBECF0] rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full transition-all duration-700 ${progress === 100 ? 'bg-[#00875A]' : 'bg-[#0052CC]'}`}
+                                                            style={{ width: `${progress}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="flex justify-between text-[10px] text-[#5E6C84] pt-1">
+                                                        <span>{completedTasks} of {milestoneTasks.length} tasks completed</span>
+                                                        <button onClick={() => {
+                                                            // Future: Filter tasks list by this milestone
+                                                            setViewMode('list');
+                                                        }} className="text-[#0052CC] hover:underline font-bold">View Tasks</button>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="Status name..."
-                                            className="flex-1 p-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                            value={newStatusName}
-                                            onChange={e => setNewStatusName(e.target.value)}
-                                        />
-                                        <input
-                                            type="color"
-                                            className="w-10 h-10 p-1 border border-[#DFE1E6] rounded cursor-pointer"
-                                            value={newStatusColor}
-                                            onChange={e => setNewStatusColor(e.target.value)}
-                                        />
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="p-12 text-center">
+                                    <Flag size={48} className="mx-auto text-[#DFE1E6] mb-4" />
+                                    <p className="text-[#5E6C84]">Setting milestones helps keep the project on track.</p>
+                                    <button onClick={() => setIsRoadmapModalOpen(true)} className="mt-4 px-4 py-2 bg-[#0052CC] text-white rounded font-bold text-sm">Add First Milestone</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Right: Deliverables & Stats */}
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest flex items-center gap-2">
+                                <Package size={14} className="text-[#0052CC]" /> Deliverables
+                            </h3>
+                            <button onClick={() => setShowDeliverableModal(true)} className="text-xs font-bold text-[#0052CC] hover:underline flex items-center gap-1">
+                                <Plus size={14} /> New deliverable
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            {project.deliverables?.map((d) => (
+                                <div key={d.id} className="bg-white border border-[#DFE1E6] rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${d.is_completed ? 'bg-[#00875A]' : 'bg-[#FF9F1A]'}`} />
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h4 className="text-sm font-bold text-[#172B4D]">{d.name}</h4>
                                         <button
-                                            type="button"
-                                            onClick={handleCreateStatus}
-                                            className="px-3 py-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-bold text-[#42526E]"
+                                            onClick={() => handleToggleDeliverable(d.id, d.is_completed)}
+                                            className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${d.is_completed ? 'bg-[#00875A] border-[#00875A] text-white' : 'border-[#DFE1E6] bg-white group-hover:border-[#0052CC]'}`}
                                         >
-                                            Add
+                                            {d.is_completed && <Check size={12} />}
                                         </button>
                                     </div>
-                                    <p className="text-[10px] text-[#5E6C84] mt-2 italic">Note: Creating custom statuses will override the default To Do/In Progress/Done columns.</p>
-                                </div>
-                                <div className="flex justify-end gap-2 pt-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowSettingsModal(false)}
-                                        className="px-4 py-2 text-[#172B4D] hover:bg-[#F4F5F7] rounded font-medium transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="px-4 py-2 bg-[#0079BF] text-white rounded font-medium hover:bg-[#026AA7] transition-colors"
-                                    >
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Goal Modal */}
-            {
-                showGoalModal && (
-                    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
-                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
-                                <h3 className="font-bold text-[#172B4D]">New Project Goal</h3>
-                                <button onClick={() => setShowGoalModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
-                            </div>
-                            <form onSubmit={handleCreateGoal} className="p-4 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Title</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={newGoal.title}
-                                        onChange={e => setNewGoal({ ...newGoal, title: e.target.value })}
-                                        placeholder="e.g. Increase user retention by 20%"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Target Date</label>
-                                    <input
-                                        type="date"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={newGoal.target_date}
-                                        onChange={e => setNewGoal({ ...newGoal, target_date: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
-                                    <textarea
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] min-h-[100px]"
-                                        value={newGoal.description}
-                                        onChange={e => setNewGoal({ ...newGoal, description: e.target.value })}
-                                        placeholder="Describe the desired outcome..."
-                                    />
-                                </div>
-                                <div className="pt-2">
-                                    <button type="submit" className="w-full py-2 bg-[#0079BF] text-white font-bold rounded hover:bg-[#026AA7] transition-colors">
-                                        Define Goal
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Deliverable Modal */}
-            {
-                showDeliverableModal && (
-                    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
-                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
-                                <h3 className="font-bold text-[#172B4D]">New Deliverable</h3>
-                                <button onClick={() => setShowDeliverableModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
-                            </div>
-                            <form onSubmit={handleCreateDeliverable} className="p-4 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Name</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={newDeliverable.name}
-                                        onChange={e => setNewDeliverable({ ...newDeliverable, name: e.target.value })}
-                                        placeholder="e.g. API Documentation"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Link to Milestone</label>
-                                    <select
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] appearance-none bg-white"
-                                        value={newDeliverable.milestone || ''}
-                                        onChange={e => setNewDeliverable({ ...newDeliverable, milestone: e.target.value })}
-                                    >
-                                        <option value="">No Milestone</option>
-                                        {project.milestones?.map(m => (
-                                            <option key={m.id} value={m.id}>{m.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Due Date</label>
-                                    <input
-                                        type="date"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
-                                        value={newDeliverable.due_date}
-                                        onChange={e => setNewDeliverable({ ...newDeliverable, due_date: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
-                                    <textarea
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] min-h-[100px]"
-                                        value={newDeliverable.description}
-                                        onChange={e => setNewDeliverable({ ...newDeliverable, description: e.target.value })}
-                                        placeholder="Describe this output..."
-                                    />
-                                </div>
-                                <div className="pt-2">
-                                    <button type="submit" className="w-full py-2 bg-[#0079BF] text-white font-bold rounded hover:bg-[#026AA7] transition-colors">
-                                        Create Deliverable
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )
-            }
-            {/* Sprint Modal */}
-            {
-                showSprintModal && (
-                    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
-                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
-                                <h3 className="font-bold text-[#172B4D]">Create Sprint</h3>
-                                <button onClick={() => setShowSprintModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
-                            </div>
-                            <div className="p-4 space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Sprint Name</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
-                                        value={newSprint.name}
-                                        onChange={e => setNewSprint({ ...newSprint, name: e.target.value })}
-                                        placeholder="e.g. Sprint 1"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Start Date</label>
-                                        <input
-                                            type="date"
-                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
-                                            value={newSprint.start_date}
-                                            onChange={e => setNewSprint({ ...newSprint, start_date: e.target.value })}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">End Date</label>
-                                        <input
-                                            type="date"
-                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
-                                            value={newSprint.end_date}
-                                            onChange={e => setNewSprint({ ...newSprint, end_date: e.target.value })}
-                                        />
+                                    <p className="text-xs text-[#5E6C84] mb-3 line-clamp-2">{d.description}</p>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#5E6C84] uppercase">
+                                            <Clock size={10} />
+                                            {d.due_date ? new Date(d.due_date).toLocaleDateString() : 'TBD'}
+                                        </div>
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Sprint Goal</label>
-                                    <textarea
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] min-h-[80px]"
-                                        value={newSprint.goal}
-                                        onChange={e => setNewSprint({ ...newSprint, goal: e.target.value })}
-                                        placeholder="What are we aiming for?"
-                                    />
+                            ))}
+                            {(!project.deliverables || project.deliverables.length === 0) && (
+                                <div className="bg-[#EBECF0]/30 border-2 border-dashed border-[#DFE1E6] rounded-lg p-8 text-center">
+                                    <p className="text-xs text-[#5E6C84]">Define concrete deliverables to measure project success.</p>
                                 </div>
-                                <button onClick={handleCreateSprint} className="w-full py-2 bg-[#0052CC] text-white font-bold rounded hover:bg-[#0747A6] transition-colors">
-                                    Create
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{
+    viewMode === 'releases' && (
+        <div className="flex-1 p-8 overflow-y-auto">
+            <div className="max-w-4xl mx-auto space-y-6">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-[#172B4D]">Releases</h2>
+                    <button
+                        onClick={() => setShowReleaseModal(true)}
+                        className="px-4 py-2 bg-[#0052CC] text-white rounded font-bold text-sm flex items-center gap-2"
+                    >
+                        <Plus size={16} /> Create Release
+                    </button>
+                </div>
+
+                <div className="space-y-4">
+                    {releases.map(release => (
+                        <div key={release.id} className="bg-white border border-[#DFE1E6] rounded-lg p-6 shadow-sm flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${release.is_released ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
+                                    <Package size={24} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                        <h3 className="font-bold text-[#172B4D] text-lg">{release.name}</h3>
+                                        <span className="bg-[#EBECF0] text-[#42526E] text-[11px] font-bold px-2 py-0.5 rounded uppercase">{release.version}</span>
+                                    </div>
+                                    <p className="text-sm text-[#5E6C84] mt-1">{release.description}</p>
+                                    <div className="flex items-center gap-4 mt-2">
+                                        <span className="text-xs text-[#5E6C84] flex items-center gap-1.5 font-medium">
+                                            <CalendarIcon size={12} /> {new Date(release.release_date).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-3">
+                                <span className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase ${release.is_released ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#FF9F1A]/10 text-[#FF9F1A]'}`}>
+                                    {release.is_released ? 'Released' : 'Unreleased'}
+                                </span>
+                                <button
+                                    onClick={() => handleToggleRelease(release.id, release.is_released)}
+                                    className={`px-4 py-1.5 rounded text-xs font-bold transition-colors ${release.is_released ? 'bg-[#EBECF0] text-[#172B4D] hover:bg-[#DFE1E6]' : 'bg-[#0052CC] text-white hover:bg-[#0747A6]'}`}
+                                >
+                                    {release.is_released ? 'Roll back' : 'Release now'}
                                 </button>
                             </div>
                         </div>
+                    ))}
+                    {releases.length === 0 && (
+                        <div className="text-center py-20 bg-white border-2 border-dashed border-[#DFE1E6] rounded-lg">
+                            <Package size={48} className="mx-auto text-[#DFE1E6] mb-4" />
+                            <p className="text-[#5E6C84]">No releases planned yet.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{
+    viewMode === 'reports' && (
+        <div className="flex-1 p-8 overflow-y-auto">
+            <div className="max-w-5xl mx-auto space-y-8">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-2xl font-bold text-[#172B4D]">Agile Reports</h2>
+                        <p className="text-sm text-[#5E6C84] mt-1">Insights into team performance and project velocity.</p>
                     </div>
-                )
-            }
+                    <div className="flex gap-3">
+                        <select
+                            value={selectedReportSprint || ''}
+                            onChange={(e) => setSelectedReportSprint(e.target.value)}
+                            className="px-3 py-2 border border-[#DFE1E6] rounded text-sm font-bold bg-white text-[#172B4D] outline-none hover:border-[#0052CC]"
+                        >
+                            <option value="">All Sprints</option>
+                            {sprints.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <select
+                            value={reportType}
+                            onChange={(e) => setReportType(e.target.value)}
+                            className="px-3 py-2 border border-[#DFE1E6] rounded text-sm font-bold bg-[#0052CC] text-white outline-none"
+                        >
+                            <option value="BURNDOWN">Burndown Chart</option>
+                            <option value="VELOCITY">Velocity Report</option>
+                            <option value="BURNUP">Burnup Chart</option>
+                        </select>
+                    </div>
+                </div>
 
-            {/* Create Task Modal */}
-            {
-                isTaskModalOpen && (
-                    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
-                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
-                                <h3 className="font-bold text-[#172B4D]">Create Issue</h3>
-                                <button onClick={() => setIsTaskModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white border border-[#DFE1E6] p-6 rounded-lg hover:border-[#0052CC] cursor-pointer transition-colors group">
+                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mb-1 group-hover:text-[#0052CC]">Total Velocity</p>
+                        <p className="text-3xl font-bold text-[#172B4D]">
+                            {sprints.filter(s => s.status === 'COMPLETED').reduce((acc, s) => acc + (s.completed_points || 0), 0)}
+                        </p>
+                        <p className="text-xs text-[#00875A] font-medium mt-2">↑ 12% from last cycle</p>
+                    </div>
+                    <div className="bg-white border border-[#DFE1E6] p-6 rounded-lg hover:border-[#0052CC] cursor-pointer transition-colors group">
+                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mb-1 group-hover:text-[#0052CC]">Avg Story Points</p>
+                        <p className="text-3xl font-bold text-[#172B4D]">
+                            {sprints.length > 0 ? (sprints.reduce((acc, s) => acc + (s.tasks?.reduce((tAcc, t) => tAcc + (t.story_points || 0), 0) || 0), 0) / sprints.length).toFixed(1) : 0}
+                        </p>
+                        <p className="text-xs text-[#5E6C84] mt-2">Per Sprint</p>
+                    </div>
+                    <div
+                        className="bg-white border border-[#DFE1E6] p-6 rounded-lg hover:border-[#0052CC] cursor-pointer transition-all active:scale-[0.98] group"
+                        onClick={() => setShowCapacityModal(true)}
+                    >
+                        <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest group-hover:text-[#0052CC]">Total Capacity</p>
+                            <Edit2 size={12} className="text-[#EBECF0] group-hover:text-[#0052CC]" />
+                        </div>
+                        <p className="text-3xl font-bold text-[#172B4D]">
+                            {capacities.reduce((acc, c) => acc + (c.capacity_hours || 0), 0) || (project.members_details?.length * 40)}h
+                        </p>
+                        <p className="text-xs text-[#5E6C84] mt-2">Team Weekly (Manage)</p>
+                    </div>
+                    <div className="bg-white border border-[#DFE1E6] p-6 rounded-lg hover:border-[#0052CC] cursor-pointer transition-colors group">
+                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mb-1 group-hover:text-[#0052CC]">Team Availability</p>
+                        <p className="text-3xl font-bold text-[#0052CC]">92%</p>
+                        <p className="text-xs text-[#00875A] font-medium mt-2">Stable (Last 30 days)</p>
+                    </div>
+                </div>
+
+                {/* Interactive Charts */}
+                <div className="bg-white border border-[#DFE1E6] rounded-lg p-8 min-h-[500px] flex flex-col items-center shadow-sm">
+                    {reportType === 'BURNDOWN' && (
+                        <div className="w-full space-y-6">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-bold text-[#172B4D]">Sprint Burndown</h3>
+                                <div className="flex items-center gap-4 text-xs font-bold">
+                                    <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#4C9AFF]"></div><span className="text-[#5E6C84]">Ideal Burn</span></div>
+                                    <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-[#DE350B]"></div><span className="text-[#5E6C84]">Actual Burn</span></div>
+                                </div>
                             </div>
-                            <form onSubmit={handleCreateTask} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Issue Type</label>
-                                    <div className="flex gap-2">
-                                        {['TASK', 'STORY', 'BUG', 'EPIC'].map(type => (
-                                            <button
-                                                key={type}
-                                                type="button"
-                                                onClick={() => setNewTask({ ...newTask, issue_type: type })}
-                                                className={`flex-1 flex items-center justify-center gap-2 py-2 border rounded-sm transition-all ${newTask.issue_type === type ? 'border-[#0052CC] bg-[#DEEBFF] text-[#0052CC]' : 'border-[#DFE1E6] bg-white text-[#42526E] hover:bg-[#F4F5F7]'}`}
-                                            >
-                                                {getIssueTypeIcon(type)}
-                                                <span className="text-[11px] font-bold">{type}</span>
-                                            </button>
-                                        ))}
+                            <div className="h-80 w-full relative group">
+                                {/* SVG Chart */}
+                                <svg className="w-full h-full overflow-visible">
+                                    {/* Grid Lines */}
+                                    {[0, 25, 50, 75, 100].map(y => (
+                                        <line key={y} x1="0" y1={`${100 - y}%`} x2="100%" y2={`${100 - y}%`} stroke="#EBECF0" strokeWidth="1" />
+                                    ))}
+                                    {/* Ideal Line */}
+                                    <line x1="0" y1="0%" x2="100%" y2="100%" stroke="#4C9AFF" strokeWidth="2" strokeDasharray="5,5" />
+                                    {/* Actual Line (Animated Path) */}
+                                    <path
+                                        d="M0,0 L20,30 L40,35 L60,70 L80,75 L100,100"
+                                        fill="none"
+                                        stroke="#DE350B"
+                                        strokeWidth="3"
+                                        className="transition-all duration-1000"
+                                        vectorEffect="non-scaling-stroke"
+                                    />
+                                    {/* Markers */}
+                                    {[0, 20, 60, 100].map(x => (
+                                        <circle key={x} cx={`${x}%`} cy={`${[0, 30, 70, 100][x === 0 ? 0 : x === 20 ? 1 : x === 60 ? 2 : 3]}%`} r="4" fill="#DE350B" />
+                                    ))}
+                                </svg>
+                            </div>
+                            <div className="text-center pt-4">
+                                <p className="text-sm text-[#5E6C84]">Remaining story points vs. time. Your team is slightly <span className="text-[#DE350B] font-bold">behind</span> schedule.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {reportType === 'VELOCITY' && (
+                        <div className="w-full space-y-6">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-bold text-[#172B4D]">Team Velocity</h3>
+                                <div className="flex items-center gap-4 text-xs font-bold">
+                                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-[#0052CC]"></div><span className="text-[#5E6C84]">Completed</span></div>
+                                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-[#EBECF0]"></div><span className="text-[#5E6C84]">Estimated</span></div>
+                                </div>
+                            </div>
+                            <div className="h-80 w-full flex items-end justify-around px-8 border-b border-[#DFE1E6]">
+                                {sprints.slice(0, 5).map((s, i) => (
+                                    <div key={i} className="flex flex-col items-center gap-2 w-16 group relative">
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#172B4D] text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 whitespace-nowrap">
+                                            {s.completed_points || 0} / {s.total_points || 20} pts
+                                        </div>
+                                        <div className="w-full flex items-end justify-center gap-1">
+                                            <div
+                                                className="w-1/2 bg-[#0052CC] rounded-t transition-all duration-1000"
+                                                style={{ height: `${(s.completed_points || 0) * 10}px`, maxHeight: '100%' }}
+                                            />
+                                            <div
+                                                className="w-1/2 bg-[#EBECF0] rounded-t transition-all duration-1000"
+                                                style={{ height: `${(s.total_points || 20) * 10}px`, maxHeight: '100%' }}
+                                            />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-[#5E6C84] mt-2 rotate-45 translate-y-4">{s.name}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="text-center pt-12">
+                                <p className="text-sm text-[#5E6C84]">Points completed vs. Estimated per sprint.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {reportType === 'BURNUP' && (
+                        <div className="w-full space-y-6">
+                            <h3 className="font-bold text-[#172B4D]">Project Burnup</h3>
+                            <div className="h-80 w-full relative">
+                                <svg className="w-full h-full overflow-visible">
+                                    <path
+                                        d="M0,80 L20,70 L40,65 L60,40 L80,30 L100,10"
+                                        fill="none"
+                                        stroke="#00875A"
+                                        strokeWidth="3"
+                                    />
+                                    <line x1="0" y1="10%" x2="100%" y2="10%" stroke="#FFAB00" strokeWidth="2" strokeDasharray="5,5" />
+                                </svg>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-sm text-[#5E6C84]">Total points completed vs. Scope creep (Target line).</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {/* Sprint Retrospectives */}
+                <div className="space-y-4 pt-8 border-t border-[#DFE1E6]">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-[#172B4D]">Sprint Retrospectives</h3>
+                        {sprints.some(s => s.status === 'COMPLETED') && (
+                            <button
+                                onClick={() => {
+                                    const lastSprint = sprints.filter(s => s.status === 'COMPLETED').sort((a, b) => new Date(b.end_date) - new Date(a.end_date))[0];
+                                    setActiveSprintForRetro(lastSprint);
+                                    setShowRetroModal(true);
+                                }}
+                                className="text-sm font-bold text-[#0052CC] hover:underline flex items-center gap-1"
+                            >
+                                <Plus size={14} /> New Retrospective
+                            </button>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {retrospectives.map(retro => (
+                            <div key={retro.id} className="bg-white border border-[#DFE1E6] rounded-lg p-6 shadow-sm hover:border-[#0052CC] transition-colors">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h4 className="font-bold text-[#172B4D]">{sprints.find(s => s.id === retro.sprint)?.name || 'Completed Sprint'}</h4>
+                                    <span className="text-[10px] font-bold text-[#00875A] bg-[#E3FCEF] px-2 py-0.5 rounded uppercase">ARCHIVED</span>
+                                </div>
+                                <div className="space-y-4">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase mb-1">Successes</p>
+                                        <p className="text-sm text-[#42526E] italic leading-relaxed">"{retro.what_went_well}"</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-[#DE350B] uppercase mb-1">Action Items</p>
+                                        <p className="text-sm text-[#172B4D] font-medium">• {retro.action_items}</p>
                                     </div>
                                 </div>
+                            </div>
+                        ))}
+                        {retrospectives.length === 0 && (
+                            <div className="md:col-span-2 text-center py-12 bg-[#F4F5F7] rounded-lg border-2 border-dashed border-[#DFE1E6]">
+                                <p className="text-[#5E6C84] text-sm">No retrospectives recorded yet. Complete a sprint to start learning.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
 
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Summary <span className="text-red-500">*</span></label>
-                                    <input
-                                        required
-                                        type="text"
-                                        className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF]"
-                                        value={newTask.title}
-                                        onChange={e => setNewTask({ ...newTask, title: e.target.value })}
-                                        placeholder="What needs to be done?"
-                                        autoFocus
-                                    />
+{
+    viewMode === 'overview' && (
+        <div className="flex-1 overflow-y-auto p-8 bg-white">
+            <div className="max-w-6xl">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-2 space-y-8">
+                        <section>
+                            <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest mb-4">Project Vitality</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-white border border-[#DFE1E6] p-4 rounded-sm shadow-sm">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-[11px] font-bold text-[#5E6C84] uppercase">Health</span>
+                                        <Activity size={14} className="text-green-500" />
+                                    </div>
+                                    <p className="text-lg font-bold text-[#172B4D]">Healthy</p>
                                 </div>
+                                <div className="bg-white border border-[#DFE1E6] p-4 rounded-sm shadow-sm">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-[11px] font-bold text-[#5E6C84] uppercase">Progress</span>
+                                        <CheckSquare size={14} className="text-[#0052CC]" />
+                                    </div>
+                                    <p className="text-lg font-bold text-[#172B4D]">{(project.task_stats?.percentage || 0).toFixed(0)}%</p>
+                                </div>
+                                <div className="bg-white border border-[#DFE1E6] p-4 rounded-sm shadow-sm">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-[11px] font-bold text-[#5E6C84] uppercase">Members</span>
+                                        <Users size={14} className="text-[#0052CC]" />
+                                    </div>
+                                    <p className="text-lg font-bold text-[#172B4D]">{project.members_details?.length || 0}</p>
+                                </div>
+                            </div>
+                        </section>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Priority</label>
-                                        <select
-                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] bg-white"
-                                            value={newTask.priority}
-                                            onChange={e => setNewTask({ ...newTask, priority: e.target.value })}
+                        {/* Goals Section */}
+                        <section className="bg-white border border-[#DFE1E6] p-6 rounded-sm">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xs font-bold text-[#172B4D] uppercase tracking-widest flex items-center gap-2">
+                                    <Target size={14} /> Goals & Objectives
+                                </h3>
+                                <button onClick={() => setShowGoalModal(true)} className="text-[#0052CC] hover:underline text-xs font-bold flex items-center gap-1">
+                                    <Plus size={14} /> Add Goal
+                                </button>
+                            </div>
+                            <div className="space-y-3">
+                                {project.goals?.map(goal => (
+                                    <div key={goal.id} className="flex items-start gap-3 p-3 bg-[#FAFBFC] rounded border border-[#DFE1E6]">
+                                        <div
+                                            onClick={() => handleToggleGoal(goal.id, goal.is_achieved)}
+                                            className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center cursor-pointer transition-colors ${goal.is_achieved ? 'bg-green-500 border-green-500 text-white' : 'border-[#DFE1E6] bg-white hover:border-[#0052CC]'}`}
                                         >
-                                            <option value="LOW">Low</option>
-                                            <option value="MEDIUM">Medium</option>
-                                            <option value="HIGH">High</option>
-                                            <option value="CRITICAL">Critical</option>
-                                        </select>
+                                            {goal.is_achieved && <Check size={10} />}
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className={`text-sm font-bold ${goal.is_achieved ? 'text-[#5E6C84] line-through' : 'text-[#172B4D]'}`}>{goal.title}</h4>
+                                            <p className="text-xs text-[#5E6C84] mt-1">{goal.description}</p>
+                                            {goal.target_date && (
+                                                <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-[#5E6C84] uppercase">
+                                                    <CalendarIcon size={10} /> Target: {new Date(goal.target_date).toLocaleDateString()}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Story Points</label>
-                                        <input
-                                            type="number"
-                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF]"
-                                            value={newTask.story_points}
-                                            onChange={e => setNewTask({ ...newTask, story_points: parseInt(e.target.value) || 0 })}
-                                        />
+                                ))}
+                                {(!project.goals || project.goals.length === 0) && (
+                                    <div className="text-center py-4 border-2 border-dashed border-[#DFE1E6] rounded">
+                                        <Target size={20} className="mx-auto text-[#DFE1E6] mb-2" />
+                                        <p className="text-xs text-[#5E6C84]">Define project goals to align your team.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+
+                        <section className="bg-white border border-[#DFE1E6] p-6 rounded-sm">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xs font-bold text-[#172B4D] uppercase tracking-widest">Sub-projects</h3>
+                                <button onClick={() => navigate('/projects')} className="text-[#0052CC] hover:underline text-xs font-bold flex items-center gap-1">
+                                    <Plus size={14} /> Create
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {project.child_projects_details?.map(sub => (
+                                    <div key={sub.id} onClick={() => navigate(`/projects/${sub.id}`)} className="p-3 border border-[#DFE1E6] rounded-sm hover:border-[#0052CC] cursor-pointer group transition-all">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-4 h-4 bg-[#0052CC] rounded-[2px]" />
+                                            <span className="text-sm font-bold text-[#172B4D] group-hover:text-[#0052CC]">{sub.name}</span>
+                                        </div>
+                                        <p className="text-[10px] text-[#5E6C84] uppercase font-bold tracking-wider">{sub.key || 'SUB'}</p>
+                                    </div>
+                                ))}
+                                {(!project.child_projects_details || project.child_projects_details.length === 0) && (
+                                    <p className="col-span-2 text-xs text-[#5E6C84] italic py-2 text-center border border-dashed border-[#DFE1E6] rounded-sm">No sub-projects created yet.</p>
+                                )}
+                            </div>
+                        </section>
+                    </div>
+
+                    <div className="space-y-8">
+                        <section>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest">Details</h3>
+                                <button onClick={openSettings} className="p-1 hover:bg-[#F4F5F7] rounded text-[#5E6C84]"><Edit2 size={14} /></button>
+                            </div>
+                            <div className="space-y-4 text-sm bg-[#FAFBFC] border border-[#DFE1E6] p-4 rounded-sm">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#59667E] font-medium">Lead</span>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[8px] font-bold">
+                                            {project.created_by_details?.username?.[0].toUpperCase()}
+                                        </div>
+                                        <span className="font-bold text-[#172B4D]">{project.created_by_details?.username}</span>
                                     </div>
                                 </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#59667E] font-medium">Category</span>
+                                    <span className="px-2 py-0.5 bg-[#DFE1E6] text-[#42526E] rounded-sm text-[10px] font-bold uppercase">{project.category_details?.name || 'Software'}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#59667E] font-medium">Visibility</span>
+                                    <span className="flex items-center gap-1 text-[10px] font-bold text-[#403294] uppercase bg-[#EAE6FF] px-2 py-0.5 rounded-sm">
+                                        <Shield size={10} /> {project.visibility}
+                                    </span>
+                                </div>
+                            </div>
+                        </section>
 
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Parent Task (Optional)</label>
-                                    <select
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] bg-white"
-                                        value={newTask.parent_task || ''}
-                                        onChange={e => setNewTask({ ...newTask, parent_task: e.target.value || null })}
+                        <section>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-widest">Dependencies</h3>
+                                <button onClick={() => showToast('Dependency Management coming soon', 'info')} className="text-[#0052CC] hover:underline text-[11px] font-bold">Manage</button>
+                            </div>
+                            <div className="bg-white border border-[#DFE1E6] p-4 rounded-sm shadow-sm space-y-3">
+                                {project.dependencies_details?.length > 0 ? project.dependencies_details.map(dep => (
+                                    <div key={dep.id} className="flex items-center gap-3 text-sm group cursor-pointer" onClick={() => navigate(`/projects/${dep.id}`)}>
+                                        <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                                        <span className="font-medium text-[#172B4D] group-hover:text-[#0052CC] group-hover:underline truncate">{dep.name}</span>
+                                    </div>
+                                )) : (
+                                    <div className="text-center py-4">
+                                        <GitMerge size={24} className="text-[#DFE1E6] mx-auto mb-2 rotate-90" />
+                                        <p className="text-[11px] text-[#5E6C84] italic">No active dependencies.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+
+                        <section className="bg-gradient-to-br from-[#0052CC] to-[#0747A6] p-4 rounded-sm text-white relative overflow-hidden group">
+                            <div className="relative z-10">
+                                <h4 className="font-bold text-sm mb-1">Try Atlas</h4>
+                                <p className="text-[11px] text-blue-100 mb-3 leading-snug">Connect your project goals with team performance.</p>
+                                <button className="text-[11px] font-bold bg-white text-[#0052CC] px-3 py-1.5 rounded-sm hover:bg-blue-50 transition-colors">Learn more</button>
+                            </div>
+                            <PieChart size={80} className="absolute -right-4 -bottom-4 text-white/10 group-hover:scale-110 transition-transform duration-500" />
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+            </main >
+
+    {/* Floating Bulk Action Bar */ }
+{
+    selectedTaskIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#172B4D] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-4">
+            <div className="flex items-center gap-2 border-r border-[#42526E] pr-6">
+                <span className="text-sm font-bold">{selectedTaskIds.length} tasks selected</span>
+                <button
+                    onClick={() => { setSelectedTaskIds([]); setIsBulkMode(false); }}
+                    className="p-1 hover:bg-[#42526E] rounded text-[#A5ADBA]"
+                >
+                    <X size={14} />
+                </button>
+            </div>
+
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-[#A5ADBA] font-bold uppercase tracking-wider">Move to:</span>
+                    <div className="flex gap-1">
+                        {columns.map(col => (
+                            <button
+                                key={col.id}
+                                onClick={() => handleBulkOperation('update_status', col.id)}
+                                className="px-2 py-1 bg-[#42526E] hover:bg-[#5E6C84] rounded text-[10px] font-bold uppercase transition-colors"
+                            >
+                                {col.title}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="w-px h-6 bg-[#42526E]" />
+
+                <button
+                    onClick={() => handleBulkOperation('archive')}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-[#42526E] hover:bg-amber-600 transition-colors rounded text-xs font-bold"
+                >
+                    <Layers size={14} /> Archive Selected
+                </button>
+
+                <button
+                    onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.length} tasks?`)) {
+                            handleBulkOperation('delete');
+                        }
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-[#42526E] hover:bg-red-600 transition-colors rounded text-xs font-bold"
+                >
+                    <Trash2 size={14} /> Delete
+                </button>
+            </div>
+        </div>
+    )
+}
+
+{/* Card Detail Modal */ }
+{
+    selectedTask && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-12 overflow-y-auto" onClick={() => setSelectedTask(null)}>
+            <div className="bg-[#F4F5F7] rounded-lg w-full max-w-3xl mb-12 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                {/* Modal Header */}
+                <div className="p-6">
+                    <div className="flex items-start gap-3">
+                        <div className="mt-1">
+                            <select
+                                className="bg-transparent border-none outline-none cursor-pointer hover:bg-white rounded p-1 transition-colors"
+                                value={selectedTask.issue_type}
+                                onChange={(e) => handleUpdateTask(selectedTask.id, { issue_type: e.target.value })}
+                            >
+                                <option value="TASK">Task</option>
+                                <option value="STORY">User Story</option>
+                                <option value="BUG">Bug</option>
+                                <option value="EPIC">Epic</option>
+                                <option value="FEATURE">Feature Request</option>
+                            </select>
+                        </div>
+                        <div className="flex-1">
+                            <input
+                                type="text"
+                                className="w-full text-xl font-semibold text-[#172B4D] bg-transparent border-none outline-none px-2 -ml-2 py-1 rounded hover:bg-white focus:bg-white"
+                                value={selectedTask.title}
+                                onChange={(e) => handleUpdateTask(selectedTask.id, { title: e.target.value })}
+                            />
+                            <div className="flex items-center gap-2 mt-1 px-2">
+                                <span className="text-sm text-[#5E6C84]">in list</span>
+                                <select
+                                    className="text-sm font-medium text-[#172B4D] bg-transparent underline cursor-pointer outline-none hover:bg-[#EBECF0] rounded px-1"
+                                    value={selectedTask.status}
+                                    onChange={(e) => handleMoveCard(selectedTask.id, e.target.value)}
+                                >
+                                    {columns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                </select>
+                                <div className="h-4 w-px bg-[#DFE1E6] mx-1" />
+                                <div className="flex items-center gap-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded px-2 py-0.5 cursor-pointer transition-colors group">
+                                    <TrendingUp size={12} className="text-[#5E6C84]" />
+                                    <input
+                                        type="number"
+                                        className="w-8 bg-transparent text-xs font-bold text-[#172B4D] outline-none"
+                                        value={selectedTask.story_points || 0}
+                                        onChange={(e) => handleUpdateTask(selectedTask.id, { story_points: parseInt(e.target.value) || 0 })}
+                                    />
+                                    <span className="text-[10px] font-bold text-[#5E6C84] group-hover:block hidden">Points</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={() => setSelectedTask(null)} className="p-2 hover:bg-[#DFE1E6] rounded transition-colors">
+                            <X size={20} className="text-[#5E6C84]" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex gap-4 px-6 pb-6">
+                    {/* Main Content */}
+                    <div className="flex-1 space-y-6">
+                        {/* Labels */}
+                        {selectedTask.priority && (
+                            <div>
+                                <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Labels</h4>
+                                <div className="flex gap-1">
+                                    <div
+                                        className="px-3 py-1.5 rounded text-white text-xs font-medium"
+                                        style={{ backgroundColor: getPriorityColor(selectedTask.priority) }}
                                     >
-                                        <option value="">None</option>
-                                        {tasks.filter(t => t.issue_type === 'EPIC' || !t.parent_task).map(t => (
-                                            <option key={t.id} value={t.id}>{t.title}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-[10px] text-[#5E6C84] mt-1">Select an Epic or Parent task to link this issue.</p>
+                                        {selectedTask.priority}
+                                    </div>
                                 </div>
+                            </div>
+                        )}
 
-                                <div>
-                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
-                                    <textarea
-                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] min-h-[120px] resize-none"
-                                        value={newTask.description || ''}
-                                        onChange={e => setNewTask({ ...newTask, description: e.target.value })}
-                                        placeholder="Add more details about this issue..."
+                        {/* Description */}
+                        <div>
+                            <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Description</h4>
+                            <textarea
+                                className="w-full min-h-[100px] p-3 bg-white border border-[#DFE1E6] rounded text-sm text-[#172B4D] outline-none hover:border-[#0079BF] focus:border-[#0079BF] resize-none"
+                                placeholder="Add a more detailed description..."
+                                value={selectedTask.description || ''}
+                                onChange={(e) => handleUpdateTask(selectedTask.id, { description: e.target.value })}
+                            />
+                        </div>
+
+                        {/* Subtasks / Checklist */}
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-xs font-semibold text-[#5E6C84] uppercase">Subtasks</h4>
+                                {selectedTask.subtasks?.length > 0 && (
+                                    <span className="text-xs text-[#5E6C84]">
+                                        {Math.round((selectedTask.subtasks.filter(t => t.status === 'DONE').length / selectedTask.subtasks.length) * 100)}% Done
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Progress Bar */}
+                            {selectedTask.subtasks?.length > 0 && (
+                                <div className="h-2 bg-[#EBECF0] rounded-full mb-3 overflow-hidden">
+                                    <div
+                                        className="h-full bg-[#0079BF] transition-all duration-300"
+                                        style={{ width: `${(selectedTask.subtasks.filter(t => t.status === 'DONE').length / selectedTask.subtasks.length) * 100}%` }}
                                     />
                                 </div>
+                            )}
 
-                                <div className="pt-4 flex justify-end gap-2 border-t border-[#DFE1E6]">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsTaskModalOpen(false)}
-                                        className="px-4 py-2 text-sm font-bold text-[#42526E] hover:bg-[#EBECF0] rounded transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="px-4 py-2 bg-[#0052CC] text-white rounded text-sm font-bold hover:bg-[#0747A6] transition-colors"
-                                    >
-                                        Create
-                                    </button>
+                            <div className="space-y-2 mb-3">
+                                {selectedTask.subtasks?.map(sub => (
+                                    <div key={sub.id} className="flex items-center gap-3 p-2 hover:bg-[#F4F5F7] rounded group transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={sub.status === 'DONE'}
+                                            onChange={() => handleToggleSubtaskStatus(sub.id, sub.status)}
+                                            className="w-4 h-4 rounded border-gray-300 text-[#0079BF] focus:ring-[#0079BF]"
+                                        />
+                                        <span className={`flex-1 text-sm ${sub.status === 'DONE' ? 'line-through text-[#5E6C84]' : 'text-[#172B4D]'}`}>
+                                            {sub.title}
+                                        </span>
+                                        <button onClick={() => handleDeleteCard(sub.id)} className="opacity-0 group-hover:opacity-100 text-[#5E6C84] hover:text-red-600 transition-opacity">
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {showSubtaskInput ? (
+                                <div className="mb-2">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                                        placeholder="Enter subtask title..."
+                                        value={newSubtaskTitle}
+                                        onChange={e => setNewSubtaskTitle(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleAddSubtask();
+                                            if (e.key === 'Escape') setShowSubtaskInput(false);
+                                        }}
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                        <button onClick={handleAddSubtask} className="px-3 py-1.5 bg-[#0079BF] text-white rounded text-xs font-bold hover:bg-[#026AA7]">Add</button>
+                                        <button onClick={() => setShowSubtaskInput(false)} className="px-3 py-1.5 text-[#172B4D] hover:bg-[#EBECF0] rounded text-xs font-bold">Cancel</button>
+                                    </div>
                                 </div>
-                            </form>
+                            ) : (
+                                <button
+                                    onClick={() => setShowSubtaskInput(true)}
+                                    className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded text-sm font-medium transition-colors"
+                                >
+                                    Add an item
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Dependencies */}
+                        <div>
+                            <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Dependencies</h4>
+                            <div className="space-y-2 mb-3">
+                                {selectedTask.dependencies_details?.map(dep => (
+                                    <div key={dep.id} className="flex items-center gap-3 p-2 bg-white border border-[#DFE1E6] rounded text-sm group hover:border-[#EB5A46] transition-colors">
+                                        <GitMerge size={14} className="text-[#EB5A46]" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-[#172B4D] truncate">{dep.title}</p>
+                                            <p className="text-[10px] text-[#5E6C84] uppercase">{dep.status.replace('_', ' ')}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleRemoveDependency(dep.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-[#5E6C84] hover:text-[#EB5A46] rounded transition-all"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+
+                                {selectedTask.dependents_details?.length > 0 && (
+                                    <div className="pt-2">
+                                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase mb-2 italic">Blocking these tasks:</p>
+                                        {selectedTask.dependents_details.map(dep => (
+                                            <div key={dep.id} className="flex items-center gap-2 p-1.5 opacity-70">
+                                                <GitMerge size={12} className="text-[#61BD4F] rotate-180" />
+                                                <span className="text-xs text-[#172B4D] truncate">{dep.title}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {showDependencyInput ? (
+                                <div className="bg-white border border-[#DFE1E6] rounded p-2 animate-in fade-in slide-in-from-top-1">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        className="w-full px-3 py-1.5 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] mb-2"
+                                        placeholder="Search tasks in this board..."
+                                        value={dependencySearch}
+                                        onChange={e => setDependencySearch(e.target.value)}
+                                    />
+                                    <div className="max-h-32 overflow-y-auto mb-2 custom-scrollbar">
+                                        {tasks
+                                            .filter(t =>
+                                                t.id !== selectedTask.id &&
+                                                !selectedTask.dependencies?.includes(t.id) &&
+                                                t.title.toLowerCase().includes(dependencySearch.toLowerCase())
+                                            )
+                                            .map(t => (
+                                                <button
+                                                    key={t.id}
+                                                    onClick={() => handleAddDependency(t.id)}
+                                                    className="w-full text-left px-2 py-1.5 text-xs text-[#172B4D] hover:bg-[#F4F5F7] rounded flex items-center justify-between"
+                                                >
+                                                    <span className="truncate">{t.title}</span>
+                                                    <span className="text-[10px] text-[#5E6C84] uppercase shrink-0 ml-2">{t.status}</span>
+                                                </button>
+                                            ))}
+                                    </div>
+                                    <button onClick={() => setShowDependencyInput(false)} className="text-xs text-[#5E6C84] hover:underline">Cancel</button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setShowDependencyInput(true)}
+                                    className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded text-sm font-medium transition-colors flex items-center gap-2"
+                                >
+                                    <Plus size={14} /> Add dependency
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Activity */}
+                        <div>
+                            <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-3">Activity</h4>
+                            <div className="flex gap-2 mb-3">
+                                <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
+                                    {user.username[0].toUpperCase()}
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Write a comment..."
+                                    className="flex-1 px-3 py-2 bg-white border border-[#DFE1E6] rounded text-sm outline-none hover:border-[#0079BF] focus:border-[#0079BF]"
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
+                                />
+                            </div>
+                            <div className="space-y-4">
+                                {[...comments.map(c => ({ ...c, type: 'comment' })), ...auditLogs.map(a => ({ ...a, type: 'audit', created_at: a.timestamp }))]
+                                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                                    .map((item, i) => (
+                                        <div key={i} className="flex gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
+                                                {item.user_details?.username[0].toUpperCase() || 'S'}
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-sm font-semibold text-[#172B4D]">{item.user_details?.username || 'System'}</span>
+                                                    <span className="text-xs text-[#5E6C84]">
+                                                        {new Date(item.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                                    </span>
+                                                </div>
+                                                {item.type === 'comment' ? (
+                                                    <div className="bg-white p-2 rounded text-sm text-[#172B4D] border border-[#DFE1E6]">{item.text}</div>
+                                                ) : (
+                                                    <div className="text-xs text-[#5E6C84]">
+                                                        <span className="font-bold">{item.action.replace('_', ' ')}:</span>
+                                                        <ul className="mt-1 space-y-1">
+                                                            {Object.entries(item.details || {}).map(([field, delta]) => (
+                                                                <li key={field}>
+                                                                    Changed <span className="font-medium text-[#172B4D]">{field}</span> from <span className="italic">"{delta.old}"</span> to <span className="italic">"{delta.new}"</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
                         </div>
                     </div>
-                )
-            }
+
+                    {/* Sidebar */}
+                    <div className="w-44 space-y-2 shrink-0">
+                        <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Actions</p>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    await api.post(`/projects/tasks/${selectedTask.id}/toggle_watch/`);
+                                    fetchProjectDetails();
+                                } catch (e) { }
+                            }}
+                            className={`w-full text-left px-3 py-2 ${selectedTask.is_watching ? 'bg-[#EAE6FF] text-[#403294]' : 'bg-[#EBECF0] text-[#172B4D]'} hover:opacity-80 rounded text-sm font-medium flex items-center gap-2 transition-all`}
+                        >
+                            <Star size={14} className={selectedTask.is_watching ? 'fill-[#403294]' : ''} />
+                            {selectedTask.is_watching ? 'Watching' : 'Watch'}
+                        </button>
+                        <div className="h-4" />
+                        <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Add to card</p>
+                        <button
+                            onClick={() => setShowMembersModal(true)}
+                            className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                        >
+                            <Users size={14} /> Members
+                        </button>
+                        <button
+                            onClick={() => setShowLabelsModal(true)}
+                            className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                        >
+                            <Tag size={14} /> Labels
+                        </button>
+                        <button
+                            onClick={() => setShowDatesModal(true)}
+                            className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                        >
+                            <Clock size={14} /> Dates
+                        </button>
+                        <button
+                            onClick={() => handleDeleteCard(selectedTask.id)}
+                            className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#EB5A46] hover:text-white rounded text-sm font-medium text-[#172B4D] flex items-center gap-2 transition-colors mt-4"
+                        >
+                            <X size={14} /> Delete Card
+                        </button>
+                        <button
+                            onClick={() => setShowAttachmentModal(true)}
+                            className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                        >
+                            <Paperclip size={14} /> Attachment
+                        </button>
+                        <button
+                            onClick={() => setShowSubtaskInput(true)}
+                            className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                        >
+                            <CheckSquare size={14} /> Checklist
+                        </button>
+
+                        <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-4">Milestone</p>
+                        <select
+                            className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] outline-none appearance-none cursor-pointer"
+                            value={selectedTask.milestone || ''}
+                            onChange={(e) => handleUpdateTask(selectedTask.id, { milestone: e.target.value || null })}
+                        >
+                            <option value="">No Milestone</option>
+                            {project.milestones?.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </select>
+
+                        <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-4">Recurrence</p>
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 px-3 py-1 bg-[#EBECF0] rounded text-sm mb-1">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedTask.is_recurring}
+                                    onChange={(e) => handleUpdateTask(selectedTask.id, { is_recurring: e.target.checked })}
+                                    className="w-3 h-3 rounded border-gray-300 text-[#0079BF]"
+                                />
+                                <span className="text-[#172B4D] text-xs font-medium">Auto-repeat</span>
+                            </div>
+                            {selectedTask.is_recurring && (
+                                <select
+                                    className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] outline-none appearance-none cursor-pointer"
+                                    value={selectedTask.recurrence_rule || ''}
+                                    onChange={(e) => handleUpdateTask(selectedTask.id, { recurrence_rule: e.target.value })}
+                                >
+                                    <option value="">Select frequency...</option>
+                                    <option value="DAILY">Daily</option>
+                                    <option value="WEEKLY">Weekly</option>
+                                    <option value="MONTHLY">Monthly</option>
+                                </select>
+                            )}
+                        </div>
+
+                        <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-2">Actions</p>
+                        {activeTimer?.task === selectedTask.id && (
+                            <div className="bg-blue-50 p-3 rounded border border-blue-100 flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-[#0079BF] animate-pulse" />
+                                    <span className="text-xs font-bold text-[#0079BF] uppercase">Timer Running</span>
+                                </div>
+                                <span className="text-lg font-mono font-bold text-[#0079BF]">{formatTime(elapsedTime)}</span>
+                            </div>
+                        )}
+                        {activeTimer?.task === selectedTask.id ? (
+                            <button
+                                onClick={stopTimer}
+                                className="w-full text-left px-3 py-2 bg-[#EB5A46] hover:bg-[#CF513D] text-white rounded text-sm font-medium flex items-center gap-2"
+                            >
+                                <Clock size={14} /> Stop Timer
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => startTimer(selectedTask.id)}
+                                className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
+                            >
+                                <Clock size={14} /> Start Timer
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{/* Share Modal (Redesigned) */ }
+{
+    showShareModal && (
+        <div className="fixed inset-0 z-50 bg-[#091E42]/50 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowShareModal(false)}>
+            <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-in" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-gradient-to-r from-[#0079BF] to-[#026AA7] p-6 text-white">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xl font-bold flex items-center gap-2"><Share2 size={20} /> Share Board</h3>
+                        <button onClick={() => setShowShareModal(false)} className="p-1 hover:bg-white/20 rounded-full transition-colors"><X size={20} /></button>
+                    </div>
+                    <p className="text-blue-100 text-sm">Collaborate with your team on <strong>{project.name}</strong></p>
+                </div>
+
+                <div className="p-6">
+                    <form onSubmit={handleShareBoard} className="flex gap-2 mb-6">
+                        <input
+                            type="email"
+                            placeholder="Enter email address"
+                            className="flex-1 px-4 py-2 border-2 border-[#DFE1E6] rounded-lg text-sm outline-none focus:border-[#0079BF] transition-colors"
+                            value={shareEmail}
+                            onChange={(e) => setShareEmail(e.target.value)}
+                            required
+                        />
+                        <button
+                            type="submit"
+                            className="px-6 py-2 bg-[#0079BF] text-white rounded-lg hover:bg-[#026AA7] transition-colors text-sm font-bold shadow-md hover:shadow-lg"
+                        >
+                            Invite
+                        </button>
+                    </form>
+
+                    <div className="flex items-center justify-between p-4 bg-[#F4F5F7] rounded-lg mb-6 border border-[#DFE1E6]">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-white rounded-full shadow-sm">
+                                <Share2 size={16} className="text-[#0079BF]" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-[#5E6C84] uppercase">Public Link</p>
+                                <p className="text-sm text-[#172B4D] font-medium truncate max-w-[200px]">{window.location.href}</p>
+                            </div>
+                        </div>
+                        <button onClick={copyShareLink} className="text-[#0079BF] text-sm font-bold hover:underline">
+                            Copy Link
+                        </button>
+                    </div>
+
+                    <div>
+                        <h4 className="text-xs font-bold text-[#5E6C84] uppercase mb-4">Board Members</h4>
+                        <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                            {project.members_details?.map((member, i) => (
+                                <div key={i} className="flex items-center gap-3 p-2 hover:bg-[#F4F5F7] rounded-lg transition-colors group">
+                                    <div className="w-10 h-10 rounded-full bg-[#DFE1E6] flex items-center justify-center text-sm font-bold text-[#172B4D] group-hover:bg-white group-hover:shadow-sm transition-all border-2 border-white">
+                                        {member.username[0].toUpperCase()}
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-bold text-[#172B4D]">{member.username}</p>
+                                        <p className="text-xs text-[#5E6C84]">{member.email}</p>
+                                    </div>
+                                    <span className="px-2 py-1 bg-[#EBECF0] text-xs font-bold text-[#5E6C84] rounded">{member.role || 'Member'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{/* Milestone Modal */ }
+{
+    isRoadmapModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+                <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                    <h3 className="font-bold text-[#172B4D]">New Milestone</h3>
+                    <button onClick={() => setIsRoadmapModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                </div>
+                <form onSubmit={handleCreateMilestone} className="p-4 space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Title</label>
+                        <input
+                            required
+                            type="text"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                            value={newMilestone.name}
+                            onChange={e => setNewMilestone({ ...newMilestone, name: e.target.value })}
+                            placeholder="e.g. Beta Launch"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Due Date</label>
+                        <input
+                            required
+                            type="date"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                            value={newMilestone.due_date}
+                            onChange={e => setNewMilestone({ ...newMilestone, due_date: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                        <textarea
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] min-h-[100px]"
+                            value={newMilestone.description}
+                            onChange={e => setNewMilestone({ ...newMilestone, description: e.target.value })}
+                            placeholder="What does this milestone achieve?"
+                        />
+                    </div>
+                    <div className="pt-2">
+                        <button type="submit" className="w-full py-2 bg-[#0079BF] text-white font-bold rounded hover:bg-[#026AA7] transition-colors">
+                            Create Milestone
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+{/* Members Modal */ }
+{
+    showMembersModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowMembersModal(false)}>
+            <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Members</h3>
+                    <button onClick={() => setShowMembersModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                        <X size={16} className="text-[#5E6C84]" />
+                    </button>
+                </div>
+                <input
+                    type="text"
+                    placeholder="Search members"
+                    className="w-full px-3 py-2 mb-3 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                />
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {allUsers.map((member) => {
+                        const isProjectMember = project.members?.includes(member.id);
+                        const isAssigned = selectedTask?.assigned_to === member.id;
+
+                        return (
+                            <button
+                                key={member.id}
+                                onClick={() => handleAssignMember(member.id)}
+                                className="w-full flex items-center gap-3 p-2 rounded hover:bg-[#F4F5F7] transition-colors"
+                            >
+                                <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
+                                    {member.username[0].toUpperCase()}
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <p className="text-sm text-[#172B4D]">{member.username}</p>
+                                    {isProjectMember && !selectedTask && <p className="text-[10px] text-[#00875A] font-bold uppercase">Member</p>}
+                                </div>
+                                {(isAssigned || (isProjectMember && !selectedTask)) && (
+                                    <span className="ml-auto text-[#0079BF]">✓</span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{/* Labels Modal */ }
+{
+    showLabelsModal && selectedTask && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowLabelsModal(false)}>
+            <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Labels</h3>
+                    <button onClick={() => setShowLabelsModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                        <X size={16} className="text-[#5E6C84]" />
+                    </button>
+                </div>
+                <div className="space-y-2">
+                    {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((priority) => (
+                        <button
+                            key={priority}
+                            onClick={() => handleUpdatePriority(priority)}
+                            className="w-full flex items-center gap-3 p-3 rounded hover:opacity-90 transition-opacity text-white font-medium"
+                            style={{ backgroundColor: getPriorityColor(priority) }}
+                        >
+                            {priority}
+                            {selectedTask.priority === priority && <span className="ml-auto">✓</span>}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{/* Dates Modal */ }
+{
+    showDatesModal && selectedTask && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowDatesModal(false)}>
+            <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Dates</h3>
+                    <button onClick={() => setShowDatesModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                        <X size={16} className="text-[#5E6C84]" />
+                    </button>
+                </div>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-semibold text-[#5E6C84] mb-1 uppercase tracking-wider">Start Date</label>
+                        <input
+                            type="date"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                            value={tempStartDate || (selectedTask.start_date ? selectedTask.start_date.split('T')[0] : '')}
+                            onChange={(e) => setTempStartDate(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-[#5E6C84] mb-1 uppercase tracking-wider">Due Date</label>
+                        <input
+                            type="date"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                            value={tempDueDate || (selectedTask.due_date ? selectedTask.due_date.split('T')[0] : '')}
+                            onChange={(e) => setTempDueDate(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleUpdateDates}
+                            className="flex-1 px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-bold"
+                        >
+                            Save Dates
+                        </button>
+                        {(selectedTask.due_date || selectedTask.start_date) && (
+                            <button
+                                onClick={() => {
+                                    handleUpdateTask(selectedTask.id, { due_date: null, start_date: null });
+                                    setShowDatesModal(false);
+                                    setTempDueDate('');
+                                    setTempStartDate('');
+                                }}
+                                className="px-4 py-2 bg-[#EBECF0] text-[#172B4D] rounded hover:bg-[#FFEBE6] hover:text-[#BF2600] transition-colors text-sm font-bold"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{/* Attachment Modal */ }
+{
+    showAttachmentModal && selectedTask && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowAttachmentModal(false)}>
+            <div className="bg-white rounded-lg w-full max-w-md p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Attachments</h3>
+                    <button onClick={() => setShowAttachmentModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
+                        <X size={16} className="text-[#5E6C84]" />
+                    </button>
+                </div>
+
+                {/* Upload Section */}
+                <div className="mb-4">
+                    <label className="block text-xs font-semibold text-[#5E6C84] mb-2">Upload File</label>
+                    <div className="border-2 border-dashed border-[#DFE1E6] rounded-lg p-4 text-center hover:border-[#0079BF] transition-colors">
+                        <input
+                            type="file"
+                            id="fileInput"
+                            className="hidden"
+                            onChange={(e) => setSelectedFile(e.target.files[0])}
+                        />
+                        <label htmlFor="fileInput" className="cursor-pointer">
+                            <Paperclip size={24} className="mx-auto text-[#5E6C84] mb-2" />
+                            {selectedFile ? (
+                                <p className="text-sm text-[#172B4D] font-medium">{selectedFile.name}</p>
+                            ) : (
+                                <p className="text-sm text-[#5E6C84]">Click to browse or drag and drop</p>
+                            )}
+                        </label>
+                    </div>
+                    {selectedFile && (
+                        <button
+                            onClick={handleFileUpload}
+                            className="w-full mt-2 px-4 py-2 bg-[#0079BF] text-white rounded hover:bg-[#026AA7] transition-colors text-sm font-medium"
+                        >
+                            Upload
+                        </button>
+                    )}
+                </div>
+
+                {/* Existing Attachments */}
+                {attachments.length > 0 && (
+                    <div>
+                        <label className="block text-xs font-semibold text-[#5E6C84] uppercase mb-2">Current Attachments</label>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {attachments.map((att, i) => (
+                                <div key={i} className="flex items-center gap-3 p-2 bg-[#F4F5F7] rounded hover:bg-[#EBECF0] transition-colors">
+                                    <Paperclip size={16} className="text-[#5E6C84]" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-[#172B4D] truncate">{att.file_name || 'Attachment'}</p>
+                                        <p className="text-xs text-[#5E6C84]">
+                                            {new Date(att.created_at).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                    <a
+                                        href={att.file}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[#0079BF] hover:text-[#026AA7] text-sm"
+                                    >
+                                        View
+                                    </a>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+{/* Background Modal */ }
+{
+    showBackgroundModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowBackgroundModal(false)}>
+            <div className="bg-white rounded w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-4 border-b border-[#DFE1E6]">
+                    <h3 className="font-semibold text-[#172B4D]">Change Background</h3>
+                    <button onClick={() => setShowBackgroundModal(false)} className="text-[#5E6C84] hover:text-[#172B4D]">
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="p-4 grid grid-cols-3 gap-2">
+                    {['#0079BF', '#D29034', '#519839', '#B04632', '#89609E', '#CD5A91', '#00AECC', '#838C91', '#172B4D'].map(color => (
+                        <button
+                            key={color}
+                            onClick={() => handleUpdateBackground(color)}
+                            className="h-16 rounded hover:opacity-90 transition-opacity relative"
+                            style={{ backgroundColor: color }}
+                        >
+                            {project.background_color === color && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Check size={24} className="text-white" />
+                                </div>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{/* Settings Modal */ }
+{
+    showSettingsModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowSettingsModal(false)}>
+            <div className="bg-white rounded w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-4 border-b border-[#DFE1E6]">
+                    <h3 className="font-semibold text-[#172B4D]">Board Settings</h3>
+                    <button onClick={() => setShowSettingsModal(false)} className="text-[#5E6C84] hover:text-[#172B4D]">
+                        <X size={20} />
+                    </button>
+                </div>
+                <form onSubmit={handleUpdateProjectSettings} className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Board Name</label>
+                        <input
+                            type="text"
+                            className="w-full p-2 border border-[#DFE1E6] rounded text-[#172B4D] focus:border-[#0079BF] outline-none"
+                            value={settingsForm.name}
+                            onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })}
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                        <textarea
+                            className="w-full p-2 border border-[#DFE1E6] rounded text-[#172B4D] focus:border-[#0079BF] outline-none h-24 resize-none"
+                            value={settingsForm.description}
+                            onChange={e => setSettingsForm({ ...settingsForm, description: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="border-t border-[#DFE1E6] pt-4">
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-3">Custom Workflow (Statuses)</label>
+                        <div className="space-y-2 mb-4">
+                            {project.custom_statuses?.map(s => (
+                                <div key={s.id} className="flex items-center justify-between p-2 bg-[#F4F5F7] rounded">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
+                                        <span className="text-sm font-medium text-[#172B4D]">{s.name}</span>
+                                    </div>
+                                    <button type="button" onClick={() => handleDeleteStatus(s.id)} className="text-[#5E6C84] hover:text-red-500"><Trash2 size={14} /></button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Status name..."
+                                className="flex-1 p-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                                value={newStatusName}
+                                onChange={e => setNewStatusName(e.target.value)}
+                            />
+                            <input
+                                type="color"
+                                className="w-10 h-10 p-1 border border-[#DFE1E6] rounded cursor-pointer"
+                                value={newStatusColor}
+                                onChange={e => setNewStatusColor(e.target.value)}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleCreateStatus}
+                                className="px-3 py-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-bold text-[#42526E]"
+                            >
+                                Add
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-[#5E6C84] mt-2 italic">Note: Creating custom statuses will override the default To Do/In Progress/Done columns.</p>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setShowSettingsModal(false)}
+                            className="px-4 py-2 text-[#172B4D] hover:bg-[#F4F5F7] rounded font-medium transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 bg-[#0079BF] text-white rounded font-medium hover:bg-[#026AA7] transition-colors"
+                        >
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+{/* Goal Modal */ }
+{
+    showGoalModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+                <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                    <h3 className="font-bold text-[#172B4D]">New Project Goal</h3>
+                    <button onClick={() => setShowGoalModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                </div>
+                <form onSubmit={handleCreateGoal} className="p-4 space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Title</label>
+                        <input
+                            required
+                            type="text"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                            value={newGoal.title}
+                            onChange={e => setNewGoal({ ...newGoal, title: e.target.value })}
+                            placeholder="e.g. Increase user retention by 20%"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Target Date</label>
+                        <input
+                            type="date"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                            value={newGoal.target_date}
+                            onChange={e => setNewGoal({ ...newGoal, target_date: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                        <textarea
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] min-h-[100px]"
+                            value={newGoal.description}
+                            onChange={e => setNewGoal({ ...newGoal, description: e.target.value })}
+                            placeholder="Describe the desired outcome..."
+                        />
+                    </div>
+                    <div className="pt-2">
+                        <button type="submit" className="w-full py-2 bg-[#0079BF] text-white font-bold rounded hover:bg-[#026AA7] transition-colors">
+                            Define Goal
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+{/* Deliverable Modal */ }
+{
+    showDeliverableModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+                <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                    <h3 className="font-bold text-[#172B4D]">New Deliverable</h3>
+                    <button onClick={() => setShowDeliverableModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                </div>
+                <form onSubmit={handleCreateDeliverable} className="p-4 space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Name</label>
+                        <input
+                            required
+                            type="text"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                            value={newDeliverable.name}
+                            onChange={e => setNewDeliverable({ ...newDeliverable, name: e.target.value })}
+                            placeholder="e.g. API Documentation"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Link to Milestone</label>
+                        <select
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] appearance-none bg-white"
+                            value={newDeliverable.milestone || ''}
+                            onChange={e => setNewDeliverable({ ...newDeliverable, milestone: e.target.value })}
+                        >
+                            <option value="">No Milestone</option>
+                            {project.milestones?.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Due Date</label>
+                        <input
+                            type="date"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
+                            value={newDeliverable.due_date}
+                            onChange={e => setNewDeliverable({ ...newDeliverable, due_date: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                        <textarea
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] min-h-[100px]"
+                            value={newDeliverable.description}
+                            onChange={e => setNewDeliverable({ ...newDeliverable, description: e.target.value })}
+                            placeholder="Describe this output..."
+                        />
+                    </div>
+                    <div className="pt-2">
+                        <button type="submit" className="w-full py-2 bg-[#0079BF] text-white font-bold rounded hover:bg-[#026AA7] transition-colors">
+                            Create Deliverable
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+{/* Sprint Modal */ }
+{
+    showSprintModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+                <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                    <h3 className="font-bold text-[#172B4D]">Create Sprint</h3>
+                    <button onClick={() => setShowSprintModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                </div>
+                <div className="p-4 space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Sprint Name</label>
+                        <input
+                            type="text"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                            value={newSprint.name}
+                            onChange={e => setNewSprint({ ...newSprint, name: e.target.value })}
+                            placeholder="e.g. Sprint 1"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Start Date</label>
+                            <input
+                                type="date"
+                                className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                value={newSprint.start_date}
+                                onChange={e => setNewSprint({ ...newSprint, start_date: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">End Date</label>
+                            <input
+                                type="date"
+                                className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                value={newSprint.end_date}
+                                onChange={e => setNewSprint({ ...newSprint, end_date: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Sprint Goal</label>
+                        <textarea
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] min-h-[80px]"
+                            value={newSprint.goal}
+                            onChange={e => setNewSprint({ ...newSprint, goal: e.target.value })}
+                            placeholder="What are we aiming for?"
+                        />
+                    </div>
+                    <button onClick={handleCreateSprint} className="w-full py-2 bg-[#0052CC] text-white font-bold rounded hover:bg-[#0747A6] transition-colors">
+                        Create
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+{/* Create Task Modal */ }
+{
+    isTaskModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+                <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                    <h3 className="font-bold text-[#172B4D]">Create Issue</h3>
+                    <button onClick={() => setIsTaskModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                </div>
+                <form onSubmit={handleCreateTask} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Issue Type</label>
+                        <div className="flex gap-2">
+                            {['TASK', 'STORY', 'BUG', 'EPIC'].map(type => (
+                                <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => setNewTask({ ...newTask, issue_type: type })}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2 border rounded-sm transition-all ${newTask.issue_type === type ? 'border-[#0052CC] bg-[#DEEBFF] text-[#0052CC]' : 'border-[#DFE1E6] bg-white text-[#42526E] hover:bg-[#F4F5F7]'}`}
+                                >
+                                    {getIssueTypeIcon(type)}
+                                    <span className="text-[11px] font-bold">{type}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Summary <span className="text-red-500">*</span></label>
+                        <input
+                            required
+                            type="text"
+                            className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF]"
+                            value={newTask.title}
+                            onChange={e => setNewTask({ ...newTask, title: e.target.value })}
+                            placeholder="What needs to be done?"
+                            autoFocus
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Priority</label>
+                            <select
+                                className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] bg-white"
+                                value={newTask.priority}
+                                onChange={e => setNewTask({ ...newTask, priority: e.target.value })}
+                            >
+                                <option value="LOW">Low</option>
+                                <option value="MEDIUM">Medium</option>
+                                <option value="HIGH">High</option>
+                                <option value="CRITICAL">Critical</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Story Points</label>
+                            <input
+                                type="number"
+                                className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF]"
+                                value={newTask.story_points}
+                                onChange={e => setNewTask({ ...newTask, story_points: parseInt(e.target.value) || 0 })}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Parent Task (Optional)</label>
+                        <select
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] bg-white"
+                            value={newTask.parent_task || ''}
+                            onChange={e => setNewTask({ ...newTask, parent_task: e.target.value || null })}
+                        >
+                            <option value="">None</option>
+                            {tasks.filter(t => t.issue_type === 'EPIC' || !t.parent_task).map(t => (
+                                <option key={t.id} value={t.id}>{t.title}</option>
+                            ))}
+                        </select>
+                        <p className="text-[10px] text-[#5E6C84] mt-1">Select an Epic or Parent task to link this issue.</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                        <textarea
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] min-h-[120px] resize-none"
+                            value={newTask.description || ''}
+                            onChange={e => setNewTask({ ...newTask, description: e.target.value })}
+                            placeholder="Add more details about this issue..."
+                        />
+                    </div>
+
+                    <div className="pt-4 flex justify-end gap-2 border-t border-[#DFE1E6]">
+                        <button
+                            type="button"
+                            onClick={() => setIsTaskModalOpen(false)}
+                            className="px-4 py-2 text-sm font-bold text-[#42526E] hover:bg-[#EBECF0] rounded transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 bg-[#0052CC] text-white rounded text-sm font-bold hover:bg-[#0747A6] transition-colors"
+                        >
+                            Create
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+{/* Release Modal */ }
+{
+    showReleaseModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+                <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                    <h3 className="font-bold text-[#172B4D]">New Release</h3>
+                    <button onClick={() => setShowReleaseModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                </div>
+                <form onSubmit={handleCreateRelease} className="p-4 space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Release Name</label>
+                        <input
+                            required
+                            type="text"
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                            value={newRelease.name}
+                            onChange={e => setNewRelease({ ...newRelease, name: e.target.value })}
+                            placeholder="e.g. Q4 Platform Update"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Version Tag</label>
+                            <input
+                                type="text"
+                                className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                value={newRelease.version}
+                                onChange={e => setNewRelease({ ...newRelease, version: e.target.value })}
+                                placeholder="e.g. v2.1.0"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Release Date</label>
+                            <input
+                                type="date"
+                                required
+                                className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                value={newRelease.release_date}
+                                onChange={e => setNewRelease({ ...newRelease, release_date: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                        <textarea
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] min-h-[100px] resize-none"
+                            value={newRelease.description}
+                            onChange={e => setNewRelease({ ...newRelease, description: e.target.value })}
+                            placeholder="What's included in this release?"
+                        />
+                    </div>
+                    <div className="pt-2">
+                        <button type="submit" className="w-full py-2 bg-[#0052CC] text-white font-bold rounded hover:bg-[#0747A6] transition-colors">
+                            Create Release
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+{/* Sprint Retrospective Modal */ }
+{
+    showRetroModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+                <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                    <h3 className="font-bold text-[#172B4D]">Sprint Retrospective: {activeSprintForRetro?.name}</h3>
+                    <button onClick={() => setShowRetroModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                </div>
+                <form onSubmit={handleCreateRetro} className="p-4 space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">What went well?</label>
+                        <textarea
+                            required
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] min-h-[80px] resize-none"
+                            value={newRetro.what_went_well}
+                            onChange={e => setNewRetro({ ...newRetro, what_went_well: e.target.value })}
+                            placeholder="Successes and wins..."
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">What could be improved?</label>
+                        <textarea
+                            required
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] min-h-[80px] resize-none"
+                            value={newRetro.what_could_be_improved}
+                            onChange={e => setNewRetro({ ...newRetro, what_could_be_improved: e.target.value })}
+                            placeholder="Challenges and blockers..."
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Action Items</label>
+                        <textarea
+                            required
+                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] min-h-[80px] resize-none"
+                            value={newRetro.action_items}
+                            onChange={e => setNewRetro({ ...newRetro, action_items: e.target.value })}
+                            placeholder="Tasks for next sprint..."
+                        />
+                    </div>
+                    <div className="pt-2">
+                        <button type="submit" className="w-full py-2 bg-[#00875A] text-white font-bold rounded hover:bg-[#006644] transition-colors">
+                            Save Retrospective
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
         </div >
     );
 };
