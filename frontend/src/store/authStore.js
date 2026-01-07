@@ -48,12 +48,13 @@ const useAuthStore = create((set) => ({
     checkAuth: async () => {
         const token = localStorage.getItem('token');
         if (token) {
+            set({ loading: true });
             try {
                 const profile = await api.get('/users/profile/');
-                set({ user: profile.data, isAuthenticated: true });
+                set({ user: profile.data, isAuthenticated: true, loading: false });
             } catch (error) {
                 localStorage.removeItem('token');
-                set({ user: null, isAuthenticated: false });
+                set({ user: null, isAuthenticated: false, loading: false });
             }
         }
     },

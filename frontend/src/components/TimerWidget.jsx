@@ -29,7 +29,7 @@ const TimerWidget = () => {
 
     const fetchCurrentTimer = async () => {
         try {
-            const res = await api.get('/time/entries/current/');
+            const res = await api.get('/timetracking/entries/current/');
             if (res.data) setCurrentEntry(res.data);
             else setCurrentEntry(null);
         } catch (error) { }
@@ -46,7 +46,7 @@ const TimerWidget = () => {
     const startTimer = async (taskId) => {
         setLoading(true);
         try {
-            const res = await api.post('/time/entries/start_timer/', { task_id: taskId });
+            const res = await api.post('/timetracking/entries/start_timer/', { task_id: taskId });
             setCurrentEntry(res.data);
         } catch (error) { } finally { setLoading(false); }
     };
@@ -54,7 +54,7 @@ const TimerWidget = () => {
     const stopTimer = async () => {
         setLoading(true);
         try {
-            await api.post('/time/entries/stop_timer/');
+            await api.post('/timetracking/entries/stop_timer/');
             setCurrentEntry(null);
             setElapsed(0);
         } catch (error) { } finally { setLoading(false); }

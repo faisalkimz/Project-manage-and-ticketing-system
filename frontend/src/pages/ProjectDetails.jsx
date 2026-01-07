@@ -105,6 +105,10 @@ const ProjectDetails = () => {
     const [newChatText, setNewChatText] = useState('');
     const [newAnnounce, setNewAnnounce] = useState({ title: '', content: '' });
     const [showAnnounceModal, setShowAnnounceModal] = useState(false);
+    const [timeEntries, setTimeEntries] = useState([]);
+    const [showTimeModal, setShowTimeModal] = useState(false);
+    const [newTimeEntry, setNewTimeEntry] = useState({ task: '', description: '', duration_minutes: 0, is_billable: true, start_time: '' });
+    const [timeStats, setTimeStats] = useState({ today_minutes: 0, week_minutes: 0 });
 
     const fetchProjectDetails = async () => {
         try {
@@ -130,6 +134,12 @@ const ProjectDetails = () => {
             setAuditLogs(activityRes.data);
             setAnnouncements(announceRes.data);
             setNotifications(notifyRes.data);
+
+            // Fetch time tracking data
+            const timeRes = await api.get(`/timetracking/entries/?project_id=${id}`);
+            setTimeEntries(timeRes.data);
+            const timeStatsRes = await api.get('/timetracking/entries/stats/');
+            setTimeStats(timeStatsRes.data);
 
             if (!selectedReportSprint) {
                 const activeSprint = sprintRes.data.find(s => s.status === 'ACTIVE');
@@ -216,7 +226,7 @@ const ProjectDetails = () => {
         fetchProjectDetails();
         const fetchCurrentTimer = async () => {
             try {
-                const res = await api.get('/time/entries/current/');
+                const res = await api.get('/timetracking/entries/current/');
                 if (res.data) {
                     setActiveTimer(res.data);
                     const start = new Date(res.data.start_time).getTime();
@@ -326,7 +336,7 @@ const ProjectDetails = () => {
 
     const startTimer = async (taskId) => {
         try {
-            const res = await api.post('/time/entries/start_timer/', { task_id: taskId });
+            const res = await api.post('/timetracking/entries/start_timer/', { task_id: taskId });
             setActiveTimer(res.data);
             setElapsedTime(0);
         } catch (error) { }
@@ -334,7 +344,7 @@ const ProjectDetails = () => {
 
     const stopTimer = async () => {
         try {
-            await api.post('/time/entries/stop_timer/');
+            await api.post('/timetracking/entries/stop_timer/');
             setActiveTimer(null);
             setElapsedTime(0);
             fetchProjectDetails();
@@ -743,6 +753,21 @@ const ProjectDetails = () => {
         }
     };
 
+    const handleLogTime = async () => {
+        try {
+            await api.post('/timetracking/entries/log_manual/', {
+                ...newTimeEntry,
+                project: id
+            });
+            setShowTimeModal(false);
+            setNewTimeEntry({ task: '', description: '', duration_minutes: 0, is_billable: true, start_time: '' });
+            fetchProjectDetails();
+            showToast('Time logged successfully', 'success');
+        } catch (error) {
+            showToast('Failed to log time', 'error');
+        }
+    };
+
     const handleCreateSprint = async () => {
         if (!newSprint.name || !newSprint.start_date || !newSprint.end_date) return;
         try {
@@ -868,10 +893,21 @@ const ProjectDetails = () => {
         }
     };
 
+    if (!project) {
+        return (
+            <div className="h-screen flex items-center justify-center bg-[#FAFBFC]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-[#0052CC] border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-[#5E6C84] font-bold animate-pulse">Loading board details...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="h-screen flex flex-col bg-white font-sans text-[#172B4D] overflow-hidden">
             {/* Jira Style Header */}
-            <header className="px-6 pt-4 flex flex-col shrink-0 border-b border-[#DFE1E6]" style={{ background: project?.background_color || 'white' }}>
+            <header className="px-6 pt-4 flex flex-col shrink-0 border-b border-[#DFE1E6] bg-[#FAFBFC]" style={{ borderTop: `4px solid ${project?.background_color || '#0052CC'}` }}>
                 <div className="flex items-center gap-2 text-sm text-[#5E6C84] mb-4">
                     <span className="hover:text-[#0052CC] cursor-pointer" onClick={() => navigate('/projects')}>Projects</span>
                     <ChevronDown size={14} className="rotate-[-90deg]" />
@@ -1425,7 +1461,7 @@ const ProjectDetails = () => {
                     viewMode === 'grid' && (
                         <div className="flex-1 p-6 overflow-y-auto">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                {rootTasks.map(task => (
+                                {(rootTasks.length > 0 ? rootTasks : tasks).length > 0 ? (rootTasks.length > 0 ? rootTasks : tasks).map(task => (
                                     <div key={task.id} onClick={() => setSelectedTask(task)} className="bg-white border border-[#DFE1E6] rounded-sm p-4 hover:shadow-md transition-shadow cursor-pointer">
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">{project.key}-{task.id}</span>
@@ -1443,7 +1479,21 @@ const ProjectDetails = () => {
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                )) : (
+                                    <div className="col-span-full py-20 text-center bg-white border-2 border-dashed border-[#DFE1E6] rounded-lg">
+                                        <div className="w-16 h-16 bg-[#FAFBFC] rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Layout size={32} className="text-[#DFE1E6]" />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-[#172B4D] mb-2">No tasks found</h3>
+                                        <p className="text-sm text-[#5E6C84] mb-6 max-w-xs mx-auto">This project doesn't have any tasks in the grid yet. Start by creating a new issue.</p>
+                                        <button
+                                            onClick={() => setIsTaskModalOpen(true)}
+                                            className="px-4 py-2 bg-[#0052CC] text-white rounded text-sm font-bold hover:bg-[#0747A6] transition-colors"
+                                        >
+                                            Create issue
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )
@@ -1734,6 +1784,31 @@ const ProjectDetails = () => {
                                         <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mb-1 group-hover:text-[#0052CC]">Team Availability</p>
                                         <p className="text-3xl font-bold text-[#0052CC]">92%</p>
                                         <p className="text-xs text-[#00875A] font-medium mt-2">Stable (Last 30 days)</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="bg-white border border-[#DFE1E6] p-6 rounded-lg hover:border-[#0052CC] cursor-pointer transition-colors group">
+                                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mb-1 group-hover:text-[#0052CC]">Billable Time</p>
+                                        <p className="text-3xl font-bold text-[#172B4D]">
+                                            {Math.round(timeEntries.filter(e => e.is_billable).reduce((acc, e) => acc + (e.duration_minutes || 0), 0) / 60)}h
+                                        </p>
+                                        <p className="text-xs text-[#00875A] font-medium mt-2">78% of total tracked</p>
+                                    </div>
+                                    <div className="bg-white border border-[#DFE1E6] p-6 rounded-lg hover:border-[#0052CC] cursor-pointer transition-colors group">
+                                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mb-1 group-hover:text-[#0052CC]">SLA Compliance</p>
+                                        <p className="text-3xl font-bold text-[#172B4D]">94.2%</p>
+                                        <p className="text-xs text-[#00875A] font-medium mt-2">↑ 2.1% from target</p>
+                                    </div>
+                                    <div className="bg-white border border-[#DFE1E6] p-6 rounded-lg hover:border-[#0052CC] cursor-pointer transition-colors group">
+                                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mb-1 group-hover:text-[#0052CC]">Task Cycle Time</p>
+                                        <p className="text-3xl font-bold text-[#172B4D]">4.2d</p>
+                                        <p className="text-xs text-[#5E6C84] mt-2">Avg duration in In Progress</p>
+                                    </div>
+                                    <div className="bg-white border border-[#DFE1E6] p-6 rounded-lg hover:border-[#0052CC] cursor-pointer transition-colors group">
+                                        <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-widest mb-1 group-hover:text-[#0052CC]">Resource Cost</p>
+                                        <p className="text-3xl font-bold text-[#DE350B]">$12,450</p>
+                                        <p className="text-xs text-[#5E6C84] mt-2">Projected vs $15k Budget</p>
                                     </div>
                                 </div>
 
@@ -2064,11 +2139,11 @@ const ProjectDetails = () => {
                                         </div>
                                         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar" id="chat-stream">
                                             {chatMessages.map((msg, i) => {
-                                                const isMe = msg.sender === user.id;
+                                                const isMe = msg.sender === user?.id;
                                                 return (
                                                     <div key={i} className={`flex gap-3 group ${isMe ? 'flex-row-reverse' : ''}`}>
                                                         <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-bold shrink-0 shadow-sm border border-white">
-                                                            {msg.sender_details?.username[0].toUpperCase()}
+                                                            {msg.sender_details?.username?.[0]?.toUpperCase()}
                                                         </div>
                                                         <div className={`max-w-[70%] space-y-1 ${isMe ? 'items-end' : ''}`}>
                                                             <div className={`flex items-baseline gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
@@ -2082,7 +2157,7 @@ const ProjectDetails = () => {
                                                             <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                                                 {['LIKE', 'CELEBRATE', 'HEART'].map(emojiType => {
                                                                     const count = msg.reactions?.filter(r => r.emoji === emojiType).length || 0;
-                                                                    const hasReacted = msg.reactions?.some(r => r.emoji === emojiType && r.user === user.id);
+                                                                    const hasReacted = msg.reactions?.some(r => r.emoji === emojiType && r.user === user?.id);
                                                                     if (count === 0 && !isMe) return null;
                                                                     return (
                                                                         <button
@@ -2153,7 +2228,7 @@ const ProjectDetails = () => {
                                                     <div className="flex items-start justify-between mb-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-10 h-10 rounded-full bg-[#0052CC] text-white flex items-center justify-center font-bold">
-                                                                {ann.author_details?.username[0].toUpperCase()}
+                                                                {ann.author_details?.username?.[0]?.toUpperCase()}
                                                             </div>
                                                             <div>
                                                                 <h4 className="font-bold text-[#172B4D] flex items-center gap-2">
@@ -2235,6 +2310,171 @@ const ProjectDetails = () => {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )
+                }
+
+                {
+                    viewMode === 'timesheets' && (
+                        <div className="flex-1 p-8 overflow-y-auto bg-[#F4F5F7]">
+                            <div className="max-w-6xl mx-auto space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-[#172B4D]">Timesheets</h2>
+                                        <p className="text-sm text-[#5E6C84]">Track and manage time spent on project tasks.</p>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <div className="flex items-center gap-4 px-4 py-2 bg-white border border-[#DFE1E6] rounded shadow-sm">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-[#5E6C84] uppercase">Today</p>
+                                                <p className="text-lg font-bold text-[#172B4D]">{timeStats.today_formatted || '0h 0m'}</p>
+                                            </div>
+                                            <div className="w-px h-8 bg-[#DFE1E6]" />
+                                            <div>
+                                                <p className="text-[10px] font-bold text-[#5E6C84] uppercase">This Week</p>
+                                                <p className="text-lg font-bold text-[#172B4D]">{timeStats.week_formatted || '0h 0m'}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowTimeModal(true)}
+                                            className="px-4 py-2 bg-[#0052CC] text-white rounded font-bold text-sm flex items-center gap-2"
+                                        >
+                                            <Plus size={16} /> Log Time
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white border border-[#DFE1E6] rounded-lg overflow-hidden shadow-sm">
+                                    <table className="w-full text-left">
+                                        <thead>
+                                            <tr className="bg-[#FAFBFC] border-b border-[#DFE1E6]">
+                                                <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase">Date</th>
+                                                <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase">User</th>
+                                                <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase">Task</th>
+                                                <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase">Description</th>
+                                                <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase text-right">Duration</th>
+                                                <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase text-center">Billable</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-[#DFE1E6]">
+                                            {timeEntries.map(entry => (
+                                                <tr key={entry.id} className="hover:bg-[#FAFBFC]">
+                                                    <td className="px-6 py-4 text-sm text-[#172B4D] font-medium">
+                                                        {new Date(entry.start_time || entry.created_at).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[10px] font-bold">
+                                                                {entry.user_details?.username[0].toUpperCase()}
+                                                            </div>
+                                                            <span className="text-sm text-[#172B4D]">{entry.user_details?.username}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="text-sm font-bold text-[#0052CC] hover:underline cursor-pointer" onClick={() => navigate(`/projects/${id}?task=${entry.task}`)}>
+                                                            {entry.task_details?.title || 'General'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-[#5E6C84] truncate max-w-xs">
+                                                        {entry.description || '-'}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-[#172B4D] font-bold text-right">
+                                                        {entry.duration_minutes}m
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <div className={`w-2 h-2 rounded-full mx-auto ${entry.is_billable ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {timeEntries.length === 0 && (
+                                                <tr>
+                                                    <td colSpan="6" className="px-6 py-20 text-center text-[#5E6C84]">
+                                                        <Clock size={48} className="mx-auto mb-4 opacity-20" />
+                                                        <p>No time entries recorded for this project.</p>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                }
+
+                {
+                    viewMode === 'workload' && (
+                        <div className="flex-1 p-8 overflow-y-auto bg-[#F4F5F7]">
+                            <div className="max-w-6xl mx-auto space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-[#172B4D]">Workload & Resources</h2>
+                                        <p className="text-sm text-[#5E6C84]">Team capacity and task allocation across the project.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowCapacityModal(true)}
+                                        className="px-4 py-2 bg-white border border-[#DFE1E6] rounded text-sm font-bold text-[#172B4D] hover:bg-[#FAFBFC]"
+                                    >
+                                        Manage Capacity
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {project.members_details?.map(member => {
+                                        const memberTasks = tasks.filter(t => t.assigned_to === member.id);
+                                        const openTasks = memberTasks.filter(t => t.status !== 'DONE');
+                                        const totalPoints = memberTasks.reduce((acc, t) => acc + (t.story_points || 0), 0);
+                                        const openPoints = openTasks.reduce((acc, t) => acc + (t.story_points || 0), 0);
+
+                                        const memberTime = timeEntries.filter(e => e.user === member.id).reduce((acc, e) => acc + (e.duration_minutes || 0), 0);
+                                        const capacityMins = (capacities.find(c => c.user === member.id)?.capacity_hours || 40) * 60;
+                                        const utilization = capacityMins > 0 ? (memberTime / capacityMins) * 100 : 0;
+
+                                        return (
+                                            <div key={member.id} className="bg-white border border-[#DFE1E6] rounded-lg p-6 shadow-sm hover:shadow-md transition-all">
+                                                <div className="flex items-center gap-4 mb-6">
+                                                    <div className="w-12 h-12 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-lg font-bold">
+                                                        {member.username[0].toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-[#172B4D]">{member.username}</h3>
+                                                        <p className="text-xs text-[#5E6C84] uppercase font-bold tracking-wider">{member.role_details?.name || 'Developer'}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-4">
+                                                    <div className="flex justify-between items-end">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-bold text-[#5E6C84] uppercase">Capacity Utilization</p>
+                                                            <p className="text-lg font-bold text-[#172B4D]">{utilization.toFixed(0)}%</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">{memberTime}m / {capacityMins / 60}h</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="h-2 bg-[#EBECF0] rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full transition-all duration-700 ${utilization > 100 ? 'bg-red-500' : utilization > 80 ? 'bg-amber-500' : 'bg-green-500'}`}
+                                                            style={{ width: `${Math.min(utilization, 100)}%` }}
+                                                        />
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#DFE1E6]">
+                                                        <div>
+                                                            <p className="text-[10px] font-bold text-[#5E6C84] uppercase mb-1">Open Points</p>
+                                                            <p className="text-xl font-bold text-[#172B4D]">{openPoints} / {totalPoints}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-bold text-[#5E6C84] uppercase mb-1">Tasks</p>
+                                                            <p className="text-xl font-bold text-[#172B4D]">{openTasks.length} / {memberTasks.length}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     )
@@ -2964,7 +3204,7 @@ const ProjectDetails = () => {
                                         {project.members_details?.map((member, i) => (
                                             <div key={i} className="flex items-center gap-3 p-2 hover:bg-[#F4F5F7] rounded-lg transition-colors group">
                                                 <div className="w-10 h-10 rounded-full bg-[#DFE1E6] flex items-center justify-center text-sm font-bold text-[#172B4D] group-hover:bg-white group-hover:shadow-sm transition-all border-2 border-white">
-                                                    {member.username[0].toUpperCase()}
+                                                    {member.username?.[0]?.toUpperCase()}
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-sm font-bold text-[#172B4D]">{member.username}</p>
@@ -3060,7 +3300,7 @@ const ProjectDetails = () => {
                                             className="w-full flex items-center gap-3 p-2 rounded hover:bg-[#F4F5F7] transition-colors"
                                         >
                                             <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
-                                                {member.username[0].toUpperCase()}
+                                                {member.username?.[0]?.toUpperCase()}
                                             </div>
                                             <div className="flex-1 text-left">
                                                 <p className="text-sm text-[#172B4D]">{member.username}</p>
@@ -3850,6 +4090,144 @@ const ProjectDetails = () => {
                                         className="w-full py-2 text-sm font-bold text-[#42526E] hover:bg-[#EBECF0] rounded transition-colors"
                                     >
                                         Reset to default
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+            {/* Time Tracking Modal */}
+            {
+                showTimeModal && (
+                    <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                                <div className="flex items-center gap-2">
+                                    <Clock size={18} className="text-[#0052CC]" />
+                                    <h3 className="font-bold text-[#172B4D]">Log Work</h3>
+                                </div>
+                                <button onClick={() => setShowTimeModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                            </div>
+                            <form onSubmit={(e) => { e.preventDefault(); handleLogTime(); }} className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Issue / Task</label>
+                                    <select
+                                        required
+                                        className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                        value={newTimeEntry.task}
+                                        onChange={e => setNewTimeEntry({ ...newTimeEntry, task: e.target.value })}
+                                    >
+                                        <option value="">Select a task</option>
+                                        {tasks.map(t => <option key={t.id} value={t.id}>[{project.key}-{t.id}] {t.title}</option>)}
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Duration (minutes)</label>
+                                        <input
+                                            required
+                                            type="number"
+                                            className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                            value={newTimeEntry.duration_minutes}
+                                            onChange={e => setNewTimeEntry({ ...newTimeEntry, duration_minutes: parseInt(e.target.value) })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Start Time</label>
+                                        <input
+                                            required
+                                            type="datetime-local"
+                                            className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                            value={newTimeEntry.start_time}
+                                            onChange={e => setNewTimeEntry({ ...newTimeEntry, start_time: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                                    <textarea
+                                        className="w-full px-3 py-2 border-2 border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] min-h-[80px] resize-none"
+                                        value={newTimeEntry.description}
+                                        onChange={e => setNewTimeEntry({ ...newTimeEntry, description: e.target.value })}
+                                        placeholder="What did you work on?"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="is-billable"
+                                        checked={newTimeEntry.is_billable}
+                                        onChange={e => setNewTimeEntry({ ...newTimeEntry, is_billable: e.target.checked })}
+                                    />
+                                    <label htmlFor="is-billable" className="text-xs font-bold text-[#42526E] uppercase">Billable Time</label>
+                                </div>
+                                <div className="pt-2">
+                                    <button type="submit" className="w-full py-2.5 bg-[#0052CC] text-white font-bold rounded hover:bg-[#0747A6] transition-all shadow-md">
+                                        Log Time
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+            {/* Capacity Planning Modal */}
+            {
+                showCapacityModal && (
+                    <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                                <div className="flex items-center gap-2">
+                                    <PieChart size={18} className="text-[#0052CC]" />
+                                    <h3 className="font-bold text-[#172B4D]">Resource Capacity</h3>
+                                </div>
+                                <button onClick={() => setShowCapacityModal(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-xs text-[#5E6C84] mb-4">Set the weekly working hours for team members to calculate utilization correctly.</p>
+                                <div className="space-y-3">
+                                    {project.members_details?.map(member => (
+                                        <div key={member.id} className="flex items-center justify-between p-3 bg-[#FAFBFC] border border-[#DFE1E6] rounded">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-xs font-bold">
+                                                    {member.username?.[0]?.toUpperCase()}
+                                                </div>
+                                                <span className="text-sm font-bold text-[#172B4D]">{member.username}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    className="w-16 px-2 py-1 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                                    value={memberCapacities[member.id] || 40}
+                                                    onChange={(e) => setMemberCapacities({ ...memberCapacities, [member.id]: parseInt(e.target.value) })}
+                                                />
+                                                <span className="text-xs font-bold text-[#5E6C84]">H/WK</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="pt-4 flex gap-3">
+                                    <button
+                                        onClick={() => setShowCapacityModal(false)}
+                                        className="flex-1 py-2 bg-[#EBECF0] text-[#42526E] font-bold rounded hover:bg-[#DFE1E6]"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await Promise.all(Object.entries(memberCapacities).map(([userId, hours]) =>
+                                                    api.post('/projects/capacities/set_capacity/', { user: userId, capacity_hours: hours })
+                                                ));
+                                                setShowCapacityModal(false);
+                                                fetchProjectDetails();
+                                                showToast('Capacities updated', 'success');
+                                            } catch (error) { showToast('Update failed', 'error'); }
+                                        }}
+                                        className="flex-1 py-2 bg-[#0052CC] text-white font-bold rounded hover:bg-[#0747A6]"
+                                    >
+                                        Save Changes
                                     </button>
                                 </div>
                             </div>

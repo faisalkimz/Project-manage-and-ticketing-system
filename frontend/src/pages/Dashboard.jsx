@@ -101,7 +101,7 @@ const Dashboard = () => {
                                                     className="w-6 h-6 rounded-full bg-white text-[#0079BF] border border-[#0079BF] flex items-center justify-center text-[10px] font-semibold"
                                                     title={m.username}
                                                 >
-                                                    {m.username[0].toUpperCase()}
+                                                    {m.username?.[0]?.toUpperCase()}
                                                 </div>
                                             ))}
                                         </div>
@@ -154,7 +154,7 @@ const Dashboard = () => {
                                                     className="w-6 h-6 rounded-full bg-[#DFE1E6] flex items-center justify-center text-[10px] font-semibold"
                                                     title={task.assigned_to_details.username}
                                                 >
-                                                    {task.assigned_to_details.username[0].toUpperCase()}
+                                                    {task.assigned_to_details.username?.[0]?.toUpperCase()}
                                                 </div>
                                             )}
                                         </div>

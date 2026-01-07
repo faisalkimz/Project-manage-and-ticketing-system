@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Layout, Briefcase, Users, Settings, LogOut, MessageSquare, Menu, X, Star, PieChart, Bell, Kanban, ClipboardList, Package, BarChart, Activity, Flag } from 'lucide-react';
+import { Layout, Briefcase, Users, Settings, LogOut, MessageSquare, Menu, X, Star, PieChart, Bell, Kanban, ClipboardList, Package, BarChart, Activity, Flag, Calendar, Clock } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
@@ -78,7 +78,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
     const sidebarClasses = `
         ${isMobile ? (isOpen ? 'translate-x-0' : '-translate-x-full') : ''}
         ${!isMobile && isCollapsed ? 'w-16' : 'w-64'}
-        h-shadow bg-[#0079BF] flex flex-col shrink-0 transition-transform duration-300 md:transition-all
+        h-shadow bg-[#172B4D] flex flex-col shrink-0 transition-transform duration-300 md:transition-all
         fixed left-0 top-0 bottom-0 z-[100] h-full
     `;
 
@@ -115,7 +115,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                 </div>
 
                 {/* Navigation */}
-                <div className="flex-1 py-4 overflow-y-auto custom-scrollbar px-3">
+                <div className="flex-1 py-4 px-3 overflow-y-auto scrollbar-hide">
                     <nav className="space-y-0.5">
                         {links.map((link) => {
                             if (link.roles && !link.roles.includes(user?.role)) return null;
@@ -175,30 +175,81 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                                 <p className="text-[10px] font-bold text-[rgba(255,255,255,0.6)] uppercase tracking-widest">Project</p>
                                 <Briefcase size={12} className="text-[rgba(255,255,255,0.4)]" />
                             </div>
-                            <div className="space-y-0.5">
-                                {[
-                                    { name: 'Board', tab: 'board', icon: Kanban },
-                                    { name: 'Backlog', tab: 'list', icon: ClipboardList },
-                                    { name: 'Releases', tab: 'releases', icon: Package },
-                                    { name: 'Agile Reports', tab: 'reports', icon: BarChart },
-                                    { name: 'Workload', tab: 'workload', icon: Activity },
-                                    { name: 'Collaborate', tab: 'collaboration', icon: MessageSquare }
-                                ].map((item) => {
-                                    const active = projectTab === item.tab;
-                                    return (
-                                        <Link
-                                            key={item.tab}
-                                            to={`/projects/${projectId}?tab=${item.tab}`}
-                                            className={`flex items-center gap-3 px-3 py-2 rounded-sm transition-all font-medium text-xs ${active
-                                                ? 'bg-[rgba(255,255,255,0.25)] text-white shadow-sm'
-                                                : 'text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.15)] hover:text-white'
-                                                }`}
-                                        >
-                                            <item.icon size={14} />
-                                            <span>{item.name}</span>
-                                        </Link>
-                                    );
-                                })}
+                            <div className="space-y-4">
+                                <div>
+                                    <p className="px-3 text-[10px] font-bold text-[rgba(255,255,255,0.4)] uppercase tracking-widest mb-1">Planning</p>
+                                    {[
+                                        { name: 'Roadmap', tab: 'roadmap', icon: Flag },
+                                        { name: 'Backlog', tab: 'list', icon: ClipboardList },
+                                        { name: 'Board', tab: 'board', icon: Kanban },
+                                    ].map((item) => {
+                                        const active = projectTab === item.tab;
+                                        return (
+                                            <Link
+                                                key={item.tab}
+                                                to={`/projects/${projectId}?tab=${item.tab}`}
+                                                className={`flex items-center gap-3 px-3 py-1.5 rounded-sm transition-all font-medium text-xs ${active
+                                                    ? 'bg-[rgba(255,255,255,0.15)] text-white'
+                                                    : 'text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={14} />
+                                                <span>{item.name}</span>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+
+                                <div>
+                                    <p className="px-3 text-[10px] font-bold text-[rgba(255,255,255,0.4)] uppercase tracking-widest mb-1">Organization</p>
+                                    {[
+                                        { name: 'Overview', tab: 'overview', icon: Layout },
+                                        { name: 'Calendar', tab: 'calendar', icon: Calendar },
+                                        { name: 'Timeline', tab: 'timeline', icon: Activity },
+                                        { name: 'Grid', tab: 'grid', icon: Layout },
+                                    ].map((item) => {
+                                        const active = projectTab === item.tab;
+                                        return (
+                                            <Link
+                                                key={item.tab}
+                                                to={`/projects/${projectId}?tab=${item.tab}`}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-sm transition-all font-medium text-xs ${active
+                                                    ? 'bg-[rgba(255,255,255,0.15)] text-white'
+                                                    : 'text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={14} />
+                                                <span>{item.name}</span>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+
+                                <div>
+                                    <p className="px-3 text-[10px] font-bold text-[rgba(255,255,255,0.4)] uppercase tracking-widest mb-1">Team</p>
+                                    {[
+                                        { name: 'Releases', tab: 'releases', icon: Package },
+                                        { name: 'Reports', tab: 'reports', icon: BarChart },
+                                        { name: 'Workload', tab: 'workload', icon: Activity },
+                                        { name: 'Timesheets', tab: 'timesheets', icon: Clock },
+                                        { name: 'Collaborate', tab: 'collaboration', icon: MessageSquare }
+                                    ].map((item) => {
+                                        const active = projectTab === item.tab;
+                                        return (
+                                            <Link
+                                                key={item.tab}
+                                                to={`/projects/${projectId}?tab=${item.tab}`}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-sm transition-all font-medium text-xs ${active
+                                                    ? 'bg-[rgba(255,255,255,0.15)] text-white shadow-sm'
+                                                    : 'text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={14} />
+                                                <span>{item.name}</span>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     )}

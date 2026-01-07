@@ -232,7 +232,7 @@ const Team = () => {
                                         <div className="flex -space-x-1">
                                             {team.members_details?.slice(0, 4).map((m, i) => (
                                                 <div key={i} title={m.username} className="w-7 h-7 rounded-full bg-[#DFE1E6] border border-white flex items-center justify-center text-[10px] font-bold text-[#172B4D]">
-                                                    {m.username[0].toUpperCase()}
+                                                    {m.username?.[0]?.toUpperCase()}
                                                 </div>
                                             ))}
                                             {(team.members_details?.length || 0) > 4 && (
@@ -280,7 +280,7 @@ const Team = () => {
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-bold text-[#172B4D]">
-                                                                {user.username[0].toUpperCase()}
+                                                                {user.username?.[0]?.toUpperCase()}
                                                             </div>
                                                             <div>
                                                                 <p className="text-sm font-medium text-[#172B4D]">{user.username}</p>
@@ -469,7 +469,7 @@ const Team = () => {
                                                 }`}
                                         >
                                             <div className="w-8 h-8 rounded-full bg-[#EBECF0] flex items-center justify-center text-xs font-bold text-[#172B4D]">
-                                                {u.username[0].toUpperCase()}
+                                                {u.username?.[0]?.toUpperCase()}
                                             </div>
                                             <div className="flex-1">
                                                 <p className="text-sm font-semibold text-[#172B4D]">{u.username}</p>
