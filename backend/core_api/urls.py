@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/activity/', include('activity.urls')),
     path('api/time/', include('timetracking.urls')),
     path('api/reports/', include('reports.urls')),
+    path('api/collaboration/', include('collaboration.urls')),
 ]
 
 if settings.DEBUG:

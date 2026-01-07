@@ -1,4 +1,5 @@
 from rest_framework import generics, permissions, status, filters, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import UserSerializer, RegisterSerializer, TeamInviteSerializer, TeamSerializer, UserUpdateSerializer
@@ -20,6 +21,48 @@ class TeamViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         team = serializer.save(lead=self.request.user)
         team.members.add(self.request.user)
+
+    @action(detail=True, methods=['get'])
+    def activity(self, request, pk=None):
+        team = self.get_object()
+        from activity.models import AuditLog
+        members = team.members.all()
+        logs = AuditLog.objects.filter(user__in=members).order_by('-timestamp')[:50]
+        
+        data = []
+        for log in logs:
+            data.append({
+                'user': log.user.username,
+                'action': log.action,
+                'timestamp': log.timestamp,
+                'details': log.details,
+                'object': str(log.content_object) if log.content_object else None
+            })
+        return Response(data)
+
+    @action(detail=True, methods=['get'])
+    def workload(self, request, pk=None):
+        team = self.get_object()
+        from projects.models import Task
+        from django.db.models import Count, Q, Sum
+        
+        members = team.members.all()
+        distribution = []
+        for member in members:
+            tasks = Task.objects.filter(assigned_to=member)
+            stats = tasks.aggregate(
+                total_tasks=Count('id'),
+                open_tasks=Count('id', filter=Q(status__in=['TODO', 'IN_PROGRESS'])),
+                total_points=Sum('story_points'),
+                open_points=Sum('story_points', filter=Q(status__in=['TODO', 'IN_PROGRESS']))
+            )
+            distribution.append({
+                'user_id': member.id,
+                'username': member.username,
+                **stats
+            })
+        
+        return Response(distribution)
 
 class TeamInviteViewSet(viewsets.ModelViewSet):
     queryset = TeamInvite.objects.all()

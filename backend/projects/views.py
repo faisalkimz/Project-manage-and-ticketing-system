@@ -202,6 +202,27 @@ class ProjectViewSet(viewsets.ModelViewSet):
             project.starred_by.add(user)
             return Response({'status': 'starred', 'is_starred': True})
 
+    @action(detail=True, methods=['get'])
+    def recent_activity(self, request, pk=None):
+        project = self.get_object()
+        from activity.models import AuditLog
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+        
+        task_ct = ContentType.objects.get_for_model(Task)
+        project_ct = ContentType.objects.get_for_model(Project)
+        
+        task_ids = project.tasks.values_list('id', flat=True)
+        
+        logs = AuditLog.objects.filter(
+            (Q(content_type=task_ct) & Q(object_id__in=task_ids)) |
+            (Q(content_type=project_ct) & Q(object_id=project.id))
+        ).order_by('-timestamp')[:20]
+        
+        from activity.serializers import AuditLogSerializer
+        serializer = AuditLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
 class MilestoneViewSet(viewsets.ModelViewSet):
     queryset = Milestone.objects.all()
     serializer_class = MilestoneSerializer
@@ -238,6 +259,15 @@ class TaskViewSet(viewsets.ModelViewSet):
             return qs.filter(project_id=project_id)
         return qs
 
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        TaskHistory.objects.create(
+            task=instance,
+            status=instance.status,
+            story_points=instance.story_points,
+            changed_by=self.request.user
+        )
 
     @action(detail=True, methods=['post'])
     def toggle_watch(self, request, pk=None):
@@ -276,6 +306,15 @@ class TaskViewSet(viewsets.ModelViewSet):
                 object_id=new_instance.id,
                 details=changes
             )
+            
+            # Populate TaskHistory for Agile reporting if status or story_points changed
+            if 'status' in changes or 'story_points' in changes:
+                TaskHistory.objects.create(
+                    task=new_instance,
+                    status=new_instance.status,
+                    story_points=new_instance.story_points,
+                    changed_by=self.request.user
+                )
         
         # Handle Task Recurrence
         if 'status' in changes and changes['status']['new'] == 'DONE' and new_instance.is_recurring:

@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'activity.apps.ActivityConfig',
     'timetracking.apps.TimetrackingConfig',
     'reports.apps.ReportsConfig',
+    'collaboration.apps.CollaborationConfig',
 ]
 
 MIDDLEWARE = [

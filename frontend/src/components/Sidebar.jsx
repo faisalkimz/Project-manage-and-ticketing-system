@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Layout, Briefcase, Users, Settings, LogOut, MessageSquare, Menu, X, Star, PieChart } from 'lucide-react';
+import { Layout, Briefcase, Users, Settings, LogOut, MessageSquare, Menu, X, Star, PieChart, Bell, Kanban, ClipboardList, Package, BarChart, Activity, Flag } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
@@ -8,6 +8,8 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
     const location = useLocation();
     const { user, logout } = useAuthStore();
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const projectId = location.pathname.match(/\/projects\/(\d+)/)?.[1];
+    const projectTab = new URLSearchParams(location.search).get('tab') || 'board';
 
     const links = [
         { name: 'Boards', path: '/', icon: Layout },
@@ -50,12 +52,26 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
         } catch (error) { console.error('Failed to fetch projects', error); }
     };
 
+    const [notifications, setNotifications] = useState([]);
+
+    const fetchNotifications = async () => {
+        try {
+            const res = await api.get('/collaboration/notifications/');
+            setNotifications(res.data);
+        } catch (error) { console.error('Failed to fetch notifications', error); }
+    };
+
     useEffect(() => {
         if (user) {
             fetchStarred();
+            fetchNotifications();
             // Listen for star updates
             window.addEventListener('projectStarred', fetchStarred);
-            return () => window.removeEventListener('projectStarred', fetchStarred);
+            const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
+            return () => {
+                window.removeEventListener('projectStarred', fetchStarred);
+                clearInterval(interval);
+            };
         }
     }, [user, location.pathname]);
 
@@ -151,6 +167,42 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                             </div>
                         </div>
                     )}
+
+                    {/* Project Contextual Links */}
+                    {projectId && (!isCollapsed || isMobile) && (
+                        <div className="mt-6 pt-4 border-t border-[rgba(255,255,255,0.1)] px-3">
+                            <div className="flex items-center justify-between mb-3 px-1">
+                                <p className="text-[10px] font-bold text-[rgba(255,255,255,0.6)] uppercase tracking-widest">Project</p>
+                                <Briefcase size={12} className="text-[rgba(255,255,255,0.4)]" />
+                            </div>
+                            <div className="space-y-0.5">
+                                {[
+                                    { name: 'Board', tab: 'board', icon: Kanban },
+                                    { name: 'Backlog', tab: 'list', icon: ClipboardList },
+                                    { name: 'Releases', tab: 'releases', icon: Package },
+                                    { name: 'Agile Reports', tab: 'reports', icon: BarChart },
+                                    { name: 'Workload', tab: 'workload', icon: Activity },
+                                    { name: 'Collaborate', tab: 'collaboration', icon: MessageSquare }
+                                ].map((item) => {
+                                    const active = projectTab === item.tab;
+                                    return (
+                                        <Link
+                                            key={item.tab}
+                                            to={`/projects/${projectId}?tab=${item.tab}`}
+                                            className={`flex items-center gap-3 px-3 py-2 rounded-sm transition-all font-medium text-xs ${active
+                                                ? 'bg-[rgba(255,255,255,0.25)] text-white shadow-sm'
+                                                : 'text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.15)] hover:text-white'
+                                                }`}
+                                        >
+                                            <item.icon size={14} />
+                                            <span>{item.name}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                 </div>
 
                 {/* User Profile */}
@@ -177,13 +229,25 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                                         {user?.role?.replace('_', ' ') || 'Viewer'}
                                     </p>
                                 </div>
-                                <button
-                                    onClick={logout}
-                                    className="p-1.5 hover:bg-[rgba(255,255,255,0.2)] rounded-sm transition-colors text-[rgba(255,255,255,0.85)] hover:text-white"
-                                    title="Log out"
-                                >
-                                    <LogOut size={16} />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    <Link
+                                        to="/settings"
+                                        className="p-1.5 hover:bg-[rgba(255,255,255,0.2)] rounded-sm transition-colors text-[rgba(255,255,255,0.85)] hover:text-white relative"
+                                        title="Notifications"
+                                    >
+                                        <Bell size={16} />
+                                        {notifications.filter(n => !n.is_read).length > 0 && (
+                                            <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-[#0079BF] rounded-full" />
+                                        )}
+                                    </Link>
+                                    <button
+                                        onClick={logout}
+                                        className="p-1.5 hover:bg-[rgba(255,255,255,0.2)] rounded-sm transition-colors text-[rgba(255,255,255,0.85)] hover:text-white"
+                                        title="Log out"
+                                    >
+                                        <LogOut size={16} />
+                                    </button>
+                                </div>
                             </>
                         )}
                     </div>
