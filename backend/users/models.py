@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 import pyotp
+import uuid
 from django.utils import timezone
 
 # Removed Role/Permission models to simplify migration/usage
@@ -48,10 +49,14 @@ class EnterpriseSubscription(models.Model):
     billing_email = models.EmailField()
 
 class Team(models.Model):
+    # Keep UUID primary key to match migration and DB
+    id = models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True)
+
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     slug = models.SlugField(unique=True, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     members = models.ManyToManyField('users.User', related_name='teams', blank=True)
     lead = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, related_name='led_teams')
     enterprise = models.ForeignKey(Enterprise, on_delete=models.CASCADE, related_name='teams', null=True, blank=True)
@@ -60,6 +65,9 @@ class Team(models.Model):
         return self.name
 
 class User(AbstractUser):
+    # Keep UUID primary key to match current DB schema
+    id = models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True)
+
     ROLE_CHOICES = [
         ('ADMIN', 'Admin'),
         ('MANAGER', 'Manager'),

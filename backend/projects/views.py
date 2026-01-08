@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from users.utils import user_has_role, user_role_in
 from .models import (
     Project, Task, Tag, Milestone, ProjectCategory,
     Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
@@ -26,7 +27,10 @@ class PortfolioViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role and user.role.name == 'ADMIN':
+        # Support both the old Role FK and the newer string 'role' field
+        is_admin = user_has_role(user, 'ADMIN')
+
+        if is_admin:
             return Portfolio.objects.all()
         return Portfolio.objects.filter(owner=user)
 
@@ -47,7 +51,9 @@ class ProgramViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role and user.role.name == 'ADMIN':
+        is_admin = user_has_role(user, 'ADMIN')
+
+        if is_admin:
             return Program.objects.all()
         return Program.objects.filter(owner=user)
 
@@ -127,7 +133,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role and user.role.name == 'ADMIN':
+        is_admin = user_has_role(user, 'ADMIN')
+
+        if is_admin:
             return Project.objects.all()
             
         from django.db.models import Q

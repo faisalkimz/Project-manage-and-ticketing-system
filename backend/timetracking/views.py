@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from users.utils import user_role_in
 from .models import TimeEntry, WorkSchedule, ResourceHoliday
 from .serializers import TimeEntrySerializer, WorkScheduleSerializer, ResourceHolidaySerializer
 from django.utils import timezone
@@ -14,7 +15,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if user.role and user.role.name in ['ADMIN', 'PROJECT_MANAGER']:
+        if user_role_in(user, ['ADMIN', 'PROJECT_MANAGER']):
             return TimeEntry.objects.all()
         # Allow users to see their own entries or entries for projects they are in
         return TimeEntry.objects.filter(Q(user=user) | Q(project__members=user)).distinct()
@@ -95,7 +96,7 @@ class WorkScheduleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        if self.request.user.role and self.request.user.role.name in ['ADMIN', 'PROJECT_MANAGER']:
+        if user_role_in(self.request.user, ['ADMIN', 'PROJECT_MANAGER']):
             return WorkSchedule.objects.all()
         return WorkSchedule.objects.filter(user=self.request.user)
 

@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from users.utils import user_role_in
 from .models import Comment, Attachment, AuditLog
 from .serializers import CommentSerializer, AttachmentSerializer, AuditLogSerializer
 
@@ -15,7 +16,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         
         # Visibility logic for internal comments
-        if not (user.role and user.role.name in ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER']):
+        if not user_role_in(user, ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER']):
             queryset = queryset.filter(is_internal=False)
             
         content_type = self.request.query_params.get('content_type')

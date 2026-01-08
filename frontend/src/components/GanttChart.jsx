@@ -84,14 +84,21 @@ const GanttChart = ({ tasks, onTaskClick, onUpdateTask }) => {
     const renderDependencies = () => {
         const lines = [];
         const taskPositions = {};
+        const timelineElement = containerRef.current?.querySelector('.timeline-grid');
+        const svgWidth = timelineElement?.offsetWidth || 0;
+        const ROW_HEIGHT = 48;
 
+        // Prepare percent-based positions (left/width are percent values)
         visibleTasks.forEach((task, index) => {
             taskPositions[task.id] = {
-                x: task.pos.left + task.pos.width,
-                y: index * 48 + 24, // index * rowHeight + centerOfBar
-                start_x: task.pos.left
+                x: task.pos.left + task.pos.width, // percent
+                y: index * ROW_HEIGHT + ROW_HEIGHT / 2, // px
+                start_x: task.pos.left // percent
             };
         });
+
+        // If layout isn't measured yet, skip rendering lines
+        if (!svgWidth) return null;
 
         visibleTasks.forEach((task) => {
             if (task.dependencies && task.dependencies.length > 0) {
@@ -100,17 +107,17 @@ const GanttChart = ({ tasks, onTaskClick, onUpdateTask }) => {
                     const currentPos = taskPositions[task.id];
 
                     if (depPos && currentPos) {
-                        const startX = depPos.x;
+                        // Convert percent-based X coords to pixel positions relative to the measured svg width
+                        const startXpx = (depPos.x / 100) * svgWidth;
+                        const endXpx = (currentPos.start_x / 100) * svgWidth;
+                        const midXpx = startXpx + (endXpx - startXpx) / 2;
                         const startY = depPos.y;
-                        const endX = currentPos.start_x;
                         const endY = currentPos.y;
 
-                        // Create a stepped line
-                        const midX = startX + (endX - startX) / 2;
                         lines.push(
                             <path
                                 key={`${depId}-${task.id}`}
-                                d={`M ${startX}% ${startY} L ${midX}% ${startY} L ${midX}% ${endY} L ${endX}% ${endY}`}
+                                d={`M ${startXpx.toFixed(2)} ${startY} L ${midXpx.toFixed(2)} ${startY} L ${midXpx.toFixed(2)} ${endY} L ${endXpx.toFixed(2)} ${endY}`}
                                 fill="none"
                                 stroke="#A5ADBA"
                                 strokeWidth="1.5"

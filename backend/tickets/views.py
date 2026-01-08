@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from users.utils import user_role_in
 from .models import Ticket
 from .serializers import TicketSerializer
 from projects.models import Task, Project
@@ -12,7 +13,7 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role and user.role.name in ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER']:
+        if user_role_in(user, ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER']):
             return Ticket.objects.all()
         return Ticket.objects.filter(submitted_by=user)
 

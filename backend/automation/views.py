@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from users.utils import user_role_in
 from django.utils import timezone
 from django.db.models import Q
 from .models import WorkflowRule, WorkflowExecution, Webhook, WebhookLog, BackgroundJob, AutomationTemplate
@@ -20,7 +21,7 @@ class WorkflowRuleViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         # Admins see all, others see their created rules
-        if hasattr(user.role, 'name') and user.role.name in ['ADMIN', 'PROJECT_MANAGER']:
+        if user_role_in(user, ['ADMIN', 'PROJECT_MANAGER']):
             return WorkflowRule.objects.all()
         return WorkflowRule.objects.filter(created_by=user)
     
@@ -79,7 +80,7 @@ class WorkflowExecutionViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if hasattr(user.role, 'name') and user.role.name in ['ADMIN', 'PROJECT_MANAGER']:
+        if user_role_in(user, ['ADMIN', 'PROJECT_MANAGER']):
             return WorkflowExecution.objects.all()
         return WorkflowExecution.objects.filter(rule__created_by=user)
 
@@ -150,7 +151,7 @@ class BackgroundJobViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if hasattr(user.role, 'name') and user.role.name in ['ADMIN']:
+        if user_role_in(user, ['ADMIN']):
             return BackgroundJob.objects.all()
         return BackgroundJob.objects.filter(created_by=user)
     
