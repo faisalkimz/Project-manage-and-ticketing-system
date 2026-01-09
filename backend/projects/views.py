@@ -2,6 +2,9 @@ from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.utils import user_has_role, user_role_in
+from django.utils import timezone
+from django.db.models import Q
+from activity.models import AuditLog
 from .models import (
     Project, Task, Tag, Milestone, ProjectCategory,
     Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
@@ -12,8 +15,13 @@ from .serializers import (
     ProjectCategorySerializer, PortfolioSerializer, ProgramSerializer,
     ProjectGoalSerializer, DeliverableSerializer, ProjectStatusSerializer,
     SprintSerializer, ReleaseSerializer, SprintRetrospectiveSerializer,
-    SprintCapacitySerializer
+    SprintCapacitySerializer, ReminderSerializer
 )
+# Import Ticket model lazily to avoid circular imports in some test setups
+try:
+    from tickets.models import Ticket
+except Exception:
+    Ticket = None
 
 class ProjectCategoryViewSet(viewsets.ModelViewSet):
     queryset = ProjectCategory.objects.all()
@@ -375,6 +383,96 @@ class TaskViewSet(viewsets.ModelViewSet):
             queryset.update(status=value)
             
         return Response({'status': 'Bulk operation successful'})
+
+    @action(detail=True, methods=['post'])
+    def acknowledge(self, request, pk=None):
+        task = self.get_object()
+        AuditLog.objects.create(user=request.user, action='ACKNOWLEDGE_TASK', content_object=task, details={})
+        return Response({'status': 'acknowledged'})
+
+    @action(detail=True, methods=['post'])
+    def snooze(self, request, pk=None):
+        task = self.get_object()
+        duration = request.data.get('duration', 1)
+        unit = request.data.get('unit', 'days')
+        try:
+            dur = int(duration)
+        except Exception:
+            return Response({'error': 'invalid duration'}, status=400)
+        from datetime import timedelta
+        delta = timedelta(days=dur) if unit == 'days' else timedelta(hours=dur)
+        if task.due_date:
+            task.due_date = task.due_date + delta
+        else:
+            task.due_date = timezone.now() + delta
+        task.save()
+        TaskHistory.objects.create(task=task, status=task.status, story_points=task.story_points, changed_by=request.user)
+        AuditLog.objects.create(user=request.user, action='SNOOZE_TASK', content_object=task, details={'duration': dur, 'unit': unit})
+        return Response({'status': 'snoozed', 'due_date': task.due_date})
+
+    @action(detail=True, methods=['post'])
+    def mark_done(self, request, pk=None):
+        task = self.get_object()
+        task.status = 'DONE'
+        task.save()
+        TaskHistory.objects.create(task=task, status=task.status, story_points=task.story_points, changed_by=request.user)
+        AuditLog.objects.create(user=request.user, action='MARK_DONE_TASK', content_object=task, details={})
+        return Response({'status': 'marked_done'})
+
+
+class RemindersViewSet(viewsets.ViewSet):
+    """Endpoint that aggregates critical reminders from Tasks and Tickets"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        window = request.query_params.get('window')
+        try:
+            window_days = int(window) if window else 1
+        except Exception:
+            window_days = 1
+
+        from datetime import timedelta
+        now = timezone.now()
+        window_dt = now + timedelta(days=window_days)
+        items = []
+
+        # Tasks
+        tasks_qs = Task.objects.filter(is_archived=False).filter(
+            Q(priority='CRITICAL') | Q(due_date__lte=window_dt)
+        ).exclude(status='DONE').order_by('due_date')[:50]
+        for t in tasks_qs:
+            items.append({
+                'id': t.id,
+                'type': 'task',
+                'title': t.title,
+                'priority': t.priority,
+                'due_date': t.due_date,
+                'link': f"/projects/{t.project.id}/tasks/{t.id}" if t.project else f"/tasks/{t.id}",
+                'assigned_to_details': t.assigned_to,
+                'ticket_number': None,
+                'is_overdue': bool(t.due_date and t.due_date < now)
+            })
+
+        # Tickets (if available)
+        if Ticket:
+            tickets_qs = Ticket.objects.filter().filter(
+                Q(priority='CRITICAL') | Q(sla_due_date__lte=window_dt)
+            ).exclude(status__in=[Ticket.Status.RESOLVED, Ticket.Status.CLOSED]).order_by('sla_due_date')[:50]
+            for tk in tickets_qs:
+                items.append({
+                    'id': tk.id,
+                    'type': 'ticket',
+                    'title': tk.title,
+                    'priority': tk.priority,
+                    'due_date': tk.sla_due_date,
+                    'link': f"/tickets/{tk.id}",
+                    'assigned_to_details': tk.assigned_to,
+                    'ticket_number': tk.ticket_number,
+                    'is_overdue': bool(tk.sla_due_date and tk.sla_due_date < now)
+                })
+
+        serializer = ReminderSerializer(items, many=True, context={'request': request})
+        return Response(serializer.data)
 
 class ReleaseViewSet(viewsets.ModelViewSet):
     queryset = Release.objects.all()
