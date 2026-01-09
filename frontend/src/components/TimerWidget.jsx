@@ -113,7 +113,7 @@ const TimerWidget = () => {
                                 >
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="text-sm text-[#172B4D] truncate">{task.title}</span>
-                                        <Play size={12} className="text-[#0079BF] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                        <Play size={12} className="text-[var(--trello-primary)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                                     </div>
                                 </button>
                             ))}

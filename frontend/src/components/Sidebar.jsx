@@ -97,7 +97,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                 <div className="h-14 flex items-center justify-between px-4 border-b border-[rgba(255,255,255,0.2)]">
                     {(!isCollapsed || isMobile) && (
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[#0079BF] font-black text-base shadow-md">
+                            <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[var(--trello-primary)] font-black text-base shadow-md">
                                 M
                             </div>
                             <span className="font-semibold text-white text-base tracking-tight">
@@ -288,7 +288,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                                     >
                                         <Bell size={16} />
                                         {notifications.filter(n => !n.is_read).length > 0 && (
-                                            <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-[#0079BF] rounded-full" />
+                                            <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-[var(--trello-primary)] rounded-full" />
                                         )}
                                     </Link>
                                     <button

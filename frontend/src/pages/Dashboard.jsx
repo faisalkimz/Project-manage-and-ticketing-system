@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
 import TimerWidget from '../components/TimerWidget';
+import RemindersCard from '../components/RemindersCard';
 
 const Dashboard = () => {
     const { user } = useAuthStore();
@@ -64,7 +65,7 @@ const Dashboard = () => {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <StatCard label="Active Projects" value={stats.projects} icon={Briefcase} color="bg-[#0079BF]" link="/projects" />
+                <StatCard label="Active Projects" value={stats.projects} icon={Briefcase} color="bg-[var(--trello-primary)]" link="/projects" />
                 <StatCard label="Pending Tasks" value={stats.tasks} icon={ListTodo} color="bg-[#FF9F1A]" link="/projects" />
                 <StatCard label="Open Tickets" value={stats.tickets} icon={MessageSquare} color="bg-[#61BD4F]" link="/tickets" />
                 <StatCard label="In Progress" value={upcomingTasks.length} icon={TrendingUp} color="bg-[#C377E0]" link="/projects" />
@@ -80,7 +81,7 @@ const Dashboard = () => {
                                 <Star size={16} className="text-[#F2D600]" fill="#F2D600" />
                                 Recent Boards
                             </h2>
-                            <Link to="/projects" className="text-sm text-[#0079BF] hover:underline">
+                            <Link to="/projects" className="text-sm text-[var(--trello-primary)] hover:underline">
                                 View all →
                             </Link>
                         </div>
@@ -89,7 +90,7 @@ const Dashboard = () => {
                                 <Link
                                     key={project.id}
                                     to={`/projects/${project.id}`}
-                                    className="group bg-gradient-to-br from-[#0079BF] to-[#026AA7] rounded-sm p-4 hover:shadow-lg transition-all min-h-[100px] flex flex-col justify-between"
+                                    className="group trello-gradient rounded-sm p-4 hover:shadow-lg transition-all min-h-[100px] flex flex-col justify-between"
                                 >
                                     <h3 className="text-white font-semibold text-base mb-2">{project.name}</h3>
                                     <div className="flex items-center justify-between">
@@ -98,7 +99,7 @@ const Dashboard = () => {
                                             {project.members_details?.slice(0, 3).map((m, i) => (
                                                 <div
                                                     key={i}
-                                                    className="w-6 h-6 rounded-full bg-white text-[#0079BF] border border-[#0079BF] flex items-center justify-center text-[10px] font-semibold"
+                                                    className="w-6 h-6 rounded-full bg-white text-[var(--trello-primary)] border-[var(--trello-primary)] flex items-center justify-center text-[10px] font-semibold"
                                                     title={m.username}
                                                 >
                                                     {m.username?.[0]?.toUpperCase()}
@@ -130,7 +131,7 @@ const Dashboard = () => {
                                 <div key={i} className="px-4 py-3 hover:bg-[#F4F5F7] cursor-pointer transition-colors group">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1">
-                                            <p className="text-sm font-medium text-[#172B4D] group-hover:text-[#0079BF] transition-colors mb-1">
+                                            <p className="text-sm font-medium text-[#172B4D] group-hover:text-[var(--trello-primary)] transition-colors mb-1">
                                                 {task.title}
                                             </p>
                                             <div className="flex items-center gap-2 text-xs text-[#5E6C84]">
@@ -145,7 +146,7 @@ const Dashboard = () => {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className={`trello-badge ${task.status === 'IN_PROGRESS' ? 'bg-[#0079BF] text-white' : 'bg-[#EBECF0] text-[#172B4D]'
+                                            <span className={`trello-badge ${task.status === 'IN_PROGRESS' ? 'bg-[var(--trello-primary)] text-white' : 'bg-[#EBECF0] text-[#172B4D]'
                                                 }`}>
                                                 {task.status.replace('_', ' ')}
                                             </span>
@@ -206,6 +207,11 @@ const Dashboard = () => {
                         <TimerWidget />
                     </section>
 
+                    {/* Reminders */}
+                    <div className="mb-4">
+                        <RemindersCard />
+                    </div>
+
                     {/* Quick Actions */}
                     <section className="bg-white border border-[#DFE1E6] rounded-sm p-4">
                         <h3 className="text-xs font-semibold text-[#5E6C84] uppercase mb-3">Quick Actions</h3>
@@ -226,12 +232,12 @@ const Dashboard = () => {
                     </section>
 
                     {/* Workspace Info */}
-                    <section className="bg-gradient-to-br from-[#0079BF] to-[#026AA7] rounded-sm p-6 text-white">
+                    <section className="trello-gradient rounded-sm p-6 text-white">
                         <h3 className="text-lg font-semibold mb-2">Workspace Premium</h3>
                         <p className="text-sm text-white/90 mb-4 leading-relaxed">
                             Unlock advanced features for your team with Mbabali Premium.
                         </p>
-                        <button className="w-full py-2 bg-white text-[#0079BF] rounded-sm font-medium text-sm hover:bg-white/90 transition-colors">
+                        <button className="w-full py-2 bg-white text-[var(--trello-primary)] rounded-sm font-medium text-sm hover:bg-white/90 transition-colors">
                             Learn More
                         </button>
                     </section>
