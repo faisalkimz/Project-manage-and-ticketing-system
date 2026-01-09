@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
 import TimerWidget from '../components/TimerWidget';
+import RemindersCard from '../components/RemindersCard';
 
 const Dashboard = () => {
     const { user } = useAuthStore();
@@ -205,6 +206,11 @@ const Dashboard = () => {
                         </div>
                         <TimerWidget />
                     </section>
+
+                    {/* Reminders */}
+                    <div className="mb-4">
+                        <RemindersCard />
+                    </div>
 
                     {/* Quick Actions */}
                     <section className="bg-white border border-[#DFE1E6] rounded-sm p-4">
