@@ -51,6 +51,8 @@ backend/db.sqlite3
 .env
 .env.local
 .env.*.local
+# Secrets used only for local dev (do NOT commit)
+backend/scripts/login_admin.json
 
 # IDEs and editors
 .vscode/
