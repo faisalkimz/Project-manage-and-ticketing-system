@@ -6,10 +6,13 @@
 
 @layer base {
   :root {
-    /* Trello Color Palette */
-    --trello-blue: #0079BF;
-    --trello-blue-hover: #026AA7;
-    --trello-blue-dark: #055A8C;
+    /* Trello Color Palette (replaced blue with dark primary) */
+    --trello-primary: #111827; /* main dark charcoal */
+    --trello-primary-hover: #0f1724;
+    --trello-primary-active: #0b0f18;
+    --trello-gradient-from: var(--trello-primary);
+    --trello-gradient-to: var(--trello-primary-hover);
+
     --trello-bg: #FAFBFC;
     --trello-board-bg: #F4F5F7;
     --trello-card-bg: #FFFFFF;
@@ -47,7 +50,16 @@
   }
 
   .trello-btn-primary {
-    @apply bg-[#0079BF] text-white hover:bg-[#026AA7] active:bg-[#055A8C] shadow-sm;
+    background-color: var(--trello-primary);
+    color: white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .trello-btn-primary:hover { background-color: var(--trello-primary-hover); }
+  .trello-btn-primary:active { background-color: var(--trello-primary-active); }
+
+  /* Gradient helper */
+  .trello-gradient {
+    background-image: linear-gradient(135deg, var(--trello-gradient-from), var(--trello-gradient-to));
   }
 
   .trello-btn-secondary {
@@ -70,7 +82,13 @@
 
   /* Trello Input */
   .trello-input {
-    @apply w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-sm text-sm text-[#172B4D] placeholder:text-[#8993A4] focus:outline-none focus:bg-white focus:border-[#0079BF] focus:shadow-[0_0_0_1px_#0079BF] transition-all;
+    @apply w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-sm text-sm text-[#172B4D] placeholder:text-[#8993A4] focus:outline-none focus:bg-white transition-all;
+  }
+  .trello-input:focus {
+    border-color: var(--trello-primary);
+    box-shadow: 0 0 0 1px var(--trello-primary);
+    background-color: white;
+    outline: none;
   }
 
   /* Trello Modal */
