@@ -135,6 +135,18 @@ class TaskSerializer(serializers.ModelSerializer):
             rep['sprint_details'] = SprintSerializer(instance.sprint).data
         return rep
 
+class ReminderSerializer(serializers.Serializer):
+    """Serializer for reminder items (tasks and tickets) returned by the reminders endpoint"""
+    id = serializers.IntegerField()
+    type = serializers.CharField()  # 'task' or 'ticket'
+    title = serializers.CharField()
+    priority = serializers.CharField(allow_null=True)
+    due_date = serializers.DateTimeField(allow_null=True)
+    link = serializers.CharField(allow_null=True)
+    assigned_to_details = UserSerializer(allow_null=True)
+    ticket_number = serializers.CharField(allow_null=True)
+    is_overdue = serializers.BooleanField(default=False)
+
 class ProjectSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
     milestones = MilestoneSerializer(many=True, read_only=True)
