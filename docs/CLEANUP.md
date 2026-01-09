@@ -9,6 +9,7 @@
 - Removed an insecure plaintext credential file: `backend/scripts/login_admin.json` and replaced it with `backend/scripts/login_admin.example.json` (which contains placeholder content). The real credential file is removed from the repo and added to `.gitignore`.
 - Removed empty `.agent/` folder (contents archived).
 - Built the frontend (`npm run build`) to ensure recent changes didn't break the build.
+- Added a **Reminders** feature: a backend `/api/projects/reminders/` endpoint that aggregates critical `Task` and `Ticket` items and frontend `RemindersCard` UI with quick actions (Acknowledge, Snooze, Mark Done).
 
 ## Suggested next steps (need your confirmation)
 1. Remove or archive local DB file `backend/db.sqlite3` (it is untracked but present locally). Do you want it deleted or moved to `docs/archive/local-dbs/`?  
