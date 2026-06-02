@@ -49,9 +49,6 @@ class EnterpriseSubscription(models.Model):
     billing_email = models.EmailField()
 
 class Team(models.Model):
-    # Keep UUID primary key to match migration and DB
-    id = models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True)
-
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     slug = models.SlugField(unique=True, blank=True, null=True)
@@ -65,9 +62,6 @@ class Team(models.Model):
         return self.name
 
 class User(AbstractUser):
-    # Keep UUID primary key to match current DB schema
-    id = models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True)
-
     ROLE_CHOICES = [
         ('ADMIN', 'Admin'),
         ('MANAGER', 'Manager'),
