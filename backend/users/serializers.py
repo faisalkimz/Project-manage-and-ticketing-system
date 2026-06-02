@@ -63,7 +63,9 @@ class RegisterSerializer(serializers.ModelSerializer):
             username=validated_data['username'],
             email=input_email,
             password=validated_data['password'],
-            role=role_name
+            role=role_name,
+            bio='',  # Provide default empty bio to satisfy DB constraint
+            otp_secret=''  # Provide default empty otp_secret to satisfy DB constraint
         )
         
         # Update invite status
