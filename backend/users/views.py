@@ -1,5 +1,6 @@
 import os
 import secrets
+import urllib.parse
 from datetime import timedelta
 from rest_framework import generics, permissions, status, filters, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -136,9 +137,9 @@ class RegisterView(generics.CreateAPIView):
         response = super().create(request, *args, **kwargs)
         if response.status_code == 201:
             user = User.objects.get(username=response.data['username'])
-            token = secrets.token_urlsafe(48)
+            token = secrets.token_urlsafe(48).rstrip('=')
             EmailVerificationToken.objects.create(user=user, token=token)
-            verify_url = f"http://localhost:5173/verify-email?token={token}"
+            verify_url = f"http://localhost:5173/verify-email?token={urllib.parse.quote(token)}"
             send_mail(
                 subject='Verify your email',
                 message=f'Welcome! Click the link to verify your email:\n{verify_url}',
@@ -422,7 +423,7 @@ class SendVerificationEmailView(generics.GenericAPIView):
             return Response({'detail': 'Email already verified.'}, status=status.HTTP_400_BAD_REQUEST)
 
         EmailVerificationToken.objects.filter(user=user).delete()
-        token = secrets.token_urlsafe(48)
+        token = secrets.token_urlsafe(48).rstrip('=')
         EmailVerificationToken.objects.create(user=user, token=token)
 
         verify_url = f"http://localhost:5173/verify-email?token={token}"
@@ -443,6 +444,9 @@ class VerifyEmailView(generics.GenericAPIView):
         token = request.query_params.get('token')
         if not token:
             return Response({'detail': 'Token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Strip any = padding that might break URL parsing
+        token = token.rstrip('=')
 
         try:
             vt = EmailVerificationToken.objects.select_related('user').get(token=token)

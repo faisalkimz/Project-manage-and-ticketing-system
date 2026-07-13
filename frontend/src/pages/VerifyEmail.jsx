@@ -13,7 +13,7 @@ const VerifyEmail = () => {
             setStatus('no-token');
             return;
         }
-        api.get(`/users/verify-email/?token=${token}`)
+        api.get(`/users/verify-email/?token=${encodeURIComponent(token)}`)
             .then(() => setStatus('success'))
             .catch(() => setStatus('error'));
     }, [searchParams]);
