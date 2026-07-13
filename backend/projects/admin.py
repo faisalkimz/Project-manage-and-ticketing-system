@@ -1,3 +1,20 @@
 from django.contrib import admin
+from .models import Project, Task, Tag, Milestone, Sprint, Release, Portfolio, Program, ProjectCategory, ProjectGoal, Deliverable, ProjectStatus, SprintRetrospective, SprintCapacity, TaskHistory, CustomFieldDefinition, Report
 
-# Register your models here.
+admin.site.register(Project)
+admin.site.register(Task)
+admin.site.register(Tag)
+admin.site.register(Milestone)
+admin.site.register(Sprint)
+admin.site.register(Release)
+admin.site.register(Portfolio)
+admin.site.register(Program)
+admin.site.register(ProjectCategory)
+admin.site.register(ProjectGoal)
+admin.site.register(Deliverable)
+admin.site.register(ProjectStatus)
+admin.site.register(SprintRetrospective)
+admin.site.register(SprintCapacity)
+admin.site.register(TaskHistory)
+admin.site.register(CustomFieldDefinition)
+admin.site.register(Report)

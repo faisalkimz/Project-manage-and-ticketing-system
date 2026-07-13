@@ -30,8 +30,14 @@ const GlobalSearch = ({ isOpen, onClose }) => {
             }
             setLoading(true);
             try {
-                const res = await api.get(`/users/search/?q=${query}`);
-                setResults(res.data);
+                const res = await api.get(`/search/search/?q=${query}`);
+                const grouped = { projects: [], tasks: [], people: [] };
+                (res.data || []).forEach(item => {
+                    if (item.type === 'PROJECT') grouped.projects.push({ ...item, name: item.title, project: item.id });
+                    else if (item.type === 'TASK') grouped.tasks.push({ ...item, name: item.title, project: item.project || item.id });
+                    else if (item.type === 'USER') grouped.people.push({ ...item, name: item.title, username: item.title });
+                });
+                setResults(grouped);
             } catch (err) { console.error(err); }
             finally { setLoading(false); }
         };

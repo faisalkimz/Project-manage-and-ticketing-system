@@ -13,6 +13,8 @@ import Settings from './pages/Settings';
 import Jira from './pages/Jira';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import VerifyEmail from './pages/VerifyEmail';
+import OAuthCallback from './pages/OAuthCallback';
 import Onboarding from './pages/Onboarding';
 import Portfolios from './pages/Portfolios';
 import PortfolioDetails from './pages/PortfolioDetails';
@@ -24,10 +26,11 @@ import useAuthStore from './store/authStore';
 import { ToastProvider } from './components/Toast';
 
 const MainLayout = () => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user, sendVerificationEmail } = useAuthStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [verifySent, setVerifySent] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -68,6 +71,20 @@ const MainLayout = () => {
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
       <main className={`flex-1 transition-all duration-300 min-w-0 overflow-x-hidden ${isAuthenticated && !isMobile ? 'pl-64' : 'pl-0'}`}>
+        {isAuthenticated && user && !user.email_verified && (
+          <div className="bg-[#FFF7E6] border-b border-[#FFAB00] px-6 py-2 flex items-center justify-between">
+            <p className="text-sm text-[#172B4D]">
+              Please verify your email address to access all features.
+            </p>
+            <button
+              onClick={() => { sendVerificationEmail(); setVerifySent(true); }}
+              disabled={verifySent}
+              className="text-sm font-semibold text-[#0052CC] hover:underline disabled:text-[#5E6C84] disabled:no-underline"
+            >
+              {verifySent ? 'Sent!' : 'Resend verification'}
+            </button>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>
@@ -88,6 +105,8 @@ function App() {
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/auth/:provider/callback" element={<OAuthCallback />} />
           <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
           {/* Protected Main App Routes */}

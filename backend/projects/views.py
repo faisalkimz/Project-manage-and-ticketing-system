@@ -188,12 +188,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
         user_id = request.data.get('user_id')
         if not user_id:
             return Response({'error': 'user_id is required'}, status=400)
-        from users.models import CustomUser
+        from users.models import User
         try:
-            user_to_add = CustomUser.objects.get(id=user_id)
+            user_to_add = User.objects.get(id=user_id)
             project.members.add(user_to_add)
             return Response({'status': 'member added'})
-        except CustomUser.DoesNotExist:
+        except User.DoesNotExist:
             return Response({'error': 'user not found'}, status=404)
 
     @action(detail=True, methods=['post'])

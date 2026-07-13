@@ -146,10 +146,10 @@ const TicketDetails = () => {
                             <div className="p-4 bg-[#F4F5F7] border-b border-[#DFE1E6] flex justify-between items-center">
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-[#172B4D] font-bold text-xs ring-2 ring-white">
-                                        {ticket.submitted_by_username[0].toUpperCase()}
+                                        {ticket.submitted_by_username?.[0]?.toUpperCase() ?? '?'}
                                     </div>
                                     <div>
-                                        <p className="text-sm font-bold text-[#172B4D]">{ticket.submitted_by_username}</p>
+                                        <p className="text-sm font-bold text-[#172B4D]">{ticket.submitted_by_username ?? 'Unknown'}</p>
                                         <p className="text-xs text-[#5E6C84]">{new Date(ticket.created_at).toLocaleString()}</p>
                                     </div>
                                 </div>

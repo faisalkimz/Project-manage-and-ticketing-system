@@ -1,9 +1,14 @@
 from rest_framework import serializers
-from .models import Ticket
+from .models import Ticket, SLAPolicy
 from users.serializers import UserSerializer
 from projects.serializers import TaskSerializer, TagSerializer
 from activity.serializers import CommentSerializer, AttachmentSerializer, AuditLogSerializer
 from django.utils import timezone
+
+class SLAPolicySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SLAPolicy
+        fields = '__all__'
 
 class TicketSerializer(serializers.ModelSerializer):
     submitted_by_username = serializers.CharField(source='submitted_by.username', read_only=True)

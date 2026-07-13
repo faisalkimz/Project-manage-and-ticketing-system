@@ -67,7 +67,7 @@ const PortfolioDetails = () => {
         setIsLinkModalOpen(true);
         setSelectedProjectIds([]);
         try {
-            const res = await api.get('/projects/');
+            const res = await api.get('/projects/projects/');
             // Filter out projects already in this portfolio
             // Assuming portfolio.id is number/string matching params
             const currentId = parseInt(id);
@@ -241,7 +241,7 @@ const PortfolioDetails = () => {
                         <h4 className="text-xs font-bold text-[#5E6C84] uppercase mb-4">Portfolio Owner</h4>
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-[#0052CC] text-white flex items-center justify-center font-bold text-xs border-2 border-white ring-1 ring-[#DFE1E6]">
-                                {portfolio.owner_details ? portfolio.owner_details.username[0].toUpperCase() : 'A'}
+                                {portfolio?.owner_details?.username?.[0]?.toUpperCase() ?? 'A'}
                             </div>
                             <div>
                                 <p className="text-sm font-bold text-[#172B4D]">

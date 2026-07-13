@@ -60,9 +60,9 @@ const Onboarding = () => {
             if (error.response) {
                 console.error('Data:', error.response.data);
                 console.error('Status:', error.response.status);
-                alert(`Onboarding failed: ${JSON.stringify(error.response.data)}`);
+                showToast(`Onboarding failed`, `error`);
             } else {
-                alert("Something went wrong, but let's take you to the dashboard.");
+                showToast("Something went wrong", "error");
             }
             navigate('/');
         } finally {

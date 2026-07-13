@@ -9,7 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'role', 'permissions', 'profile_image', 'bio', 'is_active', 'department', 'job_title', 'email_notifications', 'push_notifications', 'task_updates_only']
+        fields = ['id', 'username', 'email', 'role', 'permissions', 'profile_image', 'bio', 'is_active', 'email_verified', 'department', 'job_title', 'email_notifications', 'push_notifications', 'task_updates_only']
 
     def get_permissions(self, obj):
         if obj.role == 'ADMIN':
@@ -64,8 +64,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=input_email,
             password=validated_data['password'],
             role=role_name,
-            bio='',  # Provide default empty bio to satisfy DB constraint
-            otp_secret=''  # Provide default empty otp_secret to satisfy DB constraint
+            bio=None,
+            otp_secret=None
         )
         
         # Update invite status

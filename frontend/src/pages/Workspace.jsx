@@ -189,7 +189,7 @@ const Workspace = () => {
                                             {workspace.members_details?.map(m => (
                                                 <tr key={m.id} className="hover:bg-[#F4F5F7] transition-colors">
                                                     <td className="px-6 py-4 flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-[#EBECF0] flex items-center justify-center text-xs font-bold">{m.username[0].toUpperCase()}</div>
+                                                        <div className="w-8 h-8 rounded-full bg-[#EBECF0] flex items-center justify-center text-xs font-bold">{m?.username?.[0]?.toUpperCase() ?? '?'}</div>
                                                         <div>
                                                             <p className="text-sm font-bold text-[#172B4D]">{m.username}</p>
                                                             <p className="text-xs text-[#5E6C84]">{m.email}</p>

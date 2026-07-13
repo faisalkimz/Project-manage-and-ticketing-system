@@ -56,7 +56,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
 
     const fetchNotifications = async () => {
         try {
-            const res = await api.get('/collaboration/notifications/');
+            const res = await api.get('/notifications/alerts/');
             setNotifications(res.data);
         } catch (error) { console.error('Failed to fetch notifications', error); }
     };

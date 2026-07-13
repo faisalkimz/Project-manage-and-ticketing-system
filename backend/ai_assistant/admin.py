@@ -1,3 +1,5 @@
 from django.contrib import admin
+from .models import AIPromptTemplate, AIRequestLog
 
-# Register your models here.
+admin.site.register(AIPromptTemplate)
+admin.site.register(AIRequestLog)

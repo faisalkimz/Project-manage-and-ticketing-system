@@ -7,6 +7,7 @@ from .models import TimeEntry, WorkSchedule, ResourceHoliday
 from .serializers import TimeEntrySerializer, WorkScheduleSerializer, ResourceHolidaySerializer
 from django.utils import timezone
 from django.db.models import Sum, Q
+from datetime import timedelta
 
 class TimeEntryViewSet(viewsets.ModelViewSet):
     queryset = TimeEntry.objects.all()
@@ -78,7 +79,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         """Time tracking stats for the user"""
         user = request.user
         today = timezone.now().date()
-        week_start = today - timezone.timedelta(days=today.weekday())
+        week_start = today - timedelta(days=today.weekday())
         
         today_mins = TimeEntry.objects.filter(user=user, start_time__date=today).aggregate(total=Sum('duration_minutes'))['total'] or 0
         week_mins = TimeEntry.objects.filter(user=user, start_time__date__gte=week_start).aggregate(total=Sum('duration_minutes'))['total'] or 0

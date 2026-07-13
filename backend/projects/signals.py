@@ -9,15 +9,11 @@ def task_notifications(sender, instance, created, **kwargs):
         if instance.assigned_to:
             create_notification(
                 user=instance.assigned_to,
-                actor=instance.created_by,
+                actor=None,
                 verb='assigned you to',
                 target=instance,
                 description=f'Task: {instance.title}'
             )
-    else:
-        # Check if assignee changed
-        # Note: This is a simplified version, ideally you'd check old value via pre_save
-        pass
 
 @receiver(pre_save, sender=Task)
 def task_pre_save(sender, instance, **kwargs):

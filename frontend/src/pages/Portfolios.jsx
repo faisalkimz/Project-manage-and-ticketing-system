@@ -156,7 +156,7 @@ const Portfolios = () => {
                                     <div className="flex -space-x-2">
                                         {portfolio.owner_details ? (
                                             <div title={portfolio.owner_details.username} className="w-8 h-8 rounded-full border-2 border-white bg-[#0052CC] flex items-center justify-center text-white text-[10px] font-bold ring-1 ring-[#DFE1E6]">
-                                                {portfolio.owner_details.username[0].toUpperCase()}
+                                                {portfolio?.owner_details?.username?.[0]?.toUpperCase() ?? '?'}
                                             </div>
                                         ) : (
                                             <div className="w-8 h-8 rounded-full border-2 border-white bg-[#DFE1E6] flex items-center justify-center text-[#5E6C84] text-[10px] font-bold">?</div>

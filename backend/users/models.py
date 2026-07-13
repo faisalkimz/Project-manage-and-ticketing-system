@@ -68,6 +68,8 @@ class User(AbstractUser):
         ('MEMBER', 'Member'),
         ('GUEST', 'Guest'),
         ('EMPLOYEE', 'Employee'),
+        ('DEVELOPER', 'Developer'),
+        ('PROJECT_MANAGER', 'Project Manager'),
     ]
     
     # Role as CharField to avoid migration conflict with existing data
@@ -98,6 +100,9 @@ class User(AbstractUser):
     enforce_ip_whitelist = models.BooleanField(default=False)
     failed_login_attempts = models.IntegerField(default=0)
     account_locked_until = models.DateTimeField(null=True, blank=True)
+
+    # Email verification
+    email_verified = models.BooleanField(default=False)
 
     # Notifications
     email_notifications = models.BooleanField(default=True)
@@ -143,6 +148,14 @@ class UserSession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_activity = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
+
+class EmailVerificationToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='verification_tokens')
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Verification for {self.user.email}"
 
 class OAuthConnection(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='oauth_connections')

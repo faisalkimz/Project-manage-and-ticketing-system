@@ -1,20 +1,24 @@
 import { useState } from 'react';
-import useAuthStore from '../store/authStore';
-import { useNavigate } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
+import api from '../services/api';
 
 const SocialLoginButtons = () => {
-    const { login } = useAuthStore();
-    const navigate = useNavigate();
     const [loadingProvider, setLoadingProvider] = useState(null);
+    const [error, setError] = useState('');
 
     const handleSocialLogin = async (provider) => {
         setLoadingProvider(provider);
-        // Social OAuth flow not yet implemented
-        // In production, this would redirect to provider's OAuth URL
-        setTimeout(() => {
-            alert(`${provider} login is coming soon. Please use email/password login.`);
+        setError('');
+        try {
+            const res = await api.get(`/users/auth/${provider.toLowerCase()}/`);
+            if (res.data.authorization_url) {
+                window.location.href = res.data.authorization_url;
+            }
+        } catch (err) {
+            setError(err.response?.data?.detail || `${provider} login unavailable`);
+        } finally {
             setLoadingProvider(null);
-        }, 800);
+        }
     };
 
     const providers = [
@@ -64,6 +68,12 @@ const SocialLoginButtons = () => {
 
     return (
         <div className="space-y-3">
+            {error && (
+                <div className="p-2 bg-[#FFEBE6] border border-[#EB5A46] rounded-[3px] flex items-start gap-2 text-xs text-[#172B4D]">
+                    <AlertCircle size={14} className="text-[#EB5A46] mt-0.5 shrink-0" />
+                    <span>{error}</span>
+                </div>
+            )}
             {providers.map((provider) => (
                 <button
                     key={provider.name}

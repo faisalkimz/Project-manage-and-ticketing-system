@@ -2,8 +2,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.utils import user_role_in
-from .models import Ticket
-from .serializers import TicketSerializer
+from .models import Ticket, SLAPolicy
+from .serializers import TicketSerializer, SLAPolicySerializer
 from projects.models import Task, Project
 
 class TicketViewSet(viewsets.ModelViewSet):
@@ -68,3 +68,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket.save()
         
         return Response(TicketSerializer(ticket).data)
+
+class SLAPolicyViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = SLAPolicy.objects.all()
+    serializer_class = SLAPolicySerializer
+    permission_classes = [permissions.IsAuthenticated]

@@ -7,6 +7,7 @@ import SocialLoginButtons from '../components/SocialLoginButtons';
 const Signup = () => {
     const [formData, setFormData] = useState({ username: '', email: '', password: '', token: '' });
     const [error, setError] = useState('');
+    const [registered, setRegistered] = useState(false);
     const { register, login, loading } = useAuthStore();
     const navigate = useNavigate();
     const location = useLocation();
@@ -23,21 +24,34 @@ const Signup = () => {
         e.preventDefault();
         setError('');
 
-        // 1. Register
-        const success = await register(formData);
-        if (success) {
-            // 2. Auto-login
-            const loginSuccess = await login(formData.username, formData.password);
-            if (loginSuccess) {
-                // 3. Go to Onboarding (not Home)
+        const payload = { username: formData.username, email: formData.email, password: formData.password };
+        if (formData.token) payload.token = formData.token;
+        const result = await register(payload);
+        if (result.success) {
+            setRegistered(true);
+            const loginResult = await login(formData.username, formData.password);
+            if (loginResult.success) {
                 navigate('/onboarding');
-            } else {
-                navigate('/login');
             }
         } else {
-            setError('Registration failed. Username or Email may already be taken.');
+            setError(result.message || 'Registration failed.');
         }
     };
+
+    if (registered) {
+        return (
+            <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
+                <div className="bg-white p-8 rounded-[3px] shadow-md text-center max-w-md">
+                    <div className="w-12 h-12 bg-[#5AAC44] rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                    <h2 className="text-xl font-bold text-[#172B4D] mb-2">Account Created!</h2>
+                    <p className="text-sm text-[#5E6C84] mb-4">Check your email for a verification link. Please verify your email to access all features.</p>
+                    <Link to="/login" className="text-[#0052CC] hover:underline text-sm font-semibold">Go to Login</Link>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#F9FAFB] flex flex-col items-center justify-center py-12 px-4 font-sans text-[#172B4D] relative overflow-hidden">

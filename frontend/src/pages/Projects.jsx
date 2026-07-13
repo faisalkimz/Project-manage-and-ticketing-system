@@ -114,7 +114,7 @@ const Projects = () => {
                                     className="w-5 h-5 rounded-full bg-white/20 backdrop-blur-md text-white border border-white/30 flex items-center justify-center text-[10px] font-semibold"
                                     title={m.username}
                                 >
-                                    {m.username[0].toUpperCase()}
+                                    {m?.username?.[0]?.toUpperCase() ?? '?'}
                                 </div>
                             ))}
                         </div>
