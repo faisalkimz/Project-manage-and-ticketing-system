@@ -9,21 +9,12 @@ const SocialLoginButtons = () => {
 
     const handleSocialLogin = async (provider) => {
         setLoadingProvider(provider);
-        // Simulate social OAuth flow
-        setTimeout(async () => {
-            try {
-                // For demonstration, we'll log in with a demo account
-                // In production, this would redirect to provider's OAuth URL
-                const success = await login('admin', 'admin123');
-                if (success) {
-                    navigate('/');
-                }
-            } catch (error) {
-                console.error('Social login failed', error);
-            } finally {
-                setLoadingProvider(null);
-            }
-        }, 1200);
+        // Social OAuth flow not yet implemented
+        // In production, this would redirect to provider's OAuth URL
+        setTimeout(() => {
+            alert(`${provider} login is coming soon. Please use email/password login.`);
+            setLoadingProvider(null);
+        }, 800);
     };
 
     const providers = [

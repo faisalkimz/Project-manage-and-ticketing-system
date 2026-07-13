@@ -53,7 +53,21 @@ const useAuthStore = create((set) => ({
                 const profile = await api.get('/users/profile/');
                 set({ user: profile.data, isAuthenticated: true, loading: false });
             } catch (error) {
+                // Try token refresh before giving up
+                const refreshToken = localStorage.getItem('refresh');
+                if (refreshToken) {
+                    try {
+                        const refreshRes = await api.post('/token/refresh/', { refresh: refreshToken });
+                        localStorage.setItem('token', refreshRes.data.access);
+                        const profile = await api.get('/users/profile/');
+                        set({ user: profile.data, isAuthenticated: true, loading: false });
+                        return;
+                    } catch (refreshError) {
+                        // Refresh failed, clear everything
+                    }
+                }
                 localStorage.removeItem('token');
+                localStorage.removeItem('refresh');
                 set({ user: null, isAuthenticated: false, loading: false });
             }
         }

@@ -5,6 +5,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import UserSerializer, RegisterSerializer, TeamInviteSerializer, TeamSerializer, UserUpdateSerializer
 from .models import User, TeamInvite, Team
 from django.core.mail import send_mail
+from django.core.exceptions import ValidationError
 
 # Role model removed, using CharField
 
@@ -130,11 +131,16 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 class UserListView(generics.ListAPIView):
-    queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = (permissions.IsAuthenticated,)
     filter_backends = [filters.SearchFilter]
     search_fields = ['username', 'email', 'first_name', 'last_name']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'ADMIN':
+            return User.objects.all()
+        return User.objects.filter(is_active=True).exclude(role='ADMIN')
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
@@ -155,6 +161,15 @@ class ChangePasswordView(generics.UpdateAPIView):
         
         if not user.check_password(old_password):
             return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if len(new_password) < 8:
+            return Response({"new_password": ["Password must be at least 8 characters."]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth.password_validation import validate_password
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as e:
+            return Response({"new_password": e.messages}, status=status.HTTP_400_BAD_REQUEST)
         
         user.set_password(new_password)
         user.save()

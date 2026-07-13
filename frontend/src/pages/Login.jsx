@@ -103,7 +103,7 @@ const Login = () => {
                 </div>
             </div>
 
-            <style jsx="true">{`
+            <style>{`
                 @keyframes fade-in-up {
                     from { opacity: 0; transform: translateY(20px); }
                     to { opacity: 1; transform: translateY(0); }
