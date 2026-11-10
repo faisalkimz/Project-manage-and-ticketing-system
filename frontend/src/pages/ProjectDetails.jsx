@@ -4,7 +4,8 @@ import {
     Plus, Star, MoreHorizontal, X, Users, Share2, Clock, MessageSquare,
     Paperclip, Tag, ChevronDown, ChevronRight, ChevronUp, List, Calendar as CalendarIcon, Layout, GitMerge, CheckSquare, Trash2,
     Flag, Target, TrendingUp, Shield, HelpCircle, AlertCircle, Package, BarChart, History,
-    Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check, Circle
+    Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check, Circle,
+    Sparkles, Loader2
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -107,6 +108,15 @@ const ProjectDetails = () => {
     const [showAnnounceModal, setShowAnnounceModal] = useState(false);
     const [timeEntries, setTimeEntries] = useState([]);
     const [showTimeModal, setShowTimeModal] = useState(false);
+
+    // AI Assistant States
+    const [showAiSuggestModal, setShowAiSuggestModal] = useState(false);
+    const [isSuggestingTasks, setIsSuggestingTasks] = useState(false);
+    const [aiSuggestedTasks, setAiSuggestedTasks] = useState([]);
+    const [selectedAiTaskIndices, setSelectedAiTaskIndices] = useState([]);
+    const [isAddingAiTasks, setIsAddingAiTasks] = useState(false);
+    const [aiSummary, setAiSummary] = useState(null);
+    const [isSummarizingTask, setIsSummarizingTask] = useState(false);
     const [newTimeEntry, setNewTimeEntry] = useState({ task: '', description: '', duration_minutes: 0, is_billable: true, start_time: '' });
     const [timeStats, setTimeStats] = useState({ today_minutes: 0, week_minutes: 0 });
 
@@ -461,6 +471,106 @@ const ProjectDetails = () => {
             setActiveCardMenu(null);
             if (selectedTask?.id === taskId) setSelectedTask(null);
         } catch (error) { }
+    };
+
+    const handleOpenAiSuggest = async () => {
+        setShowAiSuggestModal(true);
+        if (aiSuggestedTasks.length > 0) return;
+        setIsSuggestingTasks(true);
+        try {
+            const res = await api.post('/ai/suggest-tasks/', {
+                project_name: project?.name || 'Project',
+                current_tasks: tasks.slice(0, 10).map(t => ({ title: t.title }))
+            });
+            const suggestions = res.data.suggestions || [];
+            setAiSuggestedTasks(suggestions);
+            setSelectedAiTaskIndices(suggestions.map((_, i) => i));
+        } catch (err) {
+            console.error('Failed to get AI task suggestions:', err);
+            showToast('Failed to load AI suggestions', 'error');
+        } finally {
+            setIsSuggestingTasks(false);
+        }
+    };
+
+    const handleAddSelectedAiTasks = async () => {
+        const tasksToAdd = aiSuggestedTasks.filter((_, idx) => selectedAiTaskIndices.includes(idx));
+        if (tasksToAdd.length === 0) {
+            showToast('Select at least one task to add', 'info');
+            return;
+        }
+        setIsAddingAiTasks(true);
+        try {
+            for (const task of tasksToAdd) {
+                await api.post('/projects/tasks/', {
+                    title: task.title,
+                    description: task.description || '',
+                    priority: task.priority || 'MEDIUM',
+                    project: id,
+                    status: 'TODO',
+                    story_points: task.estimated_hours || 2
+                });
+            }
+            setShowAiSuggestModal(false);
+            setAiSuggestedTasks([]);
+            fetchProjectDetails();
+            showToast(`Added ${tasksToAdd.length} AI suggested tasks!`, 'success');
+        } catch (err) {
+            console.error('Failed to add suggested tasks:', err);
+            showToast('Failed to add tasks to board', 'error');
+        } finally {
+            setIsAddingAiTasks(false);
+        }
+    };
+
+    const handleGenerateTaskSummary = async () => {
+        if (!selectedTask) return;
+        setIsSummarizingTask(true);
+        try {
+            const contextText = `Task: ${selectedTask.title}\nDescription: ${selectedTask.description || 'No description'}\nPriority: ${selectedTask.priority}\nSubtasks: ${(selectedTask.subtasks || []).map(s => s.title).join(', ')}`;
+            const res = await api.post('/ai/summarize/', { text: contextText });
+            setAiSummary(res.data.summary);
+            showToast('AI Summary generated!', 'success');
+        } catch (err) {
+            console.error('AI summary failed:', err);
+            showToast('Failed to generate summary', 'error');
+        } finally {
+            setIsSummarizingTask(false);
+        }
+    };
+
+    const [isAiBreakingDown, setIsAiBreakingDown] = useState(false);
+
+    const handleAiBreakdownSubtasks = async () => {
+        if (!selectedTask) return;
+        setIsAiBreakingDown(true);
+        try {
+            const res = await api.post('/ai/breakdown/', {
+                title: selectedTask.title,
+                description: selectedTask.description || ''
+            });
+            const subtasks = res.data.subtasks || [];
+            if (subtasks.length === 0) {
+                showToast('No subtasks generated', 'info');
+                return;
+            }
+            for (const sub of subtasks) {
+                await api.post('/projects/tasks/', {
+                    title: sub.title,
+                    project: id,
+                    parent_task: selectedTask.id,
+                    status: 'TODO',
+                    priority: sub.priority || 'MEDIUM'
+                });
+            }
+            fetchProjectDetails();
+            showToast(`AI created ${subtasks.length} subtasks!`, 'success');
+        } catch (err) {
+            console.error('AI breakdown failed:', err);
+            showToast('AI Breakdown failed. Try again.', 'error');
+        } finally {
+            setIsAiBreakingDown(false);
+        }
     };
 
     const handleAddSubtask = async () => {
@@ -939,6 +1049,13 @@ const ProjectDetails = () => {
                                     className="ml-2 px-3 py-1 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-sm text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
                                 >
                                     <Plus size={14} /> Create
+                                </button>
+                                <button
+                                    onClick={handleOpenAiSuggest}
+                                    className="px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-sm text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                                    title="AI analyzes current tasks and suggests next sprint backlog items"
+                                >
+                                    <Sparkles size={14} /> AI Planner
                                 </button>
                             </div>
                             <p className="text-[11px] text-[#5E6C84] uppercase font-bold tracking-wider">Software project</p>
@@ -2833,7 +2950,33 @@ const ProjectDetails = () => {
 
                                     {/* Description */}
                                     <div>
-                                        <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Description</h4>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-xs font-semibold text-[#5E6C84] uppercase">Description</h4>
+                                            <button
+                                                type="button"
+                                                onClick={handleGenerateTaskSummary}
+                                                disabled={isSummarizingTask}
+                                                className="text-xs text-purple-700 hover:text-purple-900 font-semibold flex items-center gap-1 transition-colors"
+                                            >
+                                                {isSummarizingTask ? (
+                                                    <><Loader2 size={12} className="animate-spin" /> Summarizing...</>
+                                                ) : (
+                                                    <><Sparkles size={12} /> AI Summarize</>
+                                                )}
+                                            </button>
+                                        </div>
+                                        {aiSummary && (
+                                            <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-900 flex items-start gap-2 shadow-sm animate-in fade-in">
+                                                <Sparkles size={16} className="text-purple-600 shrink-0 mt-0.5" />
+                                                <div className="flex-1">
+                                                    <span className="font-bold block mb-0.5">AI Executive Summary</span>
+                                                    <p className="leading-relaxed">{aiSummary}</p>
+                                                </div>
+                                                <button onClick={() => setAiSummary(null)} className="text-purple-400 hover:text-purple-700">
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        )}
                                         <textarea
                                             className="w-full min-h-[100px] p-3 bg-white border border-[#DFE1E6] rounded text-sm text-[#172B4D] outline-none hover:border-[#0079BF] focus:border-[#0079BF] resize-none"
                                             placeholder="Add a more detailed description..."
@@ -2902,12 +3045,32 @@ const ProjectDetails = () => {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <button
-                                                onClick={() => setShowSubtaskInput(true)}
-                                                className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded text-sm font-medium transition-colors"
-                                            >
-                                                Add an item
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setShowSubtaskInput(true)}
+                                                    className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded text-sm font-medium transition-colors"
+                                                >
+                                                    Add an item
+                                                </button>
+                                                <button
+                                                    onClick={handleAiBreakdownSubtasks}
+                                                    disabled={isAiBreakingDown}
+                                                    className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded text-sm font-medium transition-all shadow-sm flex items-center gap-1.5"
+                                                    title="Automatically generate subtasks with AI"
+                                                >
+                                                    {isAiBreakingDown ? (
+                                                        <>
+                                                            <Loader2 size={14} className="animate-spin" />
+                                                            <span>Generating Subtasks...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Sparkles size={14} />
+                                                            <span>AI Breakdown</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
 
@@ -4242,6 +4405,137 @@ const ProjectDetails = () => {
                     </div>
                 )
             }
+
+            {/* AI Sprint & Task Suggester Modal */}
+            {showAiSuggestModal && (
+                <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl overflow-hidden animate-scale-in border border-purple-100">
+                        <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-gradient-to-r from-purple-50 to-indigo-50">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                                    <Sparkles size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-[#172B4D] text-base">AI Sprint Planner & Suggester</h3>
+                                    <p className="text-xs text-[#5E6C84]">Intelligently recommend tasks based on your project goals</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowAiSuggestModal(false)} className="p-1 hover:bg-black/5 rounded">
+                                <X size={18} className="text-[#5E6C84]" />
+                            </button>
+                        </div>
+
+                        <div className="p-5">
+                            {isSuggestingTasks ? (
+                                <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
+                                    <Loader2 size={32} className="animate-spin text-purple-600" />
+                                    <p className="text-sm font-semibold text-[#172B4D]">Analyzing project context & backlog...</p>
+                                    <p className="text-xs text-[#5E6C84]">Synthesizing next high-impact sprint recommendations</p>
+                                </div>
+                            ) : aiSuggestedTasks.length === 0 ? (
+                                <div className="py-8 text-center text-sm text-[#5E6C84]">
+                                    No suggestions generated. Click retry to generate again.
+                                    <div className="mt-3">
+                                        <button onClick={handleOpenAiSuggest} className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-bold">
+                                            Retry
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                                    <div className="flex items-center justify-between text-xs text-[#5E6C84] px-1 pb-1">
+                                        <span>Select recommendations to populate into board:</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (selectedAiTaskIndices.length === aiSuggestedTasks.length) {
+                                                    setSelectedAiTaskIndices([]);
+                                                } else {
+                                                    setSelectedAiTaskIndices(aiSuggestedTasks.map((_, i) => i));
+                                                }
+                                            }}
+                                            className="text-purple-600 hover:underline font-semibold"
+                                        >
+                                            {selectedAiTaskIndices.length === aiSuggestedTasks.length ? 'Deselect All' : 'Select All'}
+                                        </button>
+                                    </div>
+
+                                    {aiSuggestedTasks.map((task, idx) => {
+                                        const isSelected = selectedAiTaskIndices.includes(idx);
+                                        return (
+                                            <div
+                                                key={idx}
+                                                onClick={() => {
+                                                    setSelectedAiTaskIndices(prev =>
+                                                        prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+                                                    );
+                                                }}
+                                                className={`p-3 rounded-lg border text-left cursor-pointer transition-all flex items-start gap-3 ${
+                                                    isSelected ? 'bg-purple-50/60 border-purple-300 ring-1 ring-purple-400' : 'bg-white border-[#DFE1E6] hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => {}}
+                                                    className="mt-1 w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                                        <h4 className="font-bold text-[#172B4D] text-sm truncate">{task.title}</h4>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-slate-100 text-slate-700">
+                                                                {task.priority || 'MEDIUM'}
+                                                            </span>
+                                                            {task.estimated_hours && (
+                                                                <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-purple-100 text-purple-800">
+                                                                    {task.estimated_hours} pts
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-[#5E6C84] leading-relaxed">{task.description}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            <div className="pt-5 mt-4 border-t border-[#DFE1E6] flex items-center justify-between">
+                                <button
+                                    onClick={() => handleOpenAiSuggest()}
+                                    disabled={isSuggestingTasks}
+                                    className="px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 rounded flex items-center gap-1.5"
+                                >
+                                    <Sparkles size={14} /> Re-generate
+                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAiSuggestModal(false)}
+                                        className="px-4 py-2 border rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleAddSelectedAiTasks}
+                                        disabled={isAddingAiTasks || selectedAiTaskIndices.length === 0}
+                                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                                    >
+                                        {isAddingAiTasks ? (
+                                            <><Loader2 size={14} className="animate-spin" /> Adding to Board...</>
+                                        ) : (
+                                            <>Add {selectedAiTaskIndices.length} Tasks to Board</>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

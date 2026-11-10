@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, AlertCircle, Clock, MessageSquare, X } from 'lucide-react';
+import { Plus, Search, AlertCircle, Clock, MessageSquare, X, Sparkles, Loader2, Check } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
+import { useToast } from '../components/Toast';
 
 const Tickets = () => {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [tickets, setTickets] = useState([]);
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('ALL');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'MEDIUM', category: 'BUG' });
+    const [isTriaging, setIsTriaging] = useState(false);
+    const [aiTriageResult, setAiTriageResult] = useState(null);
     const { user } = useAuthStore();
 
     const fetchTickets = async () => {
@@ -24,6 +28,34 @@ const Tickets = () => {
         fetchTickets();
     }, []);
 
+    const handleAiTriage = async () => {
+        if (!newTicket.title) {
+            showToast('Enter a ticket title first', 'info');
+            return;
+        }
+        setIsTriaging(true);
+        try {
+            const res = await api.post('/ai/prioritize-ticket/', {
+                title: newTicket.title,
+                description: newTicket.description || '',
+                customer_tier: 'ENTERPRISE'
+            });
+            const data = res.data;
+            setAiTriageResult(data);
+            setNewTicket(prev => ({
+                ...prev,
+                priority: data.priority || prev.priority,
+                category: data.category === 'BUG' ? 'BUG' : data.category === 'FEATURE' ? 'FEATURE' : 'IT_SUPPORT'
+            }));
+            showToast(`AI prioritized as ${data.priority}!`, 'success');
+        } catch (err) {
+            console.error('AI Triage failed:', err);
+            showToast('AI Triage failed', 'error');
+        } finally {
+            setIsTriaging(false);
+        }
+    };
+
     const handleCreateTicket = async (e) => {
         e.preventDefault();
         try {
@@ -31,7 +63,12 @@ const Tickets = () => {
             setTickets([res.data, ...tickets]);
             setIsCreateModalOpen(false);
             setNewTicket({ title: '', description: '', priority: 'MEDIUM', category: 'BUG' });
-        } catch (err) { console.error(err); }
+            setAiTriageResult(null);
+            showToast('Ticket created successfully!', 'success');
+        } catch (err) { 
+            console.error(err);
+            showToast('Failed to create ticket', 'error');
+        }
     };
 
     const filteredTickets = tickets.filter(t => {
@@ -190,7 +227,38 @@ const Tickets = () => {
                                         value={newTicket.description}
                                         onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })}
                                     />
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <button
+                                            type="button"
+                                            onClick={handleAiTriage}
+                                            disabled={isTriaging}
+                                            className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                                        >
+                                            {isTriaging ? (
+                                                <><Loader2 size={13} className="animate-spin" /> Analyzing Issue...</>
+                                            ) : (
+                                                <><Sparkles size={13} /> AI Auto-Triage & Predict SLA</>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
+
+                                {aiTriageResult && (
+                                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-900 space-y-1 animate-in fade-in">
+                                        <div className="flex items-center justify-between font-bold">
+                                            <span className="flex items-center gap-1.5">
+                                                <Sparkles size={14} className="text-purple-600" />
+                                                AI Triage Assessment
+                                            </span>
+                                            {aiTriageResult.sla_target_hours && (
+                                                <span className="px-2 py-0.5 bg-purple-200 text-purple-900 rounded font-mono font-bold">
+                                                    Target SLA: {aiTriageResult.sla_target_hours}h
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-purple-800 leading-relaxed">{aiTriageResult.reasoning}</p>
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-[#5E6C84] uppercase mb-1">Category</label>

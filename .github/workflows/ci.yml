@@ -67,3 +67,4 @@ jobs:
       - name: Build Frontend (Vite)
         run: |
           npm --prefix frontend run build
+
