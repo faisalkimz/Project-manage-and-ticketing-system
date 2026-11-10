@@ -18,9 +18,26 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework import permissions
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
+
+schema_view = get_schema_view(
+    openapi.Info(
+        title="Omni-PMS & Ticketing API",
+        default_version='v1',
+        description="Comprehensive REST API documentation for Omni-PMS Project Management and Ticketing Platform.",
+        contact=openapi.Contact(email="support@omni-pms.local"),
+        license=openapi.License(name="Proprietary"),
+    ),
+    public=True,
+    permission_classes=(permissions.AllowAny,),
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     path('api/users/', include('users.urls')),
     path('api/projects/', include('projects.urls')),
     path('api/tickets/', include('tickets.urls')),
@@ -32,6 +49,7 @@ urlpatterns = [
     path('api/automation/', include('automation.urls')),
     path('api/search/', include('search.urls')),
     path('api/notifications/', include('notifications.urls')),
+    path('api/ai/', include('ai_assistant.urls')),
 ]
 
 if settings.DEBUG:

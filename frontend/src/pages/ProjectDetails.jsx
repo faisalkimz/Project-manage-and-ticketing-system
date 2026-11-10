@@ -218,7 +218,7 @@ const ProjectDetails = () => {
             setShowAttachmentModal(false);
             fetchTaskSideData(selectedTask);
         } catch (error) {
-            alert('Failed to upload file. Please try again.');
+            showToast('Failed to upload file. Please try again.', 'error');
         }
     };
 
@@ -480,7 +480,7 @@ const ProjectDetails = () => {
             // Actually fetchProjectDetails updates 'tasks' state, but selectedTask is a separate state object.
             // When tasks change, we should find the updated task in the list and update selectedTask.
             // Use useEffect or manual sync.
-        } catch (error) { alert('Failed to add subtask'); }
+        } catch (error) { showToast('Failed to add subtask', 'error'); }
     };
 
     const handleToggleSubtaskStatus = async (subtaskId, currentStatus) => {
@@ -501,7 +501,7 @@ const ProjectDetails = () => {
             fetchProjectDetails();
             setShowDependencyInput(false);
             setDependencySearch('');
-        } catch (error) { alert('Failed to add dependency'); }
+        } catch (error) { showToast('Failed to add dependency', 'error'); }
     };
 
     const handleRemoveDependency = async (depId) => {
@@ -511,7 +511,7 @@ const ProjectDetails = () => {
                 dependencies: currentDeps.filter(id => id !== depId)
             });
             fetchProjectDetails();
-        } catch (error) { alert('Failed to remove dependency'); }
+        } catch (error) { showToast('Failed to remove dependency', 'error'); }
     };
 
     const handleCreateMilestone = async (e) => {
@@ -521,7 +521,8 @@ const ProjectDetails = () => {
             setNewMilestone({ name: '', due_date: '', description: '' });
             setIsRoadmapModalOpen(false);
             fetchProjectDetails();
-        } catch (error) { alert('Failed to create milestone'); }
+            showToast('Milestone created!', 'success');
+        } catch (error) { showToast('Failed to create milestone', 'error'); }
     };
 
     const handleCreateRelease = async (e) => {
@@ -531,7 +532,8 @@ const ProjectDetails = () => {
             setNewRelease({ name: '', version: '', release_date: '', description: '' });
             setShowReleaseModal(false);
             fetchProjectDetails();
-        } catch (error) { alert('Failed to create release'); }
+            showToast('Release created!', 'success');
+        } catch (error) { showToast('Failed to create release', 'error'); }
     };
 
     const handleToggleRelease = async (releaseId, currentStatus) => {
@@ -546,7 +548,7 @@ const ProjectDetails = () => {
     const copyBoardLink = () => {
         const link = window.location.href;
         navigator.clipboard.writeText(link).then(() => {
-            alert('Board link copied to clipboard!');
+            showToast('Board link copied to clipboard!', 'success');
             setShowMoreMenu(false);
         });
     };
@@ -560,13 +562,13 @@ const ProjectDetails = () => {
         try {
             const res = await api.post(`/projects/projects/${id}/toggle_watch/`);
             if (res.data.status === 'watched') {
-                alert('You are now watching this board.');
+                showToast('You are now watching this board.', 'success');
             } else {
-                alert('You stopped watching this board.');
+                showToast('You stopped watching this board.', 'info');
             }
             fetchProjectDetails(); // To update the state properly if we use is_watching prop
             setShowMoreMenu(false);
-        } catch (e) { alert('Failed to toggle watch'); }
+        } catch (e) { showToast('Failed to toggle watch', 'error'); }
     };
 
     const changeBackground = () => {
@@ -592,19 +594,19 @@ const ProjectDetails = () => {
                 email: shareEmail,
                 role_name: 'DEVELOPER'
             });
-            alert(`Invitation sent to ${shareEmail}!`);
+            showToast(`Invitation sent to ${shareEmail}!`, 'success');
             setShareEmail('');
             setShowShareModal(false);
             fetchProjectDetails();
         } catch (error) {
-            alert('Failed to send invitation. Please try again.');
+            showToast('Failed to send invitation. Please try again.', 'error');
         }
     };
 
     const copyShareLink = () => {
         const link = window.location.href;
         navigator.clipboard.writeText(link).then(() => {
-            alert('Share link copied to clipboard!');
+            showToast('Share link copied to clipboard!', 'success');
         });
     };
 
@@ -665,7 +667,8 @@ const ProjectDetails = () => {
             await api.patch(`/projects/projects/${id}/`, settingsForm);
             setProject({ ...project, ...settingsForm });
             setShowSettingsModal(false);
-        } catch (error) { alert('Failed to update settings'); }
+            showToast('Settings updated!', 'success');
+        } catch (error) { showToast('Failed to update settings', 'error'); }
     };
 
     const handleUpdateBackground = async (color) => {
@@ -673,7 +676,8 @@ const ProjectDetails = () => {
             await api.patch(`/projects/projects/${id}/`, { background_color: color });
             setProject({ ...project, background_color: color });
             setShowBackgroundModal(false);
-        } catch (error) { alert('Failed to update background'); }
+            showToast('Background updated!', 'success');
+        } catch (error) { showToast('Failed to update background', 'error'); }
     };
 
     const handleCreateGoal = async (e) => {
@@ -683,7 +687,8 @@ const ProjectDetails = () => {
             setNewGoal({ title: '', description: '', target_date: '' });
             setShowGoalModal(false);
             fetchProjectDetails();
-        } catch (error) { alert('Failed to create goal'); }
+            showToast('Goal created!', 'success');
+        } catch (error) { showToast('Failed to create goal', 'error'); }
     };
 
     const handleCreateDeliverable = async (e) => {
@@ -693,7 +698,8 @@ const ProjectDetails = () => {
             setNewDeliverable({ name: '', description: '', due_date: '' });
             setShowDeliverableModal(false);
             fetchProjectDetails();
-        } catch (error) { alert('Failed to create deliverable'); }
+            showToast('Deliverable created!', 'success');
+        } catch (error) { showToast('Failed to create deliverable', 'error'); }
     };
 
     const handleToggleGoal = async (goalId, isAchieved) => {
@@ -722,7 +728,7 @@ const ProjectDetails = () => {
         try {
             await api.patch(`/projects/projects/${id}/`, { status: 'COMPLETED' }); // Mapping Close to Completed/Archived
             navigate('/projects');
-        } catch (error) { alert('Failed to close board'); }
+        } catch (error) { showToast('Failed to close board', 'error'); }
     };
 
     const handleCreateStatus = async () => {

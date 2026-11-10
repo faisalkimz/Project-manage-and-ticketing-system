@@ -2,8 +2,8 @@ from rest_framework import generics, permissions, status, filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import UserSerializer, RegisterSerializer, TeamInviteSerializer, TeamSerializer, UserUpdateSerializer
-from .models import User, TeamInvite, Team
+from .serializers import UserSerializer, RegisterSerializer, TeamInviteSerializer, TeamSerializer, UserUpdateSerializer, OAuthConnectionSerializer
+from .models import User, TeamInvite, Team, OAuthConnection
 from django.core.mail import send_mail
 
 # Role model removed, using CharField
@@ -159,3 +159,38 @@ class ChangePasswordView(generics.UpdateAPIView):
         user.set_password(new_password)
         user.save()
         return Response({"status": "password set"}, status=status.HTTP_200_OK)
+
+class OAuthConnectionsView(generics.GenericAPIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    serializer_class = OAuthConnectionSerializer
+
+    def get(self, request):
+        connections = OAuthConnection.objects.filter(user=request.user)
+        return Response(OAuthConnectionSerializer(connections, many=True).data)
+
+    def post(self, request):
+        provider = request.data.get('provider')
+        if not provider:
+            return Response({'error': 'provider is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        provider_user_id = request.data.get('provider_user_id', f"{provider}_{request.user.id}")
+        access_token = request.data.get('access_token', 'token_demo_mode')
+        scopes = request.data.get('scopes', 'read,write')
+
+        connection, created = OAuthConnection.objects.update_or_create(
+            user=request.user,
+            provider=provider.lower(),
+            defaults={
+                'provider_user_id': provider_user_id,
+                'access_token': access_token,
+                'scopes': scopes
+            }
+        )
+        return Response(OAuthConnectionSerializer(connection).data, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        provider = request.query_params.get('provider') or request.data.get('provider')
+        if not provider:
+            return Response({'error': 'provider is required'}, status=status.HTTP_400_BAD_REQUEST)
+        deleted_count, _ = OAuthConnection.objects.filter(user=request.user, provider=provider.lower()).delete()
+        return Response({'message': f'{provider} disconnected', 'deleted': deleted_count > 0})

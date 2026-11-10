@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, TeamInvite, Team
+from .models import User, TeamInvite, Team, OAuthConnection
 from projects.models import Project
 from django.core.exceptions import ValidationError
 
@@ -115,3 +115,9 @@ class TeamInviteSerializer(serializers.ModelSerializer):
         model = TeamInvite
         fields = '__all__'
         read_only_fields = ['invited_by', 'token', 'status', 'created_at', 'role']
+
+class OAuthConnectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OAuthConnection
+        fields = ['id', 'provider', 'provider_user_id', 'created_at']
+        read_only_fields = ['id', 'created_at']
