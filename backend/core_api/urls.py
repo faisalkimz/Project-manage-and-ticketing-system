@@ -26,9 +26,9 @@ schema_view = get_schema_view(
     openapi.Info(
         title="Omni-PMS & Ticketing API",
         default_version='v1',
-        description="Comprehensive REST API documentation for Omni-PMS Project Management and Ticketing Platform.",
+        description="Comprehensive Open-Source REST API for Omni-PMS Project Management and Ticketing Platform.",
         contact=openapi.Contact(email="support@omni-pms.local"),
-        license=openapi.License(name="Proprietary"),
+        license=openapi.License(name="MIT License"),
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),

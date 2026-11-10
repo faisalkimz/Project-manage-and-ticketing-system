@@ -13,6 +13,21 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_by', 'execution_count', 'last_executed', 'created_at', 'updated_at']
     
+    def to_internal_value(self, data):
+        data = data.copy()
+        if 'target_model' in data and not data.get('target_content_type'):
+            from django.contrib.contenttypes.models import ContentType
+            model_name = data.get('target_model', '').lower()
+            ct = ContentType.objects.filter(model=model_name).first()
+            if ct:
+                data['target_content_type'] = ct.id
+        elif not data.get('target_content_type'):
+            from django.contrib.contenttypes.models import ContentType
+            ct = ContentType.objects.filter(model='task').first()
+            if ct:
+                data['target_content_type'] = ct.id
+        return super().to_internal_value(data)
+    
     def get_created_by_details(self, obj):
         if obj.created_by:
             return {'id': obj.created_by.id, 'username': obj.created_by.username}
