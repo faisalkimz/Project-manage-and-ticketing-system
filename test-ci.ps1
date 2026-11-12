@@ -60,8 +60,9 @@ cd frontend
 
 Write-Host "✅ Running Frontend Lint..." -ForegroundColor Green
 npm run lint
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "⚠️  Linting issues found (non-blocking)" -ForegroundColor Yellow
+$lintExit = $LASTEXITCODE
+if ($lintExit -ne 0) {
+    Write-Host "⚠️  Linting issues found (non-blocking in CI)" -ForegroundColor Yellow
 }
 
 Write-Host ""
