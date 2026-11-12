@@ -68,7 +68,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
                 ).values_list('id', flat=True)
 
             accessible_task_ids = Task.objects.filter(
-                Q(project_id__in=accessible_projects) | Q(assignees=user)
+                Q(project_id__in=accessible_projects) | Q(assigned_to=user)
             ).values_list('id', flat=True)
 
             project_ct = ContentType.objects.filter(model='project').first()

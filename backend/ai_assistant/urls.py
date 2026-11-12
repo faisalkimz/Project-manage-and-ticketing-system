@@ -5,6 +5,7 @@ from .views import (
     SuggestTasksView,
     BreakdownTaskView,
     PrioritizeTicketView,
+    AnalyzeRiskView,
     AIRequestLogViewSet,
     AIPromptTemplateViewSet
 )
@@ -18,6 +19,7 @@ urlpatterns = [
     path('suggest-tasks/', SuggestTasksView.as_view(), name='ai-suggest-tasks'),
     path('breakdown/', BreakdownTaskView.as_view(), name='ai-breakdown'),
     path('prioritize-ticket/', PrioritizeTicketView.as_view(), name='ai-prioritize-ticket'),
+    path('analyze-risk/', AnalyzeRiskView.as_view(), name='ai-analyze-risk'),
     path('', include(router.urls)),
 ]
 

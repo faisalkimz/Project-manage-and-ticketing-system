@@ -54,7 +54,7 @@ class SearchViewSet(viewsets.ViewSet):
         if search_type in ['all', 'tasks']:
             tasks = Task.objects.filter(
                 (Q(title__icontains=query) | Q(description__icontains=query)) &
-                (Q(project__in=accessible_projects) | Q(assignees=user) | Q(assigned_to=user))
+                (Q(project__in=accessible_projects) | Q(assigned_to=user))
             ).distinct()[:15]
             
             for t in tasks:

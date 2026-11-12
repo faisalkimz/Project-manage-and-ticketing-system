@@ -58,6 +58,14 @@ class PrioritizeTicketView(APIView):
         result = AIService.prioritize_ticket(title, description, customer_tier, user=request.user)
         return Response(result)
 
+class AnalyzeRiskView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        project_data = request.data.get('project_data', {})
+        result = AIService.analyze_project_risk(project_data, user=request.user)
+        return Response(result)
+
 class AIRequestLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = AIRequestLogSerializer

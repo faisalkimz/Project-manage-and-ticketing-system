@@ -78,7 +78,8 @@ class TicketViewSet(viewsets.ModelViewSet):
             title=ticket.title,
             description=ticket.description,
             priority=ticket.priority,
-            status='TODO'
+            status='TODO',
+            created_by=ticket.submitted_by or request.user
         )
         
         ticket.project_task = task

@@ -330,8 +330,8 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         qs = Task.objects.select_related(
             'project', 'assigned_to', 'created_by', 'sprint'
-        ).prefetch_related('assignees').filter(
-            Q(project__in=accessible_projects) | Q(assignees=user)
+        ).prefetch_related('tags', 'dependencies').filter(
+            Q(project__in=accessible_projects) | Q(assigned_to=user)
         ).distinct()
             
         if project_id:
