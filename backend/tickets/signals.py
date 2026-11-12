@@ -3,6 +3,7 @@ from django.dispatch import receiver
 from .models import Ticket
 from activity.models import AuditLog
 from django.contrib.contenttypes.models import ContentType
+from automation.utils import evaluate_rules_for_object
 
 @receiver(pre_save, sender=Ticket)
 def track_ticket_changes(sender, instance, **kwargs):
@@ -49,3 +50,12 @@ def log_ticket_creation(sender, instance, created, **kwargs):
             object_id=instance.id,
             details={'message': f"Ticket {instance.ticket_number} created"}
         )
+
+    # Automation Workflow Rule Evaluation
+    trigger_type = 'CREATED' if created else 'UPDATED'
+    try:
+        evaluate_rules_for_object(instance, trigger_type=trigger_type)
+        if instance.status == 'CLOSED' or instance.status == 'RESOLVED':
+            evaluate_rules_for_object(instance, trigger_type='STATUS_CHANGED')
+    except Exception as e:
+        print(f"Workflow automation error on ticket save: {e}")

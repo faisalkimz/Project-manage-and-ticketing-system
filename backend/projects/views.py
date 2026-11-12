@@ -149,11 +149,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        base_query = Project.objects.select_related('created_by', 'team').prefetch_related('members')
         if user.is_superuser:
-            return Project.objects.all()
+            return base_query.all()
             
         from django.db.models import Q
-        base_query = Project.objects.all()
         
         # Filter by Enterprise if user belongs to one
         if user.enterprise:
@@ -187,6 +187,50 @@ class ProjectViewSet(viewsets.ModelViewSet):
             
         instance = serializer.save(created_by=self.request.user, key=key, team=team)
         instance.members.add(self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def create_from_template(self, request, pk=None):
+        template = self.get_object()
+        if not template.is_template:
+            return Response({'error': 'Selected project is not marked as a template.'}, status=400)
+
+        name = request.data.get('name') or f"Copy of {template.name}"
+        clean_key = ''.join(c for c in name if c.isalnum())[:4].upper() or 'PRJ'
+        base_key = clean_key
+        count = 1
+        while Project.objects.filter(key=clean_key).exists():
+            clean_key = f"{base_key[:3]}{count}"
+            count += 1
+
+        new_project = Project.objects.create(
+            name=name,
+            description=template.description,
+            created_by=request.user,
+            is_template=False,
+            status='ACTIVE',
+            key=clean_key,
+            team=template.team,
+            visibility=template.visibility,
+            background_color=template.background_color,
+            start_date=timezone.now().date(),
+        )
+        new_project.members.add(request.user)
+
+        # Clone template tasks without assignees
+        for task in template.tasks.all():
+            Task.objects.create(
+                project=new_project,
+                title=task.title,
+                description=task.description,
+                priority=task.priority,
+                issue_type=task.issue_type,
+                status=task.status,
+                story_points=task.story_points,
+                created_by=request.user
+            )
+
+        serializer = self.get_serializer(new_project)
+        return Response(serializer.data, status=201)
 
     @action(detail=True, methods=['post'])
     def add_member(self, request, pk=None):
@@ -284,7 +328,9 @@ class TaskViewSet(viewsets.ModelViewSet):
                 Q(members=user) | Q(team__members=user) | Q(created_by=user)
             ).distinct()
 
-        qs = Task.objects.filter(
+        qs = Task.objects.select_related(
+            'project', 'assigned_to', 'created_by', 'sprint'
+        ).prefetch_related('assignees').filter(
             Q(project__in=accessible_projects) | Q(assignees=user)
         ).distinct()
             

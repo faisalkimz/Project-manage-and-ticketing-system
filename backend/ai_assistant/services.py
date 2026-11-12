@@ -242,6 +242,66 @@ class AIService:
 
         return result
 
+    @classmethod
+    def analyze_project_risk(cls, project_data, user=None):
+        """
+        Analyze task completion rates, overdue counts, and velocity to predict delivery risk.
+        """
+        start_time = time.time()
+        client = cls._get_openai_client()
+        model = os.getenv('AI_MODEL', 'gpt-4o-mini')
+        result = {}
+        tokens = 0
+        status = "SUCCESS"
+        context = f"Project Metrics: {json.dumps(project_data)}"
+
+        if client:
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a Delivery Risk Management AI. Analyze the project metrics "
+                                "(total tasks, overdue tasks, completion rate, velocity) and return JSON: "
+                                '{"risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "score": 85, "summary": "...", "recommendations": ["..."]}'
+                            )
+                        },
+                        {"role": "user", "content": context}
+                    ],
+                    temperature=0.3
+                )
+                raw_json = response.choices[0].message.content.strip()
+                if raw_json.startswith("```"):
+                    raw_json = raw_json.strip("`").replace("json\n", "", 1).strip()
+                result = json.loads(raw_json)
+                tokens = response.usage.total_tokens if response.usage else 0
+            except Exception as e:
+                logger.error(f"OpenAI error in analyze_project_risk: {e}")
+                status = "FAILED"
+                result = cls._fallback_project_risk(project_data)
+        else:
+            result = cls._fallback_project_risk(project_data)
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+
+        if user and user.is_authenticated:
+            AIRequestLog.objects.create(
+                user=user,
+                request_type='ANALYZE',
+                input_text=context[:1000],
+                output_text=json.dumps(result),
+                status=status,
+                tokens_used=tokens,
+                processing_time_ms=elapsed_ms
+            )
+
+        return result
+
+    # Alias method to match technical assessment specification
+    suggest_task_breakdown = breakdown_task
+
     # --- Heuristic Fallbacks (when API key is unset or network offline) ---
 
     @staticmethod
@@ -301,4 +361,38 @@ class AIService:
             "category": cat,
             "reasoning": f"Determined from keywords and customer tier '{customer_tier}'.",
             "sla_target_hours": sla
+        }
+
+    @staticmethod
+    def _fallback_project_risk(project_data):
+        overdue = project_data.get('overdue_tasks', 0)
+        progress = project_data.get('progress', 0)
+        total = project_data.get('total_tasks', 0)
+
+        if overdue > 10 or (total > 0 and progress < 20 and overdue > 5):
+            level = "CRITICAL"
+            score = 30
+            summary = "Critical overdue volume with low completion throughput."
+            recs = ["Triage and deprioritize non-essential scope", "Reassign blocked tasks", "Extend milestone delivery window"]
+        elif overdue > 5:
+            level = "HIGH"
+            score = 55
+            summary = "Moderate schedule slippage with accumulating overdue tasks."
+            recs = ["Conduct standup blocker review", "Limit work-in-progress (WIP)"]
+        elif overdue > 0:
+            level = "MEDIUM"
+            score = 75
+            summary = "Minor delivery slippage detected; manageable within current sprint."
+            recs = ["Focus on resolving overdue items today"]
+        else:
+            level = "LOW"
+            score = 95
+            summary = "Project health is on track with zero overdue tasks."
+            recs = ["Maintain current sprint velocity"]
+
+        return {
+            "risk_level": level,
+            "score": score,
+            "summary": summary,
+            "recommendations": recs
         }

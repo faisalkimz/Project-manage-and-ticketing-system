@@ -3,6 +3,31 @@ from .models import WorkflowExecution, WebhookLog
 import requests
 import json
 
+def evaluate_rules_for_object(obj, trigger_type: str, triggered_by=None):
+    """
+    Evaluate all active WorkflowRules for the given object and trigger.
+    """
+    from .models import WorkflowRule
+    from django.contrib.contenttypes.models import ContentType
+    
+    ct = ContentType.objects.get_for_model(obj)
+    rules = WorkflowRule.objects.filter(
+        is_active=True,
+        trigger_type=trigger_type,
+        target_content_type=ct
+    )
+    
+    executions = []
+    for rule in rules:
+        try:
+            exec_res = execute_workflow_rule(rule, obj, triggered_by=triggered_by)
+            executions.append(exec_res)
+        except Exception as e:
+            print(f"Error evaluating rule {rule.id}: {e}")
+            
+    return executions
+
+
 def execute_workflow_rule(rule, target_object, triggered_by=None):
     """
     Execute a workflow rule on a target object

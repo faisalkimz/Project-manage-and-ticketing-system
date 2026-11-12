@@ -13,12 +13,13 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        base_qs = Ticket.objects.select_related('submitted_by', 'assigned_to', 'project_task')
         if user.is_superuser:
-            return Ticket.objects.all()
+            return base_qs.all()
 
         from django.db.models import Q
         if user.enterprise:
-            return Ticket.objects.filter(
+            return base_qs.filter(
                 Q(submitted_by__enterprise=user.enterprise) |
                 Q(assigned_to__enterprise=user.enterprise)
             ).distinct()
@@ -28,7 +29,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             Q(members=user) | Q(team__members=user) | Q(created_by=user)
         ).values_list('id', flat=True)
 
-        return Ticket.objects.filter(
+        return base_qs.filter(
             Q(submitted_by=user) |
             Q(assigned_to=user) |
             Q(project_task__project_id__in=accessible_projects)
