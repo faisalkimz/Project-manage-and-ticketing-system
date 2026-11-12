@@ -13,7 +13,7 @@ class SearchViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'])
     def search(self, request):
-        """Global search across the entire system"""
+        """Global search across the entire system with multi-tenant isolation"""
         query = request.query_params.get('q', '')
         search_type = request.query_params.get('type', 'all')
         
@@ -23,19 +23,30 @@ class SearchViewSet(viewsets.ViewSet):
         results = []
         user = request.user
         
+        # Scoped Projects
+        if user.is_superuser:
+            accessible_projects = Project.objects.all()
+        elif getattr(user, 'enterprise', None):
+            accessible_projects = Project.objects.filter(
+                Q(team__enterprise=user.enterprise) | Q(members=user) | Q(created_by=user)
+            ).distinct()
+        else:
+            accessible_projects = Project.objects.filter(
+                Q(members=user) | Q(team__members=user) | Q(created_by=user)
+            ).distinct()
+
         # Search Projects
         if search_type in ['all', 'projects']:
-            projects = Project.objects.filter(
-                (Q(name__icontains=query) | Q(description__icontains=query)) &
-                Q(members=user)
-            ).distinct()[:5]
+            projects = accessible_projects.filter(
+                Q(name__icontains=query) | Q(description__icontains=query)
+            ).distinct()[:10]
             
             for p in projects:
                 results.append({
                     'type': 'PROJECT',
                     'id': p.id,
                     'title': p.name,
-                    'preview': p.description[:100] if p.description else '',
+                    'preview': p.description[:100] if p.description else f"{p.status} • {p.members.count()} members",
                     'url': f'/projects/{p.id}'
                 })
         
@@ -43,74 +54,96 @@ class SearchViewSet(viewsets.ViewSet):
         if search_type in ['all', 'tasks']:
             tasks = Task.objects.filter(
                 (Q(title__icontains=query) | Q(description__icontains=query)) &
-                Q(project__members=user)
-            ).distinct()[:10]
+                (Q(project__in=accessible_projects) | Q(assignees=user) | Q(assigned_to=user))
+            ).distinct()[:15]
             
             for t in tasks:
                 results.append({
                     'type': 'TASK',
                     'id': t.id,
                     'title': t.title,
-                    'preview': f"{t.project.name} - {t.status}",
-                    'url': f'/projects/{t.project.id}/tasks/{t.id}'
+                    'preview': f"{t.project.name} • {t.status} • {t.priority}",
+                    'url': f'/projects/{t.project.id}?task={t.id}'
                 })
                 
         # Search Tickets
         if search_type in ['all', 'tickets']:
-            tickets = Ticket.objects.filter(
+            if user.is_superuser:
+                tickets_qs = Ticket.objects.all()
+            elif getattr(user, 'enterprise', None):
+                tickets_qs = Ticket.objects.filter(
+                    Q(submitted_by__enterprise=user.enterprise) |
+                    Q(assigned_to__enterprise=user.enterprise) |
+                    Q(project_task__project__in=accessible_projects)
+                ).distinct()
+            else:
+                tickets_qs = Ticket.objects.filter(
+                    Q(submitted_by=user) | Q(assigned_to=user) | Q(project_task__project__in=accessible_projects)
+                ).distinct()
+
+            tickets = tickets_qs.filter(
                 Q(title__icontains=query) | Q(description__icontains=query) | Q(ticket_number__icontains=query)
-            ).filter(Q(submitted_by=user) | Q(assigned_to=user)).distinct()[:10]
+            ).distinct()[:10]
             
             for t in tickets:
                 results.append({
                     'type': 'TICKET',
                     'id': t.id,
-                    'title': f"{t.ticket_number}: {t.title}",
-                    'preview': t.status,
+                    'title': f"#{t.ticket_number or t.id}: {t.title}",
+                    'preview': f"{t.status} • {t.priority}",
                     'url': f'/tickets/{t.id}'
                 })
                 
-        # Search Users
+        # Search Users / Team
         if search_type in ['all', 'users']:
-            users = User.objects.filter(
-                Q(username__icontains=query) | Q(email__icontains=query)
-            )[:5]
+            if user.is_superuser:
+                users_qs = User.objects.all()
+            elif getattr(user, 'enterprise', None):
+                users_qs = User.objects.filter(enterprise=user.enterprise)
+            else:
+                users_qs = User.objects.filter(Q(id=user.id) | Q(teams__in=user.teams.all())).distinct()
+
+            users = users_qs.filter(
+                Q(username__icontains=query) | Q(email__icontains=query) | Q(first_name__icontains=query) | Q(last_name__icontains=query)
+            )[:10]
             
             for u in users:
                 results.append({
                     'type': 'USER',
                     'id': str(u.id),
-                    'title': u.username,
-                    'preview': u.email,
-                    'url': f'/users/{u.id}'
+                    'title': u.get_full_name() or u.username,
+                    'preview': f"{u.email} • {u.role}",
+                    'url': f'/team'
                 })
                 
-        # Search Knowledge
-        if search_type in ['all', 'knowledge']:
+        # Search Knowledge Base & Wiki
+        if search_type in ['all', 'knowledge', 'wiki']:
             docs = Document.objects.filter(
-                Q(title__icontains=query) | Q(description__icontains=query)
-            ).filter(Q(is_public=True) | Q(uploaded_by=user))[:5]
+                (Q(title__icontains=query) | Q(description__icontains=query)) &
+                (Q(is_public=True) | Q(uploaded_by=user) | Q(project__in=accessible_projects))
+            ).distinct()[:10]
             
             for d in docs:
                 results.append({
                     'type': 'DOCUMENT',
                     'id': d.id,
                     'title': d.title,
-                    'preview': d.file.name,
-                    'url': f'/knowledge/documents/{d.id}'
+                    'preview': f"Document • {d.category or 'General'}",
+                    'url': '/knowledge'
                 })
                 
             wiki_pages = WikiPage.objects.filter(
-                Q(title__icontains=query) | Q(content__icontains=query)
-            ).filter(Q(is_public=True) | Q(created_by=user))[:5]
+                (Q(title__icontains=query) | Q(content__icontains=query)) &
+                (Q(is_public=True) | Q(created_by=user) | Q(project__in=accessible_projects))
+            ).distinct()[:10]
             
             for w in wiki_pages:
                 results.append({
                     'type': 'WIKI',
                     'id': w.id,
                     'title': w.title,
-                    'preview': w.slug,
-                    'url': f'/knowledge/wiki/{w.slug}'
+                    'preview': f"Wiki • {w.category or 'General'}",
+                    'url': f'/knowledge?wiki={w.slug}'
                 })
 
         return Response(results)

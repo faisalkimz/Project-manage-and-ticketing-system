@@ -15,25 +15,36 @@ const Dashboard = () => {
     const [recentProjects, setRecentProjects] = useState([]);
     const [upcomingTasks, setUpcomingTasks] = useState([]);
     const [recentActivity, setRecentActivity] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
+            setLoading(true);
             try {
-                const [tRes, pRes, tkRes, actRes] = await Promise.all([
+                const [tRes, pRes, tkRes, actRes] = await Promise.allSettled([
                     api.get('/tickets/tickets/'),
                     api.get('/projects/projects/'),
                     api.get('/projects/tasks/'),
                     api.get('/activity/audit-logs/')
                 ]);
+                const ticketsData = tRes.status === 'fulfilled' ? (tRes.value.data.results || tRes.value.data || []) : [];
+                const projectsData = pRes.status === 'fulfilled' ? (pRes.value.data.results || pRes.value.data || []) : [];
+                const tasksData = tkRes.status === 'fulfilled' ? (tkRes.value.data.results || tkRes.value.data || []) : [];
+                const actData = actRes.status === 'fulfilled' ? (actRes.value.data.results || actRes.value.data || []) : [];
+
                 setStats({
-                    tickets: tRes.data.length,
-                    projects: pRes.data.length,
-                    tasks: tkRes.data.filter(t => t.status !== 'DONE').length
+                    tickets: ticketsData.length,
+                    projects: projectsData.length,
+                    tasks: tasksData.filter(t => t.status !== 'DONE').length
                 });
-                setRecentProjects(pRes.data.slice(0, 6));
-                setUpcomingTasks(tkRes.data.filter(t => t.status !== 'DONE').slice(0, 5));
-                setRecentActivity(actRes.data.slice(0, 6));
-            } catch (error) { console.error(error); }
+                setRecentProjects(projectsData.slice(0, 6));
+                setUpcomingTasks(tasksData.filter(t => t.status !== 'DONE').slice(0, 5));
+                setRecentActivity(actData.slice(0, 6));
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+            } finally {
+                setLoading(false);
+            }
         };
         fetchData();
     }, []);
@@ -65,10 +76,25 @@ const Dashboard = () => {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <StatCard label="Active Projects" value={stats.projects} icon={Briefcase} color="bg-[var(--trello-primary)]" link="/projects" />
-                <StatCard label="Pending Tasks" value={stats.tasks} icon={ListTodo} color="bg-[#FF9F1A]" link="/projects" />
-                <StatCard label="Open Tickets" value={stats.tickets} icon={MessageSquare} color="bg-[#61BD4F]" link="/tickets" />
-                <StatCard label="In Progress" value={upcomingTasks.length} icon={TrendingUp} color="bg-[#C377E0]" link="/projects" />
+                {loading ? (
+                    [1, 2, 3, 4].map(idx => (
+                        <div key={idx} className="bg-white border border-[#DFE1E6] rounded-sm p-4 animate-pulse">
+                            <div className="flex justify-between items-center mb-3">
+                                <div className="w-8 h-8 bg-slate-200 rounded"></div>
+                                <div className="w-4 h-4 bg-slate-200 rounded"></div>
+                            </div>
+                            <div className="w-12 h-6 bg-slate-200 rounded mb-1"></div>
+                            <div className="w-24 h-3 bg-slate-200 rounded"></div>
+                        </div>
+                    ))
+                ) : (
+                    <>
+                        <StatCard label="Active Projects" value={stats.projects} icon={Briefcase} color="bg-[var(--trello-primary)]" link="/projects" />
+                        <StatCard label="Pending Tasks" value={stats.tasks} icon={ListTodo} color="bg-[#FF9F1A]" link="/projects" />
+                        <StatCard label="Open Tickets" value={stats.tickets} icon={MessageSquare} color="bg-[#61BD4F]" link="/tickets" />
+                        <StatCard label="In Progress" value={upcomingTasks.length} icon={TrendingUp} color="bg-[#C377E0]" link="/projects" />
+                    </>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -85,40 +111,48 @@ const Dashboard = () => {
                                 View all →
                             </Link>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {recentProjects.map((project) => (
-                                <Link
-                                    key={project.id}
-                                    to={`/projects/${project.id}`}
-                                    className="group trello-gradient rounded-sm p-4 hover:shadow-lg transition-all min-h-[100px] flex flex-col justify-between"
-                                >
-                                    <h3 className="text-white font-semibold text-base mb-2">{project.name}</h3>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs text-white/80">{project.key}</span>
-                                        <div className="flex -space-x-1">
-                                            {project.members_details?.slice(0, 3).map((m, i) => (
-                                                <div
-                                                    key={i}
-                                                    className="w-6 h-6 rounded-full bg-white text-[var(--trello-primary)] border-[var(--trello-primary)] flex items-center justify-center text-[10px] font-semibold"
-                                                    title={m.username}
-                                                >
-                                                    {m.username?.[0]?.toUpperCase()}
-                                                </div>
-                                            ))}
+                        {loading ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="rounded-sm p-4 min-h-[100px] bg-slate-200 animate-pulse"></div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {recentProjects.map((project) => (
+                                    <Link
+                                        key={project.id}
+                                        to={`/projects/${project.id}`}
+                                        className="group trello-gradient rounded-sm p-4 hover:shadow-lg transition-all min-h-[100px] flex flex-col justify-between"
+                                    >
+                                        <h3 className="text-white font-semibold text-base mb-2">{project.name}</h3>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs text-white/80">{project.key}</span>
+                                            <div className="flex -space-x-1">
+                                                {project.members_details?.slice(0, 3).map((m, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="w-6 h-6 rounded-full bg-white text-[var(--trello-primary)] border-[var(--trello-primary)] flex items-center justify-center text-[10px] font-semibold"
+                                                        title={m.username}
+                                                    >
+                                                        {m.username?.[0]?.toUpperCase()}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
+                                    </Link>
+                                ))}
+                                <Link
+                                    to="/projects"
+                                    className="border-2 border-dashed border-[#DFE1E6] rounded-sm p-4 hover:bg-[#F4F5F7] transition-colors min-h-[100px] flex flex-col items-center justify-center gap-2 group"
+                                >
+                                    <Plus size={24} className="text-[#5E6C84] group-hover:text-[#172B4D]" />
+                                    <span className="text-sm font-medium text-[#5E6C84] group-hover:text-[#172B4D]">
+                                        Create new board
+                                    </span>
                                 </Link>
-                            ))}
-                            <Link
-                                to="/projects"
-                                className="border-2 border-dashed border-[#DFE1E6] rounded-sm p-4 hover:bg-[#F4F5F7] transition-colors min-h-[100px] flex flex-col items-center justify-center gap-2 group"
-                            >
-                                <Plus size={24} className="text-[#5E6C84] group-hover:text-[#172B4D]" />
-                                <span className="text-sm font-medium text-[#5E6C84] group-hover:text-[#172B4D]">
-                                    Create new board
-                                </span>
-                            </Link>
-                        </div>
+                            </div>
+                        )}
                     </section>
 
                     {/* Upcoming Tasks */}
@@ -192,6 +226,11 @@ const Dashboard = () => {
                                     </div>
                                 </div>
                             ))}
+                            {recentActivity.length === 0 && !loading && (
+                                <div className="py-6 text-center text-[#5E6C84] text-xs">
+                                    No recent activity recorded yet.
+                                </div>
+                            )}
                         </div>
                     </section>
                 </div>

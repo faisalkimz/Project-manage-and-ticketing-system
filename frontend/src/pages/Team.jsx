@@ -8,11 +8,13 @@ import {
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmModal';
 
 const Team = () => {
     const navigate = useNavigate();
     const { user: currentUser } = useAuthStore();
     const { showToast } = useToast();
+    const { confirm } = useConfirm();
     const [activeTab, setActiveTab] = useState('structure');
     const [users, setUsers] = useState([]);
     const [teams, setTeams] = useState([]);
@@ -91,7 +93,13 @@ const Team = () => {
     };
 
     const handleDeleteTeam = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this team?")) return;
+        const ok = await confirm({
+            title: 'Delete Team',
+            message: 'Are you sure you want to delete this team? Team members will remain in the organization.',
+            confirmText: 'Delete Team',
+            isDanger: true,
+        });
+        if (!ok) return;
         try {
             await api.delete(`/users/teams/${id}/`);
             setIsManageTeamModalOpen(false);

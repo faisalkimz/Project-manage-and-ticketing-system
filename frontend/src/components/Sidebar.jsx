@@ -21,6 +21,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
         { name: 'Knowledge', path: '/knowledge', icon: BookOpen },
         { name: 'Reports', path: '/reports', icon: BarChart },
         { name: 'Automation', path: '/automation', icon: Zap },
+        { name: 'Notifications', path: '/notifications', icon: Bell, isNotification: true },
         { name: 'Integrations', path: '/integrations', icon: Cpu },
         { name: 'Settings', path: '/settings', icon: Settings },
     ];
@@ -135,8 +136,20 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                                         }`}
                                     title={isCollapsed && !isMobile ? link.name : ''}
                                 >
-                                    <link.icon size={18} strokeWidth={2} />
-                                    {(!isCollapsed || isMobile) && <span>{link.name}</span>}
+                                    <div className="relative flex items-center">
+                                        <link.icon size={18} strokeWidth={2} />
+                                        {link.isNotification && isCollapsed && !isMobile && notifications.filter(n => !n.is_read).length > 0 && (
+                                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full" />
+                                        )}
+                                    </div>
+                                    {(!isCollapsed || isMobile) && (
+                                        <span className="flex-1">{link.name}</span>
+                                    )}
+                                    {(!isCollapsed || isMobile) && link.isNotification && notifications.filter(n => !n.is_read).length > 0 && (
+                                        <span className="px-1.5 py-0.5 text-[10px] font-bold bg-rose-500 text-white rounded-full">
+                                            {notifications.filter(n => !n.is_read).length > 99 ? '99+' : notifications.filter(n => !n.is_read).length}
+                                        </span>
+                                    )}
                                 </Link>
                             );
                         })}
@@ -286,7 +299,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <Link
-                                        to="/settings"
+                                        to="/notifications"
                                         className="p-1.5 hover:bg-[rgba(255,255,255,0.2)] rounded-sm transition-colors text-[rgba(255,255,255,0.85)] hover:text-white relative"
                                         title="Notifications"
                                     >

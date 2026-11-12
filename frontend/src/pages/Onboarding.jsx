@@ -1,19 +1,57 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { ArrowRight, Check, Users, Layout, Briefcase } from 'lucide-react';
+import {
+    ArrowRight, Check, Users, Layout, Briefcase, Sparkles,
+    Kanban, Bug, Rocket, Shield, Layers, CheckCircle2, ChevronRight
+} from 'lucide-react';
+import { useToast } from '../components/Toast';
+
+const TEMPLATES = [
+    {
+        id: 'scrum',
+        name: 'Scrum / Agile Sprint',
+        desc: 'Sprints, backlog, story points, burndown tracking, and velocity analytics.',
+        icon: Rocket,
+        color: 'from-blue-500 to-indigo-600'
+    },
+    {
+        id: 'kanban',
+        name: 'Kanban Flow',
+        desc: 'Continuous delivery board with WIP limits, Backlog, In Progress, Review, Done.',
+        icon: Kanban,
+        color: 'from-emerald-500 to-teal-600'
+    },
+    {
+        id: 'bug_tracker',
+        name: 'Bug Tracker & Triage',
+        desc: 'Severity classification, triage queue, AI root-cause analysis, and SLAs.',
+        icon: Bug,
+        color: 'from-rose-500 to-amber-600'
+    },
+    {
+        id: 'roadmap',
+        name: 'Product Roadmap & Portfolio',
+        desc: 'Milestones, high-level deliverables, Gantt timeline, and cross-team dependencies.',
+        icon: Layers,
+        color: 'from-purple-500 to-violet-600'
+    }
+];
 
 const Onboarding = () => {
     const [step, setStep] = useState(0);
     const [workspaceName, setWorkspaceName] = useState('');
-    const [boardName, setBoardName] = useState('');
+    const [boardName, setBoardName] = useState('My First Sprint');
+    const [selectedTemplate, setSelectedTemplate] = useState('scrum');
     const [emails, setEmails] = useState('');
+    const [inviteRole, setInviteRole] = useState('DEVELOPER');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const { showToast } = useToast();
 
-    const handleNext = async () => {
+    const handleNext = () => {
         if (step === 3) {
-            await finishOnboarding();
+            finishOnboarding();
         } else {
             setStep(step + 1);
         }
@@ -22,48 +60,55 @@ const Onboarding = () => {
     const finishOnboarding = async () => {
         setLoading(true);
         try {
-            // 1. Create Team
+            // 1. Create Team / Workspace
             let teamId = null;
-            if (workspaceName) {
+            if (workspaceName.trim()) {
                 const teamRes = await api.post('/users/teams/', {
-                    name: workspaceName,
-                    description: 'My First Workspace'
+                    name: workspaceName.trim(),
+                    description: 'Primary Team Workspace'
                 });
                 teamId = teamRes.data.id;
             }
 
-            // 2. Create Project
-            if (boardName) {
-                await api.post('/projects/projects/', {
-                    name: boardName,
-                    description: 'My first project board',
+            // 2. Create Initial Project Board
+            let createdProjectId = null;
+            if (boardName.trim()) {
+                const projRes = await api.post('/projects/projects/', {
+                    name: boardName.trim(),
+                    description: `Created via ${TEMPLATES.find(t => t.id === selectedTemplate)?.name || 'Standard'} template`,
                     status: 'ACTIVE',
                     team_id: teamId
                 });
+                createdProjectId = projRes.data.id;
             }
 
-            // 3. Invites
-            if (emails) {
-                const emailList = emails.split(',').map(e => e.trim());
+            // 3. Send Team Invites if provided
+            if (emails.trim()) {
+                const emailList = emails.split(',').map(e => e.trim()).filter(Boolean);
                 for (const email of emailList) {
-                    if (email) {
-                        try {
-                            await api.post('/users/invites/', { email, role_name: 'EMPLOYEE' });
-                        } catch (e) { console.error('Invite failed', email); }
+                    try {
+                        await api.post('/users/invites/', {
+                            email,
+                            role_name: inviteRole
+                        });
+                    } catch (e) {
+                        console.error('Invite error for', email, e);
                     }
                 }
+                showToast(`Sent ${emailList.length} team invite(s)!`, 'success');
             }
 
-            navigate('/');
-        } catch (error) {
-            console.error('Onboarding failed:', error);
-            if (error.response) {
-                console.error('Data:', error.response.data);
-                console.error('Status:', error.response.status);
-                alert(`Onboarding failed: ${JSON.stringify(error.response.data)}`);
+            showToast('Workspace initialized successfully!', 'success');
+
+            // Redirect directly to the new project or dashboard
+            if (createdProjectId) {
+                navigate(`/projects/${createdProjectId}`);
             } else {
-                alert("Something went wrong, but let's take you to the dashboard.");
+                navigate('/');
             }
+        } catch (error) {
+            console.error('Onboarding error:', error);
+            showToast('Setup encountered a minor issue; taking you to your dashboard.', 'info');
             navigate('/');
         } finally {
             setLoading(false);
@@ -71,112 +116,282 @@ const Onboarding = () => {
     };
 
     return (
-        <div className="min-h-screen bg-white flex flex-col">
-            <header className="h-16 flex items-center justify-center border-b border-[#DFE1E6]">
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-[#0079BF] rounded-[3px] flex items-center justify-center font-bold text-white text-sm">M</div>
-                    <span className="font-bold text-[#172B4D] tracking-tight">Mbabali</span>
+        <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+            {/* Top Navigation Bar */}
+            <header className="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white text-base shadow-sm">
+                        M
+                    </div>
+                    <span className="font-bold text-slate-900 tracking-tight text-lg">Omni-PMS</span>
                 </div>
+
+                {/* Progress Indicators */}
+                <div className="flex items-center gap-2">
+                    {[0, 1, 2, 3].map((i) => (
+                        <div
+                            key={i}
+                            className={`h-1.5 rounded-full transition-all duration-300 ${
+                                i === step
+                                    ? 'w-10 bg-indigo-600'
+                                    : i < step
+                                    ? 'w-6 bg-emerald-500'
+                                    : 'w-6 bg-slate-200'
+                            }`}
+                        />
+                    ))}
+                </div>
+
+                <button
+                    onClick={() => navigate('/')}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
+                >
+                    Skip setup
+                </button>
             </header>
 
+            {/* Main Stage */}
             <div className="flex-1 flex items-center justify-center p-6">
-                <div className="w-full max-w-lg">
-                    {/* Progress */}
-                    <div className="flex justify-center mb-12 gap-2">
-                        {[0, 1, 2, 3].map(i => (
-                            <div key={i} className={`h-1 w-16 rounded-full transition-colors ${i <= step ? 'bg-[#0079BF]' : 'bg-[#DFE1E6]'}`} />
-                        ))}
-                    </div>
-
+                <div className="w-full max-w-xl bg-white p-8 md:p-10 rounded-2xl shadow-xl border border-slate-200/90 animate-scale-in">
+                    {/* Step 0: Welcome & Purpose */}
                     {step === 0 && (
-                        <div className="text-center animate-fade-in">
-                            <h1 className="text-3xl font-bold text-[#172B4D] mb-4">Welcome to Mbabali!</h1>
-                            <p className="text-lg text-[#5E6C84] mb-8">Let's get you set up specifically for your workflow.</p>
-                            <button onClick={() => setStep(1)} className="px-8 py-3 bg-[#0079BF] text-white font-bold rounded-[3px] text-lg hover:bg-[#026AA7] transition-colors">
-                                Let's go
-                            </button>
+                        <div className="space-y-6 text-center">
+                            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                                <Sparkles className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                                    Welcome to Omni-PMS
+                                </h1>
+                                <p className="text-slate-500 text-sm mt-2 max-w-md mx-auto">
+                                    Your unified platform for agile sprint planning, automated ticketing, AI-assisted work breakdowns, and team wikis.
+                                </p>
+                            </div>
+
+                            <div className="pt-4">
+                                <button
+                                    onClick={() => setStep(1)}
+                                    className="w-full py-3.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2"
+                                >
+                                    <span>Let's Set Up Your Workspace</span>
+                                    <ArrowRight size={18} />
+                                </button>
+                            </div>
                         </div>
                     )}
 
+                    {/* Step 1: Workspace Name */}
                     {step === 1 && (
-                        <div className="animate-fade-in">
-                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-2">Name your Workspace</label>
-                            <h2 className="text-2xl font-bold text-[#172B4D] mb-6">What's the name of your team or company?</h2>
-                            <div className="flex gap-4 items-center border-2 border-[#DFE1E6] p-1 rounded-[3px] focus-within:border-[#0079BF] transition-colors mb-8">
-                                <span className="pl-3 text-[#5E6C84]"><Briefcase /></span>
-                                <input
-                                    autoFocus
-                                    type="text"
-                                    className="flex-1 p-2 outline-none text-lg text-[#172B4D]"
-                                    placeholder="e.g. Acme Corp, Marketing Team"
-                                    value={workspaceName}
-                                    onChange={e => setWorkspaceName(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleNext()}
-                                />
+                        <div className="space-y-6">
+                            <div>
+                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                                    Step 1 of 3
+                                </span>
+                                <h2 className="text-2xl font-bold text-slate-900 mt-1">
+                                    Name your Workspace
+                                </h2>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    This acts as the organization hub for all your team's projects, tickets, and docs.
+                                </p>
                             </div>
-                            <button onClick={handleNext} disabled={!workspaceName} className="w-full py-3 bg-[#0079BF] text-white font-bold rounded-[3px] hover:bg-[#026AA7] disabled:opacity-50 transition-colors">
-                                Continue
-                            </button>
+
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                                    Workspace / Team Name
+                                </label>
+                                <div className="flex items-center gap-3 border-2 border-slate-200 rounded-xl px-4 py-3 focus-within:border-indigo-600 transition bg-slate-50 focus-within:bg-white">
+                                    <Briefcase className="text-slate-400 shrink-0" size={20} />
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        className="flex-1 outline-none text-slate-900 bg-transparent font-medium"
+                                        placeholder="e.g. Engineering Core, Acme Labs"
+                                        value={workspaceName}
+                                        onChange={(e) => setWorkspaceName(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && workspaceName && setStep(2)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 pt-4">
+                                <button
+                                    onClick={() => setStep(0)}
+                                    className="px-4 py-3 text-sm font-semibold text-slate-600 hover:text-slate-900 transition"
+                                >
+                                    Back
+                                </button>
+                                <button
+                                    onClick={() => setStep(2)}
+                                    disabled={!workspaceName.trim()}
+                                    className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm"
+                                >
+                                    Continue
+                                </button>
+                            </div>
                         </div>
                     )}
 
+                    {/* Step 2: First Project Board & Template Selection */}
                     {step === 2 && (
-                        <div className="animate-fade-in">
-                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-2">Create your first Board</label>
-                            <h2 className="text-2xl font-bold text-[#172B4D] mb-6">What are you working on right now?</h2>
-                            <div className="flex gap-4 items-center border-2 border-[#DFE1E6] p-1 rounded-[3px] focus-within:border-[#0079BF] transition-colors mb-8">
-                                <span className="pl-3 text-[#5E6C84]"><Layout /></span>
-                                <input
-                                    autoFocus
-                                    type="text"
-                                    className="flex-1 p-2 outline-none text-lg text-[#172B4D]"
-                                    placeholder="e.g. Website Launch, Q1 Goals"
-                                    value={boardName}
-                                    onChange={e => setBoardName(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleNext()}
-                                />
+                        <div className="space-y-6">
+                            <div>
+                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                                    Step 2 of 3
+                                </span>
+                                <h2 className="text-2xl font-bold text-slate-900 mt-1">
+                                    Choose Your Project Template
+                                </h2>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Pick a pre-configured workflow tailored to how your team builds.
+                                </p>
                             </div>
-                            <button onClick={handleNext} disabled={!boardName} className="w-full py-3 bg-[#0079BF] text-white font-bold rounded-[3px] hover:bg-[#026AA7] disabled:opacity-50 transition-colors">
-                                Continue
-                            </button>
+
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                                    First Board Name
+                                </label>
+                                <div className="flex items-center gap-3 border-2 border-slate-200 rounded-xl px-4 py-2.5 focus-within:border-indigo-600 transition bg-slate-50 focus-within:bg-white">
+                                    <Layout className="text-slate-400 shrink-0" size={18} />
+                                    <input
+                                        type="text"
+                                        className="flex-1 outline-none text-slate-900 bg-transparent font-medium text-sm"
+                                        placeholder="e.g. Platform Revamp, Sprint Alpha"
+                                        value={boardName}
+                                        onChange={(e) => setBoardName(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Template Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                {TEMPLATES.map((tpl) => {
+                                    const isSelected = selectedTemplate === tpl.id;
+                                    const Icon = tpl.icon;
+                                    return (
+                                        <button
+                                            key={tpl.id}
+                                            type="button"
+                                            onClick={() => setSelectedTemplate(tpl.id)}
+                                            className={`p-3.5 text-left rounded-xl border-2 transition relative flex flex-col justify-between ${
+                                                isSelected
+                                                    ? 'border-indigo-600 bg-indigo-50/50 shadow-sm'
+                                                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <div className={`p-2 rounded-lg bg-gradient-to-tr ${tpl.color} text-white shadow-sm`}>
+                                                    <Icon size={16} />
+                                                </div>
+                                                {isSelected && (
+                                                    <CheckCircle2 size={18} className="text-indigo-600" />
+                                                )}
+                                            </div>
+                                            <div className="mt-2.5">
+                                                <div className="font-bold text-xs text-slate-900">{tpl.name}</div>
+                                                <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-tight">
+                                                    {tpl.desc}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="flex items-center gap-3 pt-2">
+                                <button
+                                    onClick={() => setStep(1)}
+                                    className="px-4 py-3 text-sm font-semibold text-slate-600 hover:text-slate-900 transition"
+                                >
+                                    Back
+                                </button>
+                                <button
+                                    onClick={() => setStep(3)}
+                                    disabled={!boardName.trim()}
+                                    className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm"
+                                >
+                                    Continue
+                                </button>
+                            </div>
                         </div>
                     )}
 
+                    {/* Step 3: Team Invites */}
                     {step === 3 && (
-                        <div className="animate-fade-in">
-                            <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-2">Invite your Team</label>
-                            <h2 className="text-2xl font-bold text-[#172B4D] mb-6">Who else is on your team?</h2>
-                            <div className="flex gap-4 items-start border-2 border-[#DFE1E6] p-1 rounded-[3px] focus-within:border-[#0079BF] transition-colors mb-8">
-                                <span className="pl-3 pt-3 text-[#5E6C84]"><Users /></span>
-                                <textarea
-                                    autoFocus
-                                    className="flex-1 p-2 outline-none text-lg text-[#172B4D] min-h-[100px] resize-none"
-                                    placeholder="Enter email addresses separated by commas..."
-                                    value={emails}
-                                    onChange={e => setEmails(e.target.value)}
-                                />
+                        <div className="space-y-6">
+                            <div>
+                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                                    Step 3 of 3
+                                </span>
+                                <h2 className="text-2xl font-bold text-slate-900 mt-1">
+                                    Invite Teammates
+                                </h2>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Collaborate in real time with shared kanban cards, backlog estimation, and wiki docs.
+                                </p>
                             </div>
-                            <button onClick={finishOnboarding} disabled={loading} className="w-full py-3 bg-[#0079BF] text-white font-bold rounded-[3px] hover:bg-[#026AA7] disabled:opacity-50 transition-colors flex justify-center items-center gap-2">
-                                {loading ? 'Setting up...' : (
-                                    <>
-                                        <span>Take me to my board</span>
-                                        <ArrowRight size={18} />
-                                    </>
-                                )}
-                            </button>
-                            <button onClick={finishOnboarding} className="w-full mt-4 text-[#5E6C84] text-sm hover:underline">
-                                I'll do this later
-                            </button>
+
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                                        Teammate Email Addresses
+                                    </label>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-xs text-slate-400 font-medium">Default Role:</span>
+                                        <select
+                                            value={inviteRole}
+                                            onChange={(e) => setInviteRole(e.target.value)}
+                                            className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700"
+                                        >
+                                            <option value="DEVELOPER">Developer</option>
+                                            <option value="PROJECT_MANAGER">Project Manager</option>
+                                            <option value="EMPLOYEE">Member</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="border-2 border-slate-200 rounded-xl p-3 focus-within:border-indigo-600 transition bg-slate-50 focus-within:bg-white">
+                                    <textarea
+                                        autoFocus
+                                        className="w-full outline-none text-slate-900 bg-transparent text-sm min-h-[90px] resize-none"
+                                        placeholder="alice@company.com, bob@company.com..."
+                                        value={emails}
+                                        onChange={(e) => setEmails(e.target.value)}
+                                    />
+                                </div>
+                                <p className="text-[11px] text-slate-400">Separate multiple emails with commas.</p>
+                            </div>
+
+                            <div className="space-y-3 pt-2">
+                                <button
+                                    onClick={finishOnboarding}
+                                    disabled={loading}
+                                    className="w-full py-3.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2"
+                                >
+                                    {loading ? (
+                                        <span>Setting Up Workspace...</span>
+                                    ) : (
+                                        <>
+                                            <span>Launch My Workspace</span>
+                                            <ArrowRight size={18} />
+                                        </>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={finishOnboarding}
+                                    disabled={loading}
+                                    className="w-full text-xs font-semibold text-slate-400 hover:text-slate-600 transition text-center py-1"
+                                >
+                                    I'll invite teammates later
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
 
-            <div className="fixed bottom-0 left-0 w-full h-[30vh] opacity-10 pointer-events-none -z-10 bg-gradient-to-t from-[#0079BF] to-transparent" />
-
-            <div className="p-6 text-center text-[#5E6C84] text-sm">
-                Trust by over 1,000 teams worldwide.
-            </div>
+            <footer className="py-4 text-center text-xs text-slate-400">
+                Omni-PMS • Open Source Project Management & Ticketing
+            </footer>
         </div>
     );
 };

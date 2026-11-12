@@ -8,10 +8,12 @@ import {
 import api from '../services/api';
 import { Link } from 'react-router-dom';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmModal';
 import useAuthStore from '../store/authStore';
 
 const Jira = () => {
     const { showToast } = useToast();
+    const { confirm } = useConfirm();
     const { user } = useAuthStore();
 
     const [columns, setColumns] = useState(() => {
@@ -70,8 +72,14 @@ const Jira = () => {
         }
     };
 
-    const handleDeleteColumn = (id) => {
-        if (window.confirm('Delete this column? Tasks in this column will be hidden unless you change their status.')) {
+    const handleDeleteColumn = async (id) => {
+        const ok = await confirm({
+            title: 'Delete Board Column',
+            message: 'Delete this column? Tasks in this column will be hidden unless you update their status.',
+            confirmText: 'Delete Column',
+            isDanger: true,
+        });
+        if (ok) {
             setColumns(columns.filter(c => c.id !== id));
             showToast('Column removed.', 'info');
         }
@@ -137,7 +145,13 @@ const Jira = () => {
     };
 
     const handleDeleteTask = async (taskId) => {
-        if (!window.confirm('Are you sure you want to delete this issue?')) return;
+        const ok = await confirm({
+            title: 'Delete Issue',
+            message: 'Are you sure you want to permanently delete this issue? This cannot be undone.',
+            confirmText: 'Delete Issue',
+            isDanger: true,
+        });
+        if (!ok) return;
         try {
             await api.delete(`/projects/tasks/${taskId}/`);
             setTasks(tasks.filter(t => t.id !== taskId));

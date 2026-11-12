@@ -12,12 +12,14 @@ import useAuthStore from '../store/authStore';
 import CalendarView from '../components/CalendarView';
 import GanttChart from '../components/GanttChart';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmModal';
 
 const ProjectDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuthStore();
     const { showToast } = useToast();
+    const { confirm } = useConfirm();
     const [project, setProject] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [selectedTask, setSelectedTask] = useState(null);
@@ -464,7 +466,13 @@ const ProjectDetails = () => {
     };
 
     const handleDeleteCard = async (taskId) => {
-        if (!window.confirm('Are you sure you want to delete this card?')) return;
+        const ok = await confirm({
+            title: 'Delete Card',
+            message: 'Are you sure you want to permanently delete this card?',
+            confirmText: 'Delete Card',
+            isDanger: true,
+        });
+        if (!ok) return;
         try {
             await api.delete(`/projects/tasks/${taskId}/`);
             fetchProjectDetails();
@@ -834,7 +842,13 @@ const ProjectDetails = () => {
     };
 
     const handleCloseBoard = async () => {
-        if (!window.confirm('Are you sure you want to close this board? You can re-open it later.')) return;
+        const ok = await confirm({
+            title: 'Close Board',
+            message: 'Are you sure you want to close this board? You can re-open it at any time.',
+            confirmText: 'Close Board',
+            isDanger: false,
+        });
+        if (!ok) return;
         try {
             await api.patch(`/projects/projects/${id}/`, { status: 'COMPLETED' }); // Mapping Close to Completed/Archived
             navigate('/projects');
@@ -907,7 +921,13 @@ const ProjectDetails = () => {
     };
 
     const handleDeleteStatus = async (statusId) => {
-        if (!window.confirm('Are you sure? Tasks in this status might become invisible.')) return;
+        const ok = await confirm({
+            title: 'Delete Custom Status',
+            message: 'Are you sure? Tasks currently in this status may need to be transitioned to a different column.',
+            confirmText: 'Delete Status',
+            isDanger: true,
+        });
+        if (!ok) return;
         try {
             await api.delete(`/projects/statuses/${statusId}/`);
             fetchProjectDetails();
@@ -1411,7 +1431,13 @@ const ProjectDetails = () => {
                                                 )}
                                                 {sprint.status === 'ACTIVE' && (
                                                     <button onClick={async () => {
-                                                        if (window.confirm("Complete sprint and move unfinished tasks to backlog?")) {
+                                                        const ok = await confirm({
+                                                            title: 'Complete Sprint',
+                                                            message: 'Complete sprint and move all unfinished tasks back to the backlog?',
+                                                            confirmText: 'Complete Sprint',
+                                                            isDanger: false,
+                                                        });
+                                                        if (ok) {
                                                             await api.post(`/projects/sprints/${sprint.id}/complete_sprint/`);
                                                             fetchProjectDetails();
                                                         }
@@ -2860,8 +2886,14 @@ const ProjectDetails = () => {
                             </button>
 
                             <button
-                                onClick={() => {
-                                    if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.length} tasks?`)) {
+                                onClick={async () => {
+                                    const ok = await confirm({
+                                        title: 'Bulk Delete Tasks',
+                                        message: `Are you sure you want to permanently delete ${selectedTaskIds.length} tasks?`,
+                                        confirmText: 'Delete Tasks',
+                                        isDanger: true,
+                                    });
+                                    if (ok) {
                                         handleBulkOperation('delete');
                                     }
                                 }}

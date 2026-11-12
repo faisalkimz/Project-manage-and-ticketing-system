@@ -6,9 +6,11 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
+import { useToast } from '../components/Toast';
 
 const Projects = () => {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [search, setSearch] = useState('');
@@ -37,14 +39,18 @@ const Projects = () => {
     const handleCreateProject = async (e) => {
         e.preventDefault();
         try {
-            await api.post('/projects/projects/', newProject);
+            const res = await api.post('/projects/projects/', newProject);
             setIsCreateModalOpen(false);
             setNewProject({
                 name: '', description: '', start_date: '', end_date: '',
                 category: '', visibility: 'TEAM_ONLY', is_template: false, parent_project: ''
             });
-            fetchData();
-        } catch (err) { console.error(err); }
+            showToast('Project created successfully!', 'success');
+            navigate(`/projects/${res.data.id}`);
+        } catch (err) {
+            console.error(err);
+            showToast('Failed to create project', 'error');
+        }
     };
 
     const handleToggleStar = async (e, projectId) => {

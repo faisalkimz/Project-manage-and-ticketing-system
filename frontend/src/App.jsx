@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Outlet, Link } from 'react-router-dom';
+import { Menu, Layout, Briefcase, MessageSquare, Search } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
@@ -25,6 +25,7 @@ import GlobalSearch from './components/GlobalSearch';
 import ProtectedRoute from './components/ProtectedRoute';
 import useAuthStore from './store/authStore';
 import { ToastProvider } from './components/Toast';
+import { ConfirmProvider } from './components/ConfirmModal';
 
 const MainLayout = () => {
   const { isAuthenticated } = useAuthStore();
@@ -58,19 +59,52 @@ const MainLayout = () => {
         />
       )}
 
-      {/* Mobile Toggle Button */}
+      {/* Mobile Bottom Navigation Bar */}
       {isAuthenticated && isMobile && (
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="fixed bottom-6 right-6 w-12 h-12 bg-[#0079BF] text-white rounded-full shadow-lg z-[80] flex items-center justify-center hover:bg-[#026AA7] active:scale-95 transition-all"
-        >
-          <Menu size={24} />
-        </button>
+        <div className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200 z-[70] flex items-center justify-around px-2 shadow-lg md:hidden">
+          <Link
+            to="/"
+            className="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-indigo-600 transition"
+          >
+            <Layout size={20} />
+            <span className="text-[10px] font-semibold mt-0.5">Boards</span>
+          </Link>
+          <Link
+            to="/projects"
+            className="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-indigo-600 transition"
+          >
+            <Briefcase size={20} />
+            <span className="text-[10px] font-semibold mt-0.5">Projects</span>
+          </Link>
+          <button
+            onClick={() => setIsSearchOpen(true)}
+            className="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-indigo-600 transition"
+          >
+            <div className="p-2.5 bg-indigo-600 text-white rounded-full shadow-md -mt-5 mb-0.5">
+              <Search size={18} />
+            </div>
+            <span className="text-[10px] font-semibold">Search</span>
+          </button>
+          <Link
+            to="/tickets"
+            className="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-indigo-600 transition"
+          >
+            <MessageSquare size={20} />
+            <span className="text-[10px] font-semibold mt-0.5">Tickets</span>
+          </Link>
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-indigo-600 transition"
+          >
+            <Menu size={20} />
+            <span className="text-[10px] font-semibold mt-0.5">Menu</span>
+          </button>
+        </div>
       )}
 
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
-      <main className={`flex-1 transition-all duration-300 min-w-0 overflow-x-hidden ${isAuthenticated && !isMobile ? 'pl-64' : 'pl-0'}`}>
+      <main className={`flex-1 transition-all duration-300 min-w-0 overflow-x-hidden ${isAuthenticated && !isMobile ? 'pl-64' : 'pl-0'} ${isAuthenticated && isMobile ? 'pb-20' : ''}`}>
         <Outlet />
       </main>
     </div>
@@ -87,7 +121,8 @@ function App() {
   return (
     <Router>
       <ToastProvider>
-        <Routes>
+        <ConfirmProvider>
+          <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
@@ -114,6 +149,7 @@ function App() {
             <Route path="jira" element={<ProtectedRoute><Jira /></ProtectedRoute>} />
           </Route>
         </Routes>
+        </ConfirmProvider>
       </ToastProvider>
     </Router>
   );

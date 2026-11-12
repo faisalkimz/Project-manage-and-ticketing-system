@@ -24,9 +24,11 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmModal';
 
 const Knowledge = () => {
     const { showToast } = useToast();
+    const { confirm } = useConfirm();
     const [activeTab, setActiveTab] = useState('wiki'); // 'wiki' or 'documents'
     
     // Wiki states
@@ -128,7 +130,13 @@ const Knowledge = () => {
     };
 
     const handleDeleteWiki = async (slug) => {
-        if (!window.confirm('Are you sure you want to delete this article?')) return;
+        const ok = await confirm({
+            title: 'Delete Wiki Article',
+            message: 'Are you sure you want to permanently delete this wiki article? This action cannot be undone.',
+            confirmText: 'Delete Article',
+            isDanger: true,
+        });
+        if (!ok) return;
         try {
             await api.delete(`/knowledge/wiki/${slug}/`);
             const updated = wikiPages.filter(p => p.slug !== slug);
