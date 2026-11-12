@@ -13,9 +13,26 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user_role_in(user, ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER']):
+        if user.is_superuser:
             return Ticket.objects.all()
-        return Ticket.objects.filter(submitted_by=user)
+
+        from django.db.models import Q
+        if user.enterprise:
+            return Ticket.objects.filter(
+                Q(submitted_by__enterprise=user.enterprise) |
+                Q(assigned_to__enterprise=user.enterprise)
+            ).distinct()
+
+        from projects.models import Project
+        accessible_projects = Project.objects.filter(
+            Q(members=user) | Q(team__members=user) | Q(created_by=user)
+        ).values_list('id', flat=True)
+
+        return Ticket.objects.filter(
+            Q(submitted_by=user) |
+            Q(assigned_to=user) |
+            Q(project_task__project_id__in=accessible_projects)
+        ).distinct()
 
     def perform_create(self, serializer):
         serializer.save(submitted_by=self.request.user)

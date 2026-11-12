@@ -27,7 +27,7 @@ if (-Not (Test-Path "frontend\node_modules")) {
 
 Write-Host ""
 Write-Host "Starting Backend Server (Django)..." -ForegroundColor Green
-Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd backend; .\venv\Scripts\Activate.ps1; python manage.py runserver"
+Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd backend; .\venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000"
 
 Write-Host "Starting Frontend Server (Vite + React)..." -ForegroundColor Green
 Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"

@@ -65,3 +65,4 @@ for t in templates:
     )
     status = "Created" if created else "Already Exists"
     print(f"Template [{obj.name}]: {status}")
+

@@ -19,6 +19,7 @@ import PortfolioDetails from './pages/PortfolioDetails';
 import Notifications from './pages/Notifications';
 import Integrations from './pages/Integrations';
 import Automation from './pages/Automation';
+import Knowledge from './pages/Knowledge';
 import GlobalSearch from './components/GlobalSearch';
 import ProtectedRoute from './components/ProtectedRoute';
 import useAuthStore from './store/authStore';
@@ -107,6 +108,7 @@ function App() {
             <Route path="notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
             <Route path="automation" element={<ProtectedRoute><Automation /></ProtectedRoute>} />
+            <Route path="knowledge" element={<ProtectedRoute><Knowledge /></ProtectedRoute>} />
             <Route path="jira" element={<ProtectedRoute><Jira /></ProtectedRoute>} />
           </Route>
         </Routes>

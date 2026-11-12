@@ -109,11 +109,19 @@ class SprintViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         project_id = self.request.query_params.get('project_id')
         user = self.request.user
-        qs = Sprint.objects.all()
         
-        if user.enterprise:
-            qs = qs.filter(project__team__enterprise=user.enterprise)
-            
+        if user.is_superuser:
+            accessible_projects = Project.objects.all()
+        elif user.enterprise:
+            accessible_projects = Project.objects.filter(
+                Q(team__enterprise=user.enterprise) | Q(members=user) | Q(created_by=user)
+            ).distinct()
+        else:
+            accessible_projects = Project.objects.filter(
+                Q(members=user) | Q(team__members=user) | Q(created_by=user)
+            ).distinct()
+
+        qs = Sprint.objects.filter(project__in=accessible_projects)
         if project_id:
             return qs.filter(project_id=project_id)
         return qs
@@ -141,9 +149,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        is_admin = user_has_role(user, 'ADMIN')
-
-        if is_admin:
+        if user.is_superuser:
             return Project.objects.all()
             
         from django.db.models import Q
@@ -267,9 +273,20 @@ class TaskViewSet(viewsets.ModelViewSet):
         project_id = self.request.query_params.get('project_id')
         user = self.request.user
         
-        qs = Task.objects.all()
-        if user.enterprise:
-            qs = qs.filter(project__team__enterprise=user.enterprise)
+        if user.is_superuser:
+            accessible_projects = Project.objects.all()
+        elif user.enterprise:
+            accessible_projects = Project.objects.filter(
+                Q(team__enterprise=user.enterprise) | Q(members=user) | Q(created_by=user)
+            ).distinct()
+        else:
+            accessible_projects = Project.objects.filter(
+                Q(members=user) | Q(team__members=user) | Q(created_by=user)
+            ).distinct()
+
+        qs = Task.objects.filter(
+            Q(project__in=accessible_projects) | Q(assignees=user)
+        ).distinct()
             
         if project_id:
             return qs.filter(project_id=project_id)

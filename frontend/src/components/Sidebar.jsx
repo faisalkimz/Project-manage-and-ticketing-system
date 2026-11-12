@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Layout, Briefcase, Users, Settings, LogOut, MessageSquare, Menu, X, Star, PieChart, Bell, Kanban, ClipboardList, Package, BarChart, Activity, Flag, Calendar, Clock, Cpu, Zap } from 'lucide-react';
+import { Layout, Briefcase, Users, Settings, LogOut, MessageSquare, Menu, X, Star, PieChart, Bell, Kanban, ClipboardList, Package, BarChart, Activity, Flag, Calendar, Clock, Cpu, Zap, BookOpen } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
@@ -18,6 +18,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
         { name: 'Jira Software', path: '/jira', icon: Layout },
         { name: 'Tickets', path: '/tickets', icon: MessageSquare },
         { name: 'Team', path: '/team', icon: Users, roles: ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER'] },
+        { name: 'Knowledge', path: '/knowledge', icon: BookOpen },
         { name: 'Automation', path: '/automation', icon: Zap },
         { name: 'Integrations', path: '/integrations', icon: Cpu },
         { name: 'Settings', path: '/settings', icon: Settings },
