@@ -29,10 +29,27 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        user = self.request.user
         project_id = self.request.query_params.get('project_id')
+        from projects.models import Project
+        from django.db.models import Q
+
+        if user.is_superuser:
+            qs = Announcement.objects.all()
+        elif getattr(user, 'enterprise', None):
+            accessible_project_ids = Project.objects.filter(
+                Q(team__enterprise=user.enterprise) | Q(members=user) | Q(created_by=user)
+            ).values_list('id', flat=True)
+            qs = Announcement.objects.filter(project_id__in=accessible_project_ids)
+        else:
+            accessible_project_ids = Project.objects.filter(
+                Q(members=user) | Q(team__members=user) | Q(created_by=user)
+            ).values_list('id', flat=True)
+            qs = Announcement.objects.filter(project_id__in=accessible_project_ids)
+
         if project_id:
-            return Announcement.objects.filter(project_id=project_id)
-        return Announcement.objects.all()
+            return qs.filter(project_id=project_id)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)

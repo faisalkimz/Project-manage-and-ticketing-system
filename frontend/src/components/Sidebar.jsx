@@ -19,6 +19,7 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
         { name: 'Tickets', path: '/tickets', icon: MessageSquare },
         { name: 'Team', path: '/team', icon: Users, roles: ['ADMIN', 'DEVELOPER', 'PROJECT_MANAGER'] },
         { name: 'Knowledge', path: '/knowledge', icon: BookOpen },
+        { name: 'Reports', path: '/reports', icon: BarChart },
         { name: 'Automation', path: '/automation', icon: Zap },
         { name: 'Integrations', path: '/integrations', icon: Cpu },
         { name: 'Settings', path: '/settings', icon: Settings },

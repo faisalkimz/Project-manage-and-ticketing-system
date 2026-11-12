@@ -15,6 +15,19 @@ from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 
+
+def get_accessible_projects_qs(user):
+    if user.is_superuser:
+        return Project.objects.all()
+    if getattr(user, 'enterprise', None):
+        return Project.objects.filter(
+            Q(team__enterprise=user.enterprise) | Q(members=user) | Q(created_by=user)
+        ).distinct()
+    return Project.objects.filter(
+        Q(members=user) | Q(team__members=user) | Q(created_by=user)
+    ).distinct()
+
+
 class ReportsViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
@@ -24,9 +37,20 @@ class ReportsViewSet(viewsets.ViewSet):
         user = request.user
         
         # Determine scope
-        projects = Project.objects.filter(members=user)
+        projects = get_accessible_projects_qs(user)
         tasks = Task.objects.filter(project__in=projects)
-        tickets = Ticket.objects.filter(Q(assigned_to=user) | Q(submitted_by=user))
+        if user.is_superuser:
+            tickets = Ticket.objects.all()
+        elif getattr(user, 'enterprise', None):
+            tickets = Ticket.objects.filter(
+                Q(submitted_by__enterprise=user.enterprise) |
+                Q(assigned_to__enterprise=user.enterprise) |
+                Q(project_task__project__in=projects)
+            ).distinct()
+        else:
+            tickets = Ticket.objects.filter(
+                Q(assigned_to=user) | Q(submitted_by=user) | Q(project_task__project__in=projects)
+            ).distinct()
         
         # KPI 1: Task Completion Rate (This Month)
         now = timezone.now()
@@ -47,7 +71,7 @@ class ReportsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def project_health(self, request):
         """Health metrics for all projects"""
-        projects = Project.objects.filter(members=request.user)
+        projects = get_accessible_projects_qs(request.user)
         data = []
         
         for project in projects:
@@ -148,7 +172,7 @@ class ReportsViewSet(viewsets.ViewSet):
     def workload(self, request):
         """Detailed workload by user"""
         project_id = request.query_params.get('project_id')
-        projects = Project.objects.filter(members=request.user)
+        projects = get_accessible_projects_qs(request.user)
         if project_id:
             projects = projects.filter(id=project_id)
             
@@ -211,12 +235,13 @@ class ReportsViewSet(viewsets.ViewSet):
         response['Content-Disposition'] = f'attachment; filename="{report_type}_report.csv"'
         
         writer = csv.writer(response)
+        projects = get_accessible_projects_qs(request.user)
+        if project_id:
+            projects = projects.filter(id=project_id)
         
         if report_type == 'tasks':
             # Export tasks
-            tasks = Task.objects.filter(project__members=request.user)
-            if project_id:
-                tasks = tasks.filter(project_id=project_id)
+            tasks = Task.objects.filter(project__in=projects).distinct()
             
             writer.writerow(['ID', 'Title', 'Project', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Story Points'])
             for task in tasks:
@@ -233,7 +258,6 @@ class ReportsViewSet(viewsets.ViewSet):
         
         elif report_type == 'projects':
             # Export projects
-            projects = Project.objects.filter(members=request.user)
             writer.writerow(['ID', 'Name', 'Status', 'Start Date', 'End Date', 'Total Tasks', 'Completed Tasks', 'Members'])
             for project in projects:
                 total_tasks = project.tasks.count()
@@ -251,10 +275,6 @@ class ReportsViewSet(viewsets.ViewSet):
         
         elif report_type == 'workload':
             # Export workload
-            projects = Project.objects.filter(members=request.user)
-            if project_id:
-                projects = projects.filter(id=project_id)
-            
             distribution = Task.objects.filter(project__in=projects).exclude(assigned_to=None).values(
                 'assigned_to__username'
             ).annotate(
@@ -287,11 +307,15 @@ class ReportsViewSet(viewsets.ViewSet):
         elements = []
         styles = getSampleStyleSheet()
         
+        projects = get_accessible_projects_qs(request.user)
+        if project_id:
+            projects = projects.filter(id=project_id)
+        
         # Title
         title_text = f"{report_type.title()} Report"
         if project_id:
             try:
-                project = Project.objects.get(id=project_id)
+                project = projects.get(id=project_id)
                 title_text += f" - {project.name}"
             except Project.DoesNotExist:
                 pass
@@ -307,9 +331,7 @@ class ReportsViewSet(viewsets.ViewSet):
             data.append(headers)
             
             # Content
-            tasks = Task.objects.filter(project__members=request.user).distinct()
-            if project_id:
-                tasks = tasks.filter(project_id=project_id)
+            tasks = Task.objects.filter(project__in=projects).distinct()
                 
             for task in tasks:
                 assignee = task.assigned_to.username if task.assigned_to else 'Unassigned'
@@ -327,7 +349,6 @@ class ReportsViewSet(viewsets.ViewSet):
             headers = ['Name', 'Status', 'Start Date', 'Tasks', 'Progress']
             data.append(headers)
             
-            projects = Project.objects.filter(members=request.user).distinct()
             for p in projects:
                 total = p.tasks.count()
                 done = p.tasks.filter(status='DONE').count()
@@ -368,7 +389,7 @@ class ReportsViewSet(viewsets.ViewSet):
     def kpis(self, request):
         """Get Key Performance Indicators"""
         user = request.user
-        projects = Project.objects.filter(members=user)
+        projects = get_accessible_projects_qs(user)
         tasks = Task.objects.filter(project__in=projects)
         
         now = timezone.now()
