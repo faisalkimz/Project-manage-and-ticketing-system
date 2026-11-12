@@ -1,44 +1,41 @@
-#!/usr/bin/env pwsh
-# Omni-PMS Development Server Startup Script
-
-Write-Host "================================================" -ForegroundColor Cyan
-Write-Host "     Starting Omni-PMS Development Servers     " -ForegroundColor Cyan
-Write-Host "================================================" -ForegroundColor Cyan
+# Omni-PMS Project Startup Script
+Write-Host "🚀 Starting Omni-PMS Project..." -ForegroundColor Cyan
 Write-Host ""
 
-# Check if virtual environment exists
-if (-Not (Test-Path "backend\venv\Scripts\Activate.ps1")) {
-    Write-Host "Virtual environment not found. Creating..." -ForegroundColor Yellow
-    Push-Location backend
-    python -m venv venv
-    .\venv\Scripts\Activate.ps1
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    Pop-Location
+# Check if backend venv exists
+if (-Not (Test-Path "backend\venv")) {
+    Write-Host "❌ Backend virtual environment not found!" -ForegroundColor Red
+    Write-Host "   Please run: cd backend && python -m venv venv && .\venv\Scripts\Activate.ps1 && pip install -r requirements.txt" -ForegroundColor Yellow
+    exit 1
 }
 
 # Check if node_modules exists
 if (-Not (Test-Path "frontend\node_modules")) {
-    Write-Host "Node modules not found. Installing..." -ForegroundColor Yellow
-    Push-Location frontend
-    npm install
-    Pop-Location
+    Write-Host "❌ Frontend dependencies not found!" -ForegroundColor Red
+    Write-Host "   Please run: cd frontend && npm install" -ForegroundColor Yellow
+    exit 1
 }
 
+Write-Host "✅ All dependencies found" -ForegroundColor Green
 Write-Host ""
-Write-Host "Starting Backend Server (Django)..." -ForegroundColor Green
-Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd backend; .\venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000"
 
-Write-Host "Starting Frontend Server (Vite + React)..." -ForegroundColor Green
-Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"
+# Start Backend in new window
+Write-Host "🔧 Starting Django Backend on http://127.0.0.1:8000" -ForegroundColor Cyan
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\backend'; .\venv\Scripts\Activate.ps1; python manage.py runserver"
+
+# Wait a bit before starting frontend
+Start-Sleep -Seconds 2
+
+# Start Frontend in new window
+Write-Host "⚛️  Starting React Frontend on http://localhost:5173" -ForegroundColor Cyan
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\frontend'; npm run dev"
 
 Write-Host ""
-Write-Host "================================================" -ForegroundColor Cyan
-Write-Host "Servers are starting up!" -ForegroundColor Green
-Write-Host "================================================" -ForegroundColor Cyan
+Write-Host "✨ Both servers are starting!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Backend:  http://127.0.0.1:8000" -ForegroundColor Yellow
-Write-Host "Frontend: http://localhost:5173" -ForegroundColor Yellow
+Write-Host "📝 URLs:" -ForegroundColor Yellow
+Write-Host "   Backend:  http://127.0.0.1:8000" -ForegroundColor White
+Write-Host "   Frontend: http://localhost:5173" -ForegroundColor White
+Write-Host "   Admin:    http://127.0.0.1:8000/admin" -ForegroundColor White
 Write-Host ""
-Write-Host "Press Ctrl+C in each terminal window to stop the servers" -ForegroundColor Gray
-Write-Host ""
+Write-Host "⚠️  Close the new terminal windows to stop the servers" -ForegroundColor Yellow
