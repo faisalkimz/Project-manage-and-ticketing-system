@@ -270,3 +270,4 @@ const TaskTableView = ({
 };
 
 export default TaskTableView;
+
