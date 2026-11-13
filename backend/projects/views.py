@@ -482,6 +482,27 @@ class TaskViewSet(viewsets.ModelViewSet):
         AuditLog.objects.create(user=request.user, action='MARK_DONE_TASK', content_object=task, details={})
         return Response({'status': 'marked_done'})
 
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        task = self.get_object()
+        new_task = Task.objects.create(
+            project=task.project,
+            title=f"{task.title} (Copy)",
+            description=task.description,
+            priority=task.priority,
+            issue_type=task.issue_type,
+            story_points=task.story_points,
+            status='TODO',
+            assigned_to=task.assigned_to,
+            sprint=task.sprint,
+            milestone=task.milestone,
+            parent_task=task.parent_task,
+        )
+        # Copy tags
+        new_task.tags.set(task.tags.all())
+        from .serializers import TaskSerializer
+        return Response(TaskSerializer(new_task, context={'request': request}).data, status=201)
+
 
 class RemindersViewSet(viewsets.ViewSet):
     """Endpoint that aggregates critical reminders from Tasks and Tickets"""

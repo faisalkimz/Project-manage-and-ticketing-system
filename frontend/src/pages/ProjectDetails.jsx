@@ -5,7 +5,7 @@ import {
     Paperclip, Tag, ChevronDown, ChevronRight, ChevronUp, List, Calendar as CalendarIcon, Layout, GitMerge, CheckSquare, Trash2,
     Flag, Target, TrendingUp, Shield, HelpCircle, AlertCircle, Package, BarChart, History,
     Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check, Circle,
-    Sparkles, Loader2
+    Sparkles, Loader2, Copy
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -121,6 +121,9 @@ const ProjectDetails = () => {
     const [isSummarizingTask, setIsSummarizingTask] = useState(false);
     const [newTimeEntry, setNewTimeEntry] = useState({ task: '', description: '', duration_minutes: 0, is_billable: true, start_time: '' });
     const [timeStats, setTimeStats] = useState({ today_minutes: 0, week_minutes: 0 });
+    const [availableTags, setAvailableTags] = useState([]);
+    const [selectedTagIds, setSelectedTagIds] = useState([]);
+    const [isDuplicatingTask, setIsDuplicatingTask] = useState(false);
 
     const fetchProjectDetails = async () => {
         try {
@@ -146,6 +149,12 @@ const ProjectDetails = () => {
             setAuditLogs(activityRes.data);
             setAnnouncements(announceRes.data);
             setNotifications(notifyRes.data);
+
+            // Fetch tags for the project
+            try {
+                const tagsRes = await api.get(`/projects/tags/?project_id=${id}`);
+                setAvailableTags(tagsRes.data?.results || tagsRes.data || []);
+            } catch (_) {}
 
             // Fetch time tracking data
             const timeRes = await api.get(`/timetracking/entries/?project_id=${id}`);
@@ -283,7 +292,8 @@ const ProjectDetails = () => {
                 description: newTask.description?.trim() || null,
                 due_date: newTask.due_date || null,
                 parent_task: newTask.parent_task || null,
-                status: newTask.status || 'TODO'
+                status: newTask.status || 'TODO',
+                tags: selectedTagIds,
             };
 
             await api.post('/projects/tasks/', payload);
@@ -298,6 +308,7 @@ const ProjectDetails = () => {
                 story_points: 0,
                 parent_task: null
             });
+            setSelectedTagIds([]);
             fetchProjectDetails();
             showToast("Issue created successfully", "success");
         } catch (error) {
@@ -479,6 +490,19 @@ const ProjectDetails = () => {
             setActiveCardMenu(null);
             if (selectedTask?.id === taskId) setSelectedTask(null);
         } catch (error) { }
+    };
+
+    const handleDuplicateTask = async (taskId) => {
+        setIsDuplicatingTask(true);
+        try {
+            await api.post(`/projects/tasks/${taskId}/duplicate/`);
+            fetchProjectDetails();
+            showToast('Task duplicated!', 'success');
+        } catch (error) {
+            showToast('Failed to duplicate task', 'error');
+        } finally {
+            setIsDuplicatingTask(false);
+        }
     };
 
     const handleOpenAiSuggest = async () => {
@@ -3273,6 +3297,13 @@ const ProjectDetails = () => {
                                         <X size={14} /> Delete Card
                                     </button>
                                     <button
+                                        onClick={() => handleDuplicateTask(selectedTask.id)}
+                                        disabled={isDuplicatingTask}
+                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2 transition-colors"
+                                    >
+                                        <Copy size={14} /> {isDuplicatingTask ? 'Duplicating...' : 'Duplicate Card'}
+                                    </button>
+                                    <button
                                         onClick={() => setShowAttachmentModal(true)}
                                         className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2"
                                     >
@@ -4059,6 +4090,27 @@ const ProjectDetails = () => {
                                         placeholder="Add more details about this issue..."
                                     />
                                 </div>
+
+                                {availableTags.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-2">Labels / Tags</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {availableTags.map(tag => (
+                                                <button
+                                                    key={tag.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedTagIds(prev =>
+                                                        prev.includes(tag.id) ? prev.filter(t => t !== tag.id) : [...prev, tag.id]
+                                                    )}
+                                                    className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${selectedTagIds.includes(tag.id) ? 'text-white border-transparent' : 'bg-white text-[#42526E] border-[#DFE1E6] hover:border-[#0052CC]'}`}
+                                                    style={selectedTagIds.includes(tag.id) ? { backgroundColor: tag.color || '#0052CC', borderColor: tag.color || '#0052CC' } : {}}
+                                                >
+                                                    {tag.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="pt-4 flex justify-end gap-2 border-t border-[#DFE1E6]">
                                     <button
