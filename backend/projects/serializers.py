@@ -106,6 +106,7 @@ class SubTaskSerializer(serializers.ModelSerializer):
 
 class TaskSerializer(serializers.ModelSerializer):
     assigned_to_details = UserSerializer(source='assigned_to', read_only=True)
+    assignees_details = UserSerializer(source='assignees', many=True, read_only=True)
     tags_details = TagSerializer(source='tags', many=True, read_only=True)
     subtasks = SubTaskSerializer(many=True, read_only=True)
     subtasks_count = serializers.IntegerField(source='subtasks.count', read_only=True)

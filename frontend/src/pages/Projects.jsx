@@ -19,6 +19,7 @@ const Projects = () => {
         name: '', description: '', start_date: '', end_date: '',
         category: '', visibility: 'TEAM_ONLY', is_template: false, parent_project: ''
     });
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const { user } = useAuthStore();
 
     const fetchData = async () => {
@@ -38,6 +39,22 @@ const Projects = () => {
 
     const handleCreateProject = async (e) => {
         e.preventDefault();
+        if (selectedTemplateId) {
+            try {
+                const res = await api.post(`/projects/projects/${selectedTemplateId}/create_from_template/`, {
+                    name: newProject.name
+                });
+                setIsCreateModalOpen(false);
+                setSelectedTemplateId('');
+                showToast('Project created from template!', 'success');
+                navigate(`/projects/${res.data.id}`);
+                return;
+            } catch (err) {
+                console.error(err);
+                showToast('Failed to create project from template', 'error');
+                return;
+            }
+        }
         try {
             const res = await api.post('/projects/projects/', newProject);
             setIsCreateModalOpen(false);
@@ -324,6 +341,20 @@ const Projects = () => {
                                             onChange={(e) => setNewProject({ ...newProject, end_date: e.target.value })}
                                         />
                                     </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Start from Template (Optional)</label>
+                                    <select
+                                        className="trello-input h-10 px-2"
+                                        value={selectedTemplateId}
+                                        onChange={e => setSelectedTemplateId(e.target.value)}
+                                    >
+                                        <option value="">Blank Project (Default)</option>
+                                        {templates.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name} (Template)</option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 <div>
