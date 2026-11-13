@@ -3,22 +3,33 @@ from django.dispatch import receiver
 from projects.models import Task
 from tickets.models import Ticket
 from activity.models import Comment
+from datetime import timedelta
+from django.utils import timezone
 from .utils import create_notification
+from .models import EmailAlert
 
 @receiver(post_save, sender=Task)
 def task_notification(sender, instance, created, **kwargs):
-    if created and instance.assigned_to:
-        create_notification(
+    if instance.assigned_to:
+        now = timezone.now()
+        # US-002: Debounce rapid reassignments within 5 minutes
+        recent_alert = EmailAlert.objects.filter(
             recipient=instance.assigned_to,
-            event='TASK_ASSIGNED',
-            title=f"New Task Assigned: {instance.title}",
-            body=f"You have been assigned to task {instance.title} in project {instance.project.name}",
-            related_object=instance
-        )
+            object_id=instance.id,
+            subject__startswith="Task Assigned:",
+            created_at__gte=now - timedelta(minutes=5)
+        ).exists()
+
+        if not recent_alert:
+            due_str = instance.due_date.strftime('%b %d, %Y') if instance.due_date else 'No due date set'
+            create_notification(
+                recipient=instance.assigned_to,
+                event='TASK_ASSIGNED',
+                title=f"Task Assigned: {instance.title}",
+                body=f"You have been assigned to task '{instance.title}' in project '{instance.project.name}'.\n\nPriority: {instance.priority}\nDue Date: {due_str}\nStatus: {instance.status}\nLink: http://localhost:5173/projects/{instance.project.id}",
+                related_object=instance
+            )
     elif not created and instance.assigned_to:
-        # Check if status changed (simple check not tracking old, assuming any save might be update)
-        # Ideally we track pre_save state or use instance._loaded_values if available, 
-        # For MVP we notify on update if assigned
         create_notification(
             recipient=instance.assigned_to,
             event='TASK_UPDATED',

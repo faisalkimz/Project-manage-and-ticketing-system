@@ -43,3 +43,4 @@ def check_due_date_reminders():
             reminders_sent += 1
 
     return f"Processed {tasks_due_soon.count()} tasks due soon. Sent {reminders_sent} reminders."
+

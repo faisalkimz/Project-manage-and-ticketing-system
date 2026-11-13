@@ -3171,6 +3171,23 @@ const ProjectDetails = () => {
                                 </div>
                             </div>
 
+                            {/* Linked Support Ticket Origin (US-015 / US-016) */}
+                            {selectedTask.source_ticket_number && (
+                                <div className="mx-6 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center justify-between shadow-sm">
+                                    <span className="flex items-center gap-2 font-bold">
+                                        <span className="px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded text-[10px] font-bold">🎫 Ticket Origin</span>
+                                        <span>Source: #{selectedTask.source_ticket_number} {selectedTask.source_ticket_title ? `— ${selectedTask.source_ticket_title}` : ''}</span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/tickets/${selectedTask.source_ticket_id}`)}
+                                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold transition flex items-center gap-1 shadow-sm"
+                                    >
+                                        Open Ticket <ArrowRight size={12} />
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="flex gap-4 px-6 pb-6">
                                 {/* Main Content */}
                                 <div className="flex-1 space-y-6">

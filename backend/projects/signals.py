@@ -37,6 +37,18 @@ def task_post_save(sender, instance, created, **kwargs):
     except Exception as e:
         print(f"Workflow automation error on task save: {e}")
 
+    # 3. Ticket->Task Pipeline Auto-Resolve (US-015)
+    # When task moves to DONE, linked source ticket is automatically moved to RESOLVED
+    if instance.status == 'DONE':
+        try:
+            if hasattr(instance, 'source_ticket') and instance.source_ticket:
+                ticket = instance.source_ticket
+                if ticket.status not in ['RESOLVED', 'CLOSED']:
+                    ticket.status = 'RESOLVED'
+                    ticket.save(update_fields=['status'])
+        except Exception as e:
+            print(f"Error auto-resolving source ticket for task {instance.id}: {e}")
+
 
 @receiver(pre_save, sender=Task)
 def task_pre_save(sender, instance, **kwargs):
