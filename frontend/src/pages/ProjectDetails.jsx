@@ -13,6 +13,8 @@ import CalendarView from '../components/CalendarView';
 import GanttChart from '../components/GanttChart';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
+import TaskTableView from '../components/TaskTableView';
+import AiRiskModal from '../components/AiRiskModal';
 
 const ProjectDetails = () => {
     const { id } = useParams();
@@ -124,6 +126,9 @@ const ProjectDetails = () => {
     const [availableTags, setAvailableTags] = useState([]);
     const [selectedTagIds, setSelectedTagIds] = useState([]);
     const [isDuplicatingTask, setIsDuplicatingTask] = useState(false);
+    const [showAiRiskModal, setShowAiRiskModal] = useState(false);
+    const [isLoadingRisk, setIsLoadingRisk] = useState(false);
+    const [projectRiskData, setProjectRiskData] = useState(null);
 
     const fetchProjectDetails = async () => {
         try {
@@ -502,6 +507,20 @@ const ProjectDetails = () => {
             showToast('Failed to duplicate task', 'error');
         } finally {
             setIsDuplicatingTask(false);
+        }
+    };
+
+    const handleAnalyzeProjectRisk = async () => {
+        setShowAiRiskModal(true);
+        setIsLoadingRisk(true);
+        try {
+            const res = await api.post('/ai/analyze-risk/', { project_id: id });
+            setProjectRiskData(res.data);
+        } catch (err) {
+            console.error('Failed to analyze project risk:', err);
+            showToast('AI Risk Analysis failed', 'error');
+        } finally {
+            setIsLoadingRisk(false);
         }
     };
 
@@ -1154,10 +1173,18 @@ const ProjectDetails = () => {
                             </button>
                             <div className="h-5 w-px bg-[#DFE1E6] mx-1" />
                             <button
-                                onClick={() => setShowShareModal(true)}
+                                onClick={setShowShareModal}
                                 className="px-3 py-1.5 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded-sm text-xs font-bold text-[#42526E] transition-colors flex items-center gap-2"
                             >
                                 <Share2 size={14} /> Share
+                            </button>
+                            <button
+                                onClick={handleAnalyzeProjectRisk}
+                                className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-sm text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                                title="Run AI Project Delivery Risk Analysis"
+                            >
+                                <Sparkles size={13} />
+                                <span>AI Risk Radar</span>
                             </button>
                             <div className="relative">
                                 <button
@@ -1209,6 +1236,9 @@ const ProjectDetails = () => {
                         </button>
                         <button onClick={() => setViewMode('grid')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'grid' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
                             Grid
+                        </button>
+                        <button onClick={() => setViewMode('table')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'table' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
+                            Table
                         </button>
                     </div>
 
@@ -1669,6 +1699,23 @@ const ProjectDetails = () => {
                                 )}
                             </div>
                         </div>
+                    )
+                }
+
+                {
+                    viewMode === 'table' && (
+                        <TaskTableView
+                            tasks={tasks}
+                            project={project}
+                            statuses={statuses}
+                            allUsers={allUsers}
+                            onSelectTask={setSelectedTask}
+                            onUpdateTask={handleUpdateTask}
+                            onDuplicateTask={handleDuplicateTask}
+                            onDeleteTask={handleDeleteCard}
+                            onOpenCreateModal={() => setIsTaskModalOpen(true)}
+                            showToast={showToast}
+                        />
                     )
                 }
 
@@ -4620,6 +4667,14 @@ const ProjectDetails = () => {
                     </div>
                 </div>
             )}
+
+            <AiRiskModal
+                isOpen={showAiRiskModal}
+                onClose={() => setShowAiRiskModal(false)}
+                isLoading={isLoadingRisk}
+                riskData={projectRiskData}
+                onRerun={handleAnalyzeProjectRisk}
+            />
         </div >
     );
 };

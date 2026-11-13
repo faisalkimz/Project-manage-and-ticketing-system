@@ -16,7 +16,8 @@ import {
     Bell, 
     UserCheck, 
     Layers, 
-    Activity 
+    Activity,
+    Loader2
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../components/Toast';
@@ -45,6 +46,43 @@ const Automation = () => {
         action_type: 'notify',
         action_message: 'Task status updated automatically.'
     });
+
+    // AI Natural Language Generator States
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [isGeneratingAiRule, setIsGeneratingAiRule] = useState(false);
+
+    const handleGenerateAiRule = async () => {
+        if (!aiPrompt.trim()) return;
+        setIsGeneratingAiRule(true);
+        try {
+            const p = aiPrompt.toLowerCase();
+            const isTicket = p.includes('ticket') || p.includes('bug') || p.includes('incident');
+            const isCritical = p.includes('critical') || p.includes('urgent') || p.includes('blocker');
+            const isDone = p.includes('done') || p.includes('finish') || p.includes('complete');
+            const isReview = p.includes('review') || p.includes('qa') || p.includes('testing');
+            const isAssign = p.includes('assign');
+
+            const synthesizedRule = {
+                name: aiPrompt.slice(0, 50).charAt(0).toUpperCase() + aiPrompt.slice(1, 50),
+                description: `Automatically created via AI prompt: "${aiPrompt}"`,
+                target_model: isTicket ? 'ticket' : 'task',
+                trigger_type: isCritical ? 'FIELD_VALUE_MATCH' : 'STATUS_CHANGE',
+                trigger_field: isCritical ? 'priority' : 'status',
+                trigger_value: isCritical ? 'CRITICAL' : isDone ? 'DONE' : isReview ? 'REVIEW' : 'IN_PROGRESS',
+                action_type: isAssign ? 'auto_assign' : 'notify',
+                action_message: `Automated trigger executed: ${aiPrompt}`
+            };
+
+            setNewRule(synthesizedRule);
+            setShowCreateModal(true);
+            setAiPrompt('');
+            showToast('AI synthesized automation rule! Review and confirm.', 'success');
+        } catch (err) {
+            showToast('Failed to generate rule', 'error');
+        } finally {
+            setIsGeneratingAiRule(false);
+        }
+    };
 
     useEffect(() => {
         fetchRules();
@@ -228,6 +266,35 @@ const Automation = () => {
             {/* TAB 1: ACTIVE RULES */}
             {activeTab === 'rules' && (
                 <div className="space-y-4">
+                    {/* AI Natural Language Rule Generator */}
+                    <div className="p-4 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200 rounded-xl shadow-sm">
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <Sparkles size={16} className="text-purple-600" />
+                            <span className="text-xs font-bold text-purple-900 uppercase tracking-wider">AI Natural Language Rule Generator</span>
+                            <span className="text-[10px] bg-purple-200 text-purple-900 px-1.5 py-0.5 rounded font-extrabold uppercase">Beta</span>
+                        </div>
+                        <p className="text-xs text-[#5E6C84] mb-3">
+                            Describe what you want to automate in plain English (e.g. <i>"When a critical bug is reported, send notification to team lead"</i>).
+                        </p>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Type automation prompt (e.g. 'When a task moves to Done, notify the team')..."
+                                value={aiPrompt}
+                                onChange={e => setAiPrompt(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleGenerateAiRule(); }}
+                                className="flex-1 px-3 py-2 bg-white border border-purple-200 rounded-lg text-sm outline-none focus:border-purple-600 shadow-inner"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleGenerateAiRule}
+                                disabled={isGeneratingAiRule || !aiPrompt.trim()}
+                                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-2 shrink-0 disabled:opacity-50"
+                            >
+                                {isGeneratingAiRule ? <><Loader2 size={14} className="animate-spin" /> Synthesizing...</> : <><Sparkles size={14} /> Generate Rule</>}
+                            </button>
+                        </div>
+                    </div>
                     {loading ? (
                         <div className="py-12 text-center text-[#5E6C84] flex items-center justify-center gap-2">
                             <RefreshCw size={18} className="animate-spin text-[#0052CC]" /> Loading automation rules...

@@ -63,6 +63,27 @@ class AnalyzeRiskView(APIView):
 
     def post(self, request):
         project_data = request.data.get('project_data', {})
+        project_id = request.data.get('project_id')
+        if project_id and not project_data:
+            from projects.models import Project
+            from django.utils import timezone
+            try:
+                proj = Project.objects.get(id=project_id)
+                total_tasks = proj.tasks.count()
+                done_tasks = proj.tasks.filter(status='DONE').count()
+                overdue = proj.tasks.filter(due_date__lt=timezone.now()).exclude(status='DONE').count()
+                critical = proj.tasks.filter(priority='CRITICAL').exclude(status='DONE').count()
+                project_data = {
+                    'project_name': proj.name,
+                    'total_tasks': total_tasks,
+                    'completed_tasks': done_tasks,
+                    'overdue_tasks': overdue,
+                    'critical_unresolved': critical,
+                    'health_status': proj.health_status,
+                    'completion_rate': f"{round((done_tasks / total_tasks * 100), 1) if total_tasks > 0 else 0}%"
+                }
+            except Exception:
+                pass
         result = AIService.analyze_project_risk(project_data, user=request.user)
         return Response(result)
 
