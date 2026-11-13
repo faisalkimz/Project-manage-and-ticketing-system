@@ -232,6 +232,46 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(new_project)
         return Response(serializer.data, status=201)
 
+    @action(detail=True, methods=['post'], url_path='save-as-template')
+    def save_as_template(self, request, pk=None):
+        """
+        US-014: Save an existing project structure as a reusable organization template.
+        """
+        project = self.get_object()
+        template_name = request.data.get('name') or f"{project.name} Template"
+        template_desc = request.data.get('description') or f"Reusable template based on {project.name}"
+        
+        # Clone as template
+        template = Project.objects.create(
+            name=template_name,
+            description=template_desc,
+            created_by=request.user,
+            is_template=True,
+            status='ACTIVE',
+            key=''.join(c for c in template_name if c.isalnum())[:4].upper() or 'TMPL',
+            team=project.team,
+            visibility='ORGANIZATION' if request.data.get('is_org_wide', True) else 'PRIVATE',
+            background_color=project.background_color,
+            start_date=timezone.now().date()
+        )
+        template.members.add(request.user)
+
+        # Clone project tasks into template without assignees
+        for task in project.tasks.all():
+            Task.objects.create(
+                project=template,
+                title=task.title,
+                description=task.description,
+                priority=task.priority,
+                status='TODO',
+                issue_type=task.issue_type,
+                story_points=task.story_points,
+                created_by=request.user
+            )
+
+        serializer = self.get_serializer(template)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'])
     def add_member(self, request, pk=None):
         project = self.get_object()

@@ -69,6 +69,29 @@ class EmailAlert(models.Model):
     def __str__(self):
         return f"Email to {self.recipient.username}: {self.subject}"
 
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        if is_new and self.status == self.Status.PENDING:
+            from django.core.mail import send_mail
+            try:
+                if self.recipient and self.recipient.email:
+                    send_mail(
+                        subject=self.subject,
+                        message=self.body,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@omni-pms.local'),
+                        recipient_list=[self.recipient.email],
+                        html_message=self.html_body or None,
+                        fail_silently=True
+                    )
+                    self.status = self.Status.SENT
+                    self.sent_at = timezone.now()
+                    super().save(update_fields=['status', 'sent_at'])
+            except Exception as e:
+                self.status = self.Status.FAILED
+                self.error_message = str(e)
+                super().save(update_fields=['status', 'error_message'])
+
 class PushNotification(models.Model):
     """Push notifications for mobile/web"""
     class Status(models.TextChoices):

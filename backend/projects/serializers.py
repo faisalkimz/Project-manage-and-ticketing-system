@@ -134,6 +134,13 @@ class TaskSerializer(serializers.ModelSerializer):
             rep['milestone_details'] = MilestoneSerializer(instance.milestone).data
         if instance.sprint:
             rep['sprint_details'] = SprintSerializer(instance.sprint).data
+        try:
+            if hasattr(instance, 'source_ticket') and instance.source_ticket:
+                rep['source_ticket_id'] = instance.source_ticket.id
+                rep['source_ticket_number'] = instance.source_ticket.ticket_number
+                rep['source_ticket_title'] = instance.source_ticket.title
+        except Exception:
+            pass
         return rep
 
 class ReminderSerializer(serializers.Serializer):

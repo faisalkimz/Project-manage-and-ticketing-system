@@ -625,6 +625,68 @@ const ProjectDetails = () => {
         }
     };
 
+    const [isSuggestingPriority, setIsSuggestingPriority] = useState(false);
+    const handleSuggestPriority = async () => {
+        if (!newTask.title) {
+            showToast('Enter a task title first to suggest priority', 'info');
+            return;
+        }
+        try {
+            setIsSuggestingPriority(true);
+            const res = await api.post('/ai/suggest-priority/', {
+                title: newTask.title,
+                description: newTask.description || ''
+            });
+            if (res.data?.priority) {
+                setNewTask(prev => ({ ...prev, priority: res.data.priority }));
+                showToast(`AI Suggested: ${res.data.priority} - ${res.data.reason || 'Optimal scope'}`, 'success');
+            }
+        } catch (err) {
+            console.error('Priority suggestion failed', err);
+            showToast('Could not suggest priority', 'error');
+        } finally {
+            setIsSuggestingPriority(false);
+        }
+    };
+
+    const [isGeneratingProjectSummary, setIsGeneratingProjectSummary] = useState(false);
+    const [projectExecutiveSummary, setProjectExecutiveSummary] = useState(null);
+    const handleGenerateProjectSummary = async () => {
+        setIsGeneratingProjectSummary(true);
+        try {
+            const totalTasks = tasks.length;
+            const completed = tasks.filter(t => t.status === 'DONE').length;
+            const overdue = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'DONE').length;
+            const contextText = `Project: ${project?.name || ''}\nTotal Tasks: ${totalTasks}\nCompleted Tasks: ${completed}\nOverdue Tasks: ${overdue}\nHealth: ${project?.health_status || 'ON_TRACK'}\nRecent Tasks: ${tasks.slice(0, 5).map(t => t.title).join(', ')}`;
+            const res = await api.post('/ai/summarize/', { text: contextText });
+            setProjectExecutiveSummary(res.data.summary);
+            showToast('Executive project summary generated!', 'success');
+        } catch (err) {
+            console.error('Project summary failed', err);
+            showToast('Failed to generate project summary', 'error');
+        } finally {
+            setIsGeneratingProjectSummary(false);
+        }
+    };
+
+    const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+    const handleSaveAsTemplate = async () => {
+        setIsSavingTemplate(true);
+        try {
+            await api.post(`/projects/projects/${id}/save-as-template/`, {
+                name: `${project.name} Template`,
+                description: project.description || 'Reusable workspace template'
+            });
+            showToast('Saved as reusable organization template!', 'success');
+            setShowSettingsModal(false);
+        } catch (err) {
+            console.error('Failed to save as template', err);
+            showToast('Failed to save project as template', 'error');
+        } finally {
+            setIsSavingTemplate(false);
+        }
+    };
+
     const handleAddSubtask = async () => {
         if (!newSubtaskTitle.trim()) return;
         try {
@@ -1210,6 +1272,15 @@ const ProjectDetails = () => {
                                 <Sparkles size={13} />
                                 <span>AI Risk Radar</span>
                             </button>
+                            <button
+                                onClick={handleGenerateProjectSummary}
+                                disabled={isGeneratingProjectSummary}
+                                className="px-3 py-1.5 bg-white border border-[#DFE1E6] hover:bg-slate-50 text-indigo-700 rounded-sm text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                                title="Generate Executive AI Project Summary"
+                            >
+                                <Sparkles size={13} className={isGeneratingProjectSummary ? 'animate-spin text-purple-600' : 'text-purple-600'} />
+                                <span>{isGeneratingProjectSummary ? 'Summarizing...' : 'AI Summary'}</span>
+                            </button>
                             <div className="relative">
                                 <button
                                     onClick={(e) => {
@@ -1271,6 +1342,37 @@ const ProjectDetails = () => {
                     </button>
                 </nav>
             </header>
+
+            {/* AI Executive Project Summary Banner (US-005) */}
+            {projectExecutiveSummary && (
+                <div className="mx-4 md:mx-6 my-3 p-4 bg-gradient-to-r from-indigo-900 via-slate-900 to-purple-950 text-white rounded-xl shadow-md border border-indigo-400/30 flex items-start justify-between gap-4 animate-in fade-in shrink-0">
+                    <div className="flex items-start gap-3">
+                        <Sparkles size={18} className="text-purple-300 shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-sm text-white mb-1">AI Executive Project Summary</h4>
+                            <p className="text-xs text-indigo-100 leading-relaxed whitespace-pre-wrap">{projectExecutiveSummary}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText(projectExecutiveSummary);
+                                showToast('Summary copied to clipboard!', 'success');
+                            }}
+                            className="px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded text-xs font-bold transition flex items-center gap-1"
+                            title="Copy to Clipboard"
+                        >
+                            <Copy size={12} /> Copy
+                        </button>
+                        <button
+                            onClick={() => setProjectExecutiveSummary(null)}
+                            className="p-1 hover:bg-white/10 rounded text-purple-200"
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <main className="flex-1 overflow-auto bg-[#F4F5F7] flex flex-col">
                 {viewMode === 'board' && (
@@ -1424,6 +1526,18 @@ const ProjectDetails = () => {
                                                                     <span className="text-[10px] font-bold text-[#5E6C84]">
                                                                         {project.key || 'TASK'}-{task.id}
                                                                     </span>
+                                                                    {task.source_ticket_number && (
+                                                                        <span
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                navigate(`/tickets/${task.source_ticket_id}`);
+                                                                            }}
+                                                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300 transition cursor-pointer"
+                                                                            title={`Originated from Support Ticket #${task.source_ticket_number}`}
+                                                                        >
+                                                                            🎫 {task.source_ticket_number}
+                                                                        </span>
+                                                                    )}
                                                                     {task.story_points > 0 && (
                                                                         <span className="ml-1 bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full" title="Story Points">
                                                                             {task.story_points}
@@ -4114,7 +4228,18 @@ const ProjectDetails = () => {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Priority</label>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="block text-xs font-bold text-[#5E6C84] uppercase">Priority</label>
+                                            <button
+                                                type="button"
+                                                onClick={handleSuggestPriority}
+                                                disabled={isSuggestingPriority}
+                                                className="text-[10px] text-purple-600 hover:text-purple-800 font-bold flex items-center gap-1 hover:underline"
+                                            >
+                                                <Sparkles size={11} className={isSuggestingPriority ? 'animate-spin' : ''} />
+                                                {isSuggestingPriority ? 'Analyzing...' : 'AI Suggest'}
+                                            </button>
+                                        </div>
                                         <select
                                             className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#4C9AFF] bg-white"
                                             value={newTask.priority}
@@ -4183,6 +4308,24 @@ const ProjectDetails = () => {
                                         </div>
                                     </div>
                                 )}
+
+                                <div className="border-t border-[#DFE1E6] pt-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h4 className="text-xs font-bold text-[#172B4D] uppercase">Project Template</h4>
+                                            <p className="text-[11px] text-[#5E6C84]">Save this board's structure and tasks as a reusable organization template.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveAsTemplate}
+                                            disabled={isSavingTemplate}
+                                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-xs font-bold transition flex items-center gap-1.5"
+                                        >
+                                            <Sparkles size={13} className={isSavingTemplate ? 'animate-spin' : ''} />
+                                            {isSavingTemplate ? 'Saving...' : 'Save as Template'}
+                                        </button>
+                                    </div>
+                                </div>
 
                                 <div className="pt-4 flex justify-end gap-2 border-t border-[#DFE1E6]">
                                     <button

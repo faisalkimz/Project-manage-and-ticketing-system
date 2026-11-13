@@ -29,8 +29,8 @@ def create_notification(recipient, event, title, body, related_object=None, noti
         else:
             channels = [rule.notify_via]
     else:
-        # Default behavior if no rule
-        channels = ['IN_APP']
+        # Default behavior if no custom rule configured
+        channels = ['IN_APP', 'EMAIL']
 
     content_type = None
     object_id = None
