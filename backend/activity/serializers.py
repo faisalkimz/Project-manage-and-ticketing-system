@@ -39,7 +39,8 @@ class AttachmentSerializer(serializers.ModelSerializer):
 
 class AuditLogSerializer(serializers.ModelSerializer):
     user_details = UserSerializer(source='user', read_only=True)
+    content_type_model = serializers.CharField(source='content_type.model', read_only=True)
     
     class Meta:
         model = AuditLog
-        fields = ['id', 'user', 'user_details', 'action', 'content_type', 'object_id', 'details', 'timestamp']
+        fields = ['id', 'user', 'user_details', 'action', 'content_type', 'content_type_model', 'object_id', 'details', 'timestamp']

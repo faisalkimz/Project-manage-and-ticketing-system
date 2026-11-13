@@ -87,3 +87,80 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket.save()
         
         return Response(TicketSerializer(ticket).data)
+
+    @action(detail=False, methods=['post'], url_path='auto-escalate')
+    def auto_escalate(self, request):
+        """
+        Cross-System SLA Intelligence & Auto-Escalation Engine:
+        Scans all unresolved tickets that have breached SLA (or where sla_due_date < now),
+        escalates them to CRITICAL priority, and automatically provisions an expedited linked Task
+        in an active project for immediate engineering resolution.
+        """
+        from django.utils import timezone
+        from django.db.models import Q
+        now = timezone.now()
+        
+        breached_tickets = self.get_queryset().exclude(
+            status__in=['RESOLVED', 'CLOSED']
+        ).filter(
+            Q(sla_breached=True) | (Q(sla_due_date__isnull=False) & Q(sla_due_date__lt=now))
+        )
+        
+        target_project_id = request.data.get('project_id')
+        target_project = None
+        if target_project_id:
+            target_project = Project.objects.filter(id=target_project_id).first()
+        if not target_project:
+            target_project = Project.objects.first()
+
+        escalated_count = 0
+        tasks_created_count = 0
+        escalated_items = []
+
+        for ticket in breached_tickets:
+            dirty = False
+            if not ticket.sla_breached:
+                ticket.sla_breached = True
+                dirty = True
+            if not ticket.escalated:
+                ticket.escalated = True
+                ticket.escalation_reason = "Automated cross-system SLA breach escalation"
+                ticket.escalated_at = now
+                dirty = True
+            if ticket.priority != 'CRITICAL':
+                ticket.priority = 'CRITICAL'
+                dirty = True
+                escalated_count += 1
+                
+            # Cross-system linked task auto-creation if not linked yet
+            if not ticket.project_task and target_project:
+                task = Task.objects.create(
+                    project=target_project,
+                    title=f"[SLA ESCALATION] {ticket.title}",
+                    description=f"Auto-generated from Breached Support Ticket #{ticket.ticket_number}\n\nCustomer Issue: {ticket.description}",
+                    priority='CRITICAL',
+                    status='TODO',
+                    created_by=request.user
+                )
+                ticket.project_task = task
+                dirty = True
+                tasks_created_count += 1
+                
+            if dirty:
+                ticket.save()
+                escalated_items.append({
+                    'id': ticket.id,
+                    'ticket_number': ticket.ticket_number,
+                    'title': ticket.title,
+                    'priority': ticket.priority,
+                    'linked_task_id': ticket.project_task.id if ticket.project_task else None
+                })
+
+        return Response({
+            'success': True,
+            'message': f"Cross-system SLA scan complete. Escalated {escalated_count} tickets to CRITICAL priority and auto-spawned {tasks_created_count} urgent project tasks.",
+            'breached_total': breached_tickets.count(),
+            'escalated_count': escalated_count,
+            'tasks_created_count': tasks_created_count,
+            'escalated_tickets': escalated_items
+        })

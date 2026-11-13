@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../components/Toast';
+import DeveloperApiStudio from '../components/DeveloperApiStudio';
 
 const Integrations = () => {
     const { showToast } = useToast();
@@ -371,6 +372,9 @@ const Integrations = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Ecosystem API Marketplace & Developer Studio (Roadmap 5.3) */}
+            <DeveloperApiStudio />
 
             {/* Modal for OAuth App Setup */}
             {selectedOAuthTool && (

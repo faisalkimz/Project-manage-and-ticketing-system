@@ -21,6 +21,7 @@ import Integrations from './pages/Integrations';
 import Automation from './pages/Automation';
 import Knowledge from './pages/Knowledge';
 import Reports from './pages/Reports';
+import UniversalTimeline from './pages/UniversalTimeline';
 import GlobalSearch from './components/GlobalSearch';
 import ProtectedRoute from './components/ProtectedRoute';
 import useAuthStore from './store/authStore';
@@ -146,6 +147,7 @@ function App() {
             <Route path="automation" element={<ProtectedRoute><Automation /></ProtectedRoute>} />
             <Route path="knowledge" element={<ProtectedRoute><Knowledge /></ProtectedRoute>} />
             <Route path="reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="timeline" element={<ProtectedRoute><UniversalTimeline /></ProtectedRoute>} />
             <Route path="jira" element={<ProtectedRoute><Jira /></ProtectedRoute>} />
           </Route>
         </Routes>

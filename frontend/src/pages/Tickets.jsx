@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     Plus, Search, AlertCircle, Clock, MessageSquare, X,
     Sparkles, Loader2, Check, Shield, TrendingUp, AlertTriangle,
-    CheckCircle2, BarChart2, Activity, Timer
+    CheckCircle2, BarChart2, Activity, Timer, Zap
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -21,6 +21,7 @@ const Tickets = () => {
     const [isTriaging, setIsTriaging] = useState(false);
     const [aiTriageResult, setAiTriageResult] = useState(null);
     const [slaLoading, setSlaLoading] = useState(false);
+    const [isEscalating, setIsEscalating] = useState(false);
     const { user } = useAuthStore();
 
     const fetchTickets = async () => {
@@ -28,6 +29,20 @@ const Tickets = () => {
             const res = await api.get('/tickets/tickets/');
             setTickets(res.data?.results || res.data || []);
         } catch (err) { console.error(err); }
+    };
+
+    const handleAutoEscalate = async () => {
+        try {
+            setIsEscalating(true);
+            const res = await api.post('/tickets/tickets/auto-escalate/', {});
+            showToast(res.data.message || 'SLA breach auto-escalation completed!', 'success');
+            fetchTickets();
+        } catch (err) {
+            console.error('Failed to auto-escalate breached tickets', err);
+            showToast('Failed to execute auto-escalation engine', 'error');
+        } finally {
+            setIsEscalating(false);
+        }
     };
 
     useEffect(() => { fetchTickets(); }, []);
@@ -367,6 +382,34 @@ const Tickets = () => {
                                 })}
                             </div>
                         </div>
+                    </div>
+
+                    {/* Cross-System SLA Intelligence & Auto-Escalation Engine (Roadmap 5.1) */}
+                    <div className="bg-gradient-to-r from-red-950 via-slate-900 to-indigo-950 border border-red-500/30 rounded-xl p-5 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2.5 bg-red-500/20 text-red-400 rounded-lg border border-red-500/30 shrink-0">
+                                <Zap size={22} />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-bold text-white text-base">Cross-System SLA Intelligence & Auto-Escalation</h3>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded-full">
+                                        SLA Engine Live
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-300 mt-1 max-w-2xl">
+                                    Automatically scans for tickets with breached SLA response/resolution targets, escalates priority to Critical, and provisions urgent linked Engineering Tasks across projects to accelerate triage.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleAutoEscalate}
+                            disabled={isEscalating}
+                            className="shrink-0 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg shadow-red-900/40 transition disabled:opacity-50 flex items-center gap-2"
+                        >
+                            <Zap size={14} className={isEscalating ? 'animate-bounce' : ''} />
+                            {isEscalating ? 'Executing Escalation...' : 'Run SLA Auto-Escalation'}
+                        </button>
                     </div>
 
                     {/* Breached Tickets List */}
