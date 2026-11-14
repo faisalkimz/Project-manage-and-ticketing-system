@@ -5,14 +5,18 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Temporarily guarded with if: false pending GitHub Actions billing flag resolution (matched with llah)
+# Remove the `if: false` lines once GitHub clears the runner billing lock
 jobs:
   backend-ci:
     name: Backend Lint & Tests
+    if: false
     runs-on: ubuntu-latest
     
     defaults:
@@ -56,6 +60,7 @@ jobs:
 
   frontend-ci:
     name: Frontend Build & Lint
+    if: false
     runs-on: ubuntu-latest
     
     defaults:

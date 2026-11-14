@@ -104,6 +104,29 @@ npm run dev
 
 ---
 
+## 🧪 Testing & Verification
+
+Run the automated full-stack verification suite covering Django system checks, Django tests, and Vite production bundle compilation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\test.ps1
+```
+
+Or run individual component tests:
+
+```bash
+# Backend checks & tests
+cd backend
+python manage.py check
+python manage.py test
+
+# Frontend build & lint
+cd frontend
+npm run build
+```
+
+---
+
 ## ⚙️ Environment Configuration (`backend/.env`)
 
 | Variable | Description | Default |
