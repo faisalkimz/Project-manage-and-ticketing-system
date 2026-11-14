@@ -1,9 +1,18 @@
 from rest_framework import serializers
-from .models import Ticket
+from .models import Ticket, TicketNote
 from users.serializers import UserSerializer
 from projects.serializers import TaskSerializer, TagSerializer
 from activity.serializers import CommentSerializer, AttachmentSerializer, AuditLogSerializer
 from django.utils import timezone
+
+class TicketNoteSerializer(serializers.ModelSerializer):
+    author_username = serializers.CharField(source='author.username', read_only=True)
+    author_details = UserSerializer(source='author', read_only=True)
+
+    class Meta:
+        model = TicketNote
+        fields = ['id', 'ticket', 'author', 'author_username', 'author_details', 'note', 'created_at']
+        read_only_fields = ['author', 'created_at']
 
 class TicketSerializer(serializers.ModelSerializer):
     submitted_by_username = serializers.CharField(source='submitted_by.username', read_only=True)
@@ -15,6 +24,7 @@ class TicketSerializer(serializers.ModelSerializer):
     audit_logs_details = AuditLogSerializer(source='audit_logs', many=True, read_only=True)
     attachments_details = AttachmentSerializer(source='attachments', many=True, read_only=True)
     comments_details = CommentSerializer(source='comments', many=True, read_only=True)
+    internal_notes_details = TicketNoteSerializer(source='internal_notes', many=True, read_only=True)
     time_remaining_hours = serializers.SerializerMethodField()
     sla_status = serializers.SerializerMethodField()
     

@@ -2,8 +2,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.utils import user_role_in
-from .models import Ticket
-from .serializers import TicketSerializer
+from .models import Ticket, TicketNote
+from .serializers import TicketSerializer, TicketNoteSerializer
 from projects.models import Task, Project
 
 class TicketViewSet(viewsets.ModelViewSet):
@@ -164,3 +164,16 @@ class TicketViewSet(viewsets.ModelViewSet):
             'tasks_created_count': tasks_created_count,
             'escalated_tickets': escalated_items
         })
+
+    @action(detail=True, methods=['post'], url_path='add-note')
+    def add_note(self, request, pk=None):
+        ticket = self.get_object()
+        note_text = request.data.get('note', '').strip()
+        if not note_text:
+            return Response({'error': 'Note content is required'}, status=status.HTTP_400_BAD_REQUEST)
+        note = TicketNote.objects.create(
+            ticket=ticket,
+            author=request.user,
+            note=note_text
+        )
+        return Response(TicketNoteSerializer(note).data, status=status.HTTP_201_CREATED)

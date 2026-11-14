@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import (
-    Project, Task, Tag, Milestone, ProjectCategory, 
+    Project, Task, TaskChecklistItem, Tag, Milestone, ProjectCategory, 
     Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
     Release, SprintRetrospective, SprintCapacity, TaskHistory
 )
@@ -104,12 +104,18 @@ class SubTaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = ['id', 'title', 'status', 'priority', 'assigned_to_details', 'due_date', 'issue_type']
 
+class TaskChecklistItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskChecklistItem
+        fields = ['id', 'task', 'text', 'is_completed', 'created_at']
+
 class TaskSerializer(serializers.ModelSerializer):
     assigned_to_details = UserSerializer(source='assigned_to', read_only=True)
     assignees_details = UserSerializer(source='assignees', many=True, read_only=True)
     tags_details = TagSerializer(source='tags', many=True, read_only=True)
     subtasks = SubTaskSerializer(many=True, read_only=True)
     subtasks_count = serializers.IntegerField(source='subtasks.count', read_only=True)
+    checklist_items = TaskChecklistItemSerializer(many=True, read_only=True)
     
     # Dependencies
     dependencies_details = SubTaskSerializer(source='dependencies', many=True, read_only=True)

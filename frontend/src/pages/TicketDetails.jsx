@@ -20,6 +20,8 @@ const TicketDetails = () => {
     const [selectedProject, setSelectedProject] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
+    const [newInternalNote, setNewInternalNote] = useState('');
+    const [isPostingNote, setIsPostingNote] = useState(false);
 
     const fileInputRef = useRef(null);
 
@@ -84,6 +86,22 @@ const TicketDetails = () => {
             setIsConverting(false);
         } catch (error) {
             setIsConverting(false);
+        }
+    };
+
+    const handlePostInternalNote = async () => {
+        if (!newInternalNote.trim()) return;
+        setIsPostingNote(true);
+        try {
+            await api.post(`/tickets/tickets/${id}/add-note/`, {
+                note: newInternalNote.trim()
+            });
+            setNewInternalNote('');
+            fetchTicket();
+        } catch (err) {
+            console.error('Failed to post internal note', err);
+        } finally {
+            setIsPostingNote(false);
         }
     };
 
@@ -182,6 +200,53 @@ const TicketDetails = () => {
                                     ))}
                                 </div>
                             )}
+                        </div>
+
+                        {/* Internal Team Notes (Private to Agents/Staff) */}
+                        <div className="bg-amber-50/60 rounded-lg border border-amber-200 overflow-hidden shadow-sm">
+                            <div className="p-4 bg-amber-100/60 border-b border-amber-200 flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <Lock size={15} className="text-amber-700" />
+                                    <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Internal Team Notes ({ticket.internal_notes_details?.length || 0})</h3>
+                                </div>
+                                <span className="text-[10px] bg-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded">Staff Only</span>
+                            </div>
+                            
+                            <div className="p-4 space-y-3">
+                                {ticket.internal_notes_details?.length > 0 ? (
+                                    <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                                        {ticket.internal_notes_details.map(n => (
+                                            <div key={n.id} className="p-3 bg-white rounded border border-amber-200/80 shadow-xs text-xs">
+                                                <div className="flex items-center justify-between text-amber-900 mb-1">
+                                                    <span className="font-bold">{n.author_username || 'Agent'}</span>
+                                                    <span className="text-[10px] text-amber-700/80">{new Date(n.created_at).toLocaleString()}</span>
+                                                </div>
+                                                <p className="text-gray-800 whitespace-pre-wrap">{n.note}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-amber-800/70 italic">No internal notes added yet.</p>
+                                )}
+
+                                <div className="pt-2 border-t border-amber-200/60 flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Add private internal note for team members..."
+                                        value={newInternalNote}
+                                        onChange={e => setNewInternalNote(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handlePostInternalNote(); }}
+                                        className="flex-1 bg-white border border-amber-300 rounded px-3 py-1.5 text-xs text-gray-800 outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                    <button
+                                        onClick={handlePostInternalNote}
+                                        disabled={isPostingNote || !newInternalNote.trim()}
+                                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-50 transition"
+                                    >
+                                        Post Note
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Activity Feed */}

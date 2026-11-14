@@ -6,12 +6,12 @@ from django.utils import timezone
 from django.db.models import Q
 from activity.models import AuditLog
 from .models import (
-    Project, Task, Tag, Milestone, ProjectCategory,
+    Project, Task, TaskChecklistItem, Tag, Milestone, ProjectCategory,
     Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
     Release, SprintRetrospective, SprintCapacity, TaskHistory
 )
 from .serializers import (
-    ProjectSerializer, TaskSerializer, TagSerializer, MilestoneSerializer,
+    ProjectSerializer, TaskSerializer, TaskChecklistItemSerializer, TagSerializer, MilestoneSerializer,
     ProjectCategorySerializer, PortfolioSerializer, ProgramSerializer,
     ProjectGoalSerializer, DeliverableSerializer, ProjectStatusSerializer,
     SprintSerializer, ReleaseSerializer, SprintRetrospectiveSerializer,
@@ -286,6 +286,20 @@ class ProjectViewSet(viewsets.ModelViewSet):
         except CustomUser.DoesNotExist:
             return Response({'error': 'user not found'}, status=404)
 
+    @action(detail=True, methods=['post'], url_path='archive')
+    def archive(self, request, pk=None):
+        project = self.get_object()
+        project.is_archived = True
+        project.save()
+        return Response({'status': 'archived', 'is_archived': True})
+
+    @action(detail=True, methods=['post'], url_path='unarchive')
+    def unarchive(self, request, pk=None):
+        project = self.get_object()
+        project.is_archived = False
+        project.save()
+        return Response({'status': 'unarchived', 'is_archived': False})
+
     @action(detail=True, methods=['post'])
     def toggle_watch(self, request, pk=None):
         project = self.get_object()
@@ -542,6 +556,25 @@ class TaskViewSet(viewsets.ModelViewSet):
         new_task.tags.set(task.tags.all())
         from .serializers import TaskSerializer
         return Response(TaskSerializer(new_task, context={'request': request}).data, status=201)
+
+
+class TaskChecklistItemViewSet(viewsets.ModelViewSet):
+    queryset = TaskChecklistItem.objects.all()
+    serializer_class = TaskChecklistItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        task_id = self.request.query_params.get('task_id')
+        if task_id:
+            return TaskChecklistItem.objects.filter(task_id=task_id)
+        return TaskChecklistItem.objects.all()
+
+    @action(detail=True, methods=['post', 'patch'], url_path='toggle')
+    def toggle(self, request, pk=None):
+        item = self.get_object()
+        item.is_completed = not item.is_completed
+        item.save()
+        return Response(TaskChecklistItemSerializer(item).data)
 
 
 class RemindersViewSet(viewsets.ViewSet):

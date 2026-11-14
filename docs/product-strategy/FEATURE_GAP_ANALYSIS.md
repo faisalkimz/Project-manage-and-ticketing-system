@@ -74,10 +74,10 @@ Maturity classifications:
 | Project visibility (Private/Public/Team) | ✅ Fully | ❌ Not in UI | ✅ Visibility field | Model exists, not surfaced |
 | Custom project statuses | ✅ Fully | ✅ ProjectDetails settings | ✅ ProjectStatus model | Working |
 | Project categories | 🔧 Backend | ❌ No category filter UI | ✅ ProjectCategory model | Unused in frontend |
-| Project templates | ❌ Missing | ❌ | ⚠️ is_template flag only | No template creation flow |
+| Project templates | ✅ Fully | ✅ Save as Template UI + modal | ✅ save_as_template & create_from_template | Working |
 | Sub-projects | 🔧 Backend | ❌ No UI | ✅ parent_project field | Backend only |
 | Project dependencies | 🔧 Backend | ❌ No UI | ✅ M2M dependencies | Backend only |
-| Project archiving | ⚠️ Partial | ⚠️ "Close board" maps to COMPLETED | ⚠️ No archive field | Workaround, not clean |
+| Project archiving | ✅ Fully | ✅ Archive/unarchive actions | ✅ is_archived field + endpoints | Working |
 | Starred/favorited projects | ✅ Fully | ✅ Star toggle works | ✅ starred_by M2M | Working |
 | Project search | ✅ Fully | ✅ Global search | ✅ Search API | Working |
 | Watchers | 🔧 Backend | ❌ No UI | ✅ watchers M2M | Backend only |
@@ -109,16 +109,16 @@ Maturity classifications:
 | Reactions on comments | ✅ Fully | ✅ Reaction buttons | ✅ Reaction model | Working |
 | Task history/audit | ✅ Fully | ✅ Audit log section | ✅ AuditLog + TaskHistory | Working |
 | Recurring tasks | 🔧 Backend | ❌ No UI | ✅ is_recurring + recurrence_rule | Backend only |
-| Task duplication | ❌ Missing | ❌ | ❌ | Not implemented |
+| Task duplication | ✅ Fully | ✅ Duplicate action button | ✅ duplicate endpoint | Working |
 | Task templates | ❌ Missing | ❌ | ❌ | Not implemented |
 | Bulk operations | ✅ Fully | ✅ Bulk select + operations | ✅ bulk_operation endpoint | Working |
 | Drag-and-drop (Kanban) | ✅ Fully | ✅ DnD implemented | ✅ PATCH endpoint | Working |
 | Due date | ✅ Fully | ✅ Date pickers | ✅ due_date field | Working |
 | Start date | ✅ Fully | ✅ Date pickers | ✅ start_date field | Working |
-| Task archiving | 🔧 Backend | ❌ No UI | ✅ is_archived field | Backend only |
-| Checklist items within tasks | ❌ Missing | ❌ | ❌ | Different from subtasks |
-| Time estimate | ❌ Missing | ❌ | ❌ | No estimated hours field |
-| Rich text in descriptions | ❌ Missing | ❌ | ❌ | Plain textarea only |
+| Task archiving | ✅ Fully | ✅ Bulk archive + toggle | ✅ is_archived field | Working |
+| Checklist items within tasks | ✅ Fully | ✅ Checklist section in Task modal | ✅ TaskChecklistItem model + API | Working |
+| Time estimate | ✅ Fully | ✅ Estimated hours in task modal | ✅ estimated_hours field | Working |
+| Rich text in descriptions | ✅ Fully | ✅ RichTextEditor component | ✅ Markdown text field | Working |
 
 **Gap Severity:** MEDIUM-HIGH — Core tasks work well; multiple assignees, rich text, templates are needed
 
@@ -181,8 +181,8 @@ Maturity classifications:
 | SLA breach escalation | ✅ Fully | ❌ No UI | ✅ trigger_escalation() | Automatic in backend |
 | Ticket queues | 🔧 Backend | ❌ No queue UI | ✅ TicketQueue model | Backend only |
 | Auto-assignment | 🔧 Backend | ❌ No UI | ✅ auto_assign field | Backend only |
-| Internal ticket notes | ⚠️ Partial | ❌ No internal note UI | ✅ TicketNote model | Backend only |
-| Ticket→Task conversion | 🔧 Backend | ❌ No UI | ✅ project_task OneToOne | Backend relationship exists |
+| Internal ticket notes | ✅ Fully | ✅ TicketDetails internal notes card | ✅ TicketNote model + add-note API | Working |
+| Ticket→Task conversion | ✅ Fully | ✅ TicketDetails convert action + 🎫 TKT badge link | ✅ convert_to_task endpoint | Working |
 | Ticket search | ✅ Fully | ✅ Global search | ✅ Search API | Working |
 | Ticket comments | ✅ Fully | ✅ TicketDetails | ✅ Generic Comment | Working |
 | Ticket attachments | ✅ Fully | ✅ TicketDetails | ✅ Generic Attachment | Working |
@@ -208,7 +208,7 @@ Maturity classifications:
 | Time entry editing | ⚠️ Partial | ❌ No edit UI | ✅ PATCH available | Can't correct mistakes via UI |
 | Work schedule | 🔧 Backend | ❌ No UI | ✅ WorkSchedule model | Backend only |
 | Resource holidays | 🔧 Backend | ❌ No UI | ✅ ResourceHoliday model | Backend only |
-| Timesheet export | ❌ Missing | ❌ | ❌ | No timesheet export |
+| Timesheet export | ✅ Fully | ✅ Export Timesheet CSV button | ✅ export-csv endpoint | Working |
 | Approval workflow | ❌ Missing | ❌ | ❌ | No manager approval for time |
 
 **Gap Severity:** LOW-MEDIUM — Core time tracking works; reporting and approval gaps

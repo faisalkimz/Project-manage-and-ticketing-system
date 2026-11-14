@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    ProjectViewSet, TaskViewSet, TagViewSet, MilestoneViewSet,
+    ProjectViewSet, TaskViewSet, TaskChecklistItemViewSet, TagViewSet, MilestoneViewSet,
     ProjectCategoryViewSet, PortfolioViewSet, ProgramViewSet,
     ProjectGoalViewSet, DeliverableViewSet, ProjectStatusViewSet,
     SprintViewSet, ReleaseViewSet, SprintRetrospectiveViewSet, SprintCapacityViewSet,
@@ -11,6 +11,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r'projects', ProjectViewSet)
 router.register(r'tasks', TaskViewSet)
+router.register(r'checklists', TaskChecklistItemViewSet)
 router.register(r'tags', TagViewSet)
 router.register(r'milestones', MilestoneViewSet)
 router.register(r'categories', ProjectCategoryViewSet)

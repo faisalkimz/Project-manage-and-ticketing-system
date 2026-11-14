@@ -61,6 +61,7 @@ class Project(models.Model):
     
     background_color = models.CharField(max_length=20, default='#0079BF')
     is_template = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
     
     # Ownership & Hierarchies
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_projects')
@@ -174,6 +175,7 @@ class Task(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     issue_type = models.CharField(max_length=20, choices=IssueType.choices, default=IssueType.TASK)
     story_points = models.IntegerField(default=0, blank=True)
+    estimated_hours = models.DecimalField(max_digits=6, decimal_places=2, default=0.0, blank=True, null=True)
     
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -202,6 +204,19 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+
+class TaskChecklistItem(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='checklist_items')
+    text = models.CharField(max_length=255)
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.task.title} - {self.text}"
+
 class Release(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='releases')
     name = models.CharField(max_length=100)

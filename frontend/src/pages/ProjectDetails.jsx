@@ -28,6 +28,8 @@ const ProjectDetails = () => {
     const [selectedTask, setSelectedTask] = useState(null);
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
+    const [checklistItems, setChecklistItems] = useState([]);
+    const [newChecklistText, setNewChecklistText] = useState('');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [newTask, setNewTask] = useState({
         title: '',
@@ -217,15 +219,49 @@ const ProjectDetails = () => {
 
     const fetchTaskSideData = async (task) => {
         try {
-            const [commentsRes, attachmentsRes, auditRes] = await Promise.all([
+            const [commentsRes, attachmentsRes, auditRes, checklistRes] = await Promise.all([
                 api.get(`/activity/comments/?content_type=task&object_id=${task.id}`),
                 api.get(`/activity/attachments/?content_type=task&object_id=${task.id}`),
-                api.get(`/activity/audit-logs/?content_type=task&object_id=${task.id}`)
+                api.get(`/activity/audit-logs/?content_type=task&object_id=${task.id}`),
+                api.get(`/projects/checklists/?task_id=${task.id}`)
             ]);
             setComments(commentsRes.data);
             setAttachments(attachmentsRes.data);
             setAuditLogs(auditRes.data);
+            setChecklistItems(checklistRes.data || []);
         } catch (error) { console.error(error); }
+    };
+
+    const handleAddChecklistItem = async () => {
+        if (!newChecklistText.trim() || !selectedTask) return;
+        try {
+            const res = await api.post('/projects/checklists/', {
+                task: selectedTask.id,
+                text: newChecklistText.trim()
+            });
+            setChecklistItems(prev => [...prev, res.data]);
+            setNewChecklistText('');
+        } catch (err) {
+            console.error('Failed to add checklist item', err);
+        }
+    };
+
+    const handleToggleChecklistItem = async (itemId) => {
+        try {
+            const res = await api.post(`/projects/checklists/${itemId}/toggle/`);
+            setChecklistItems(prev => prev.map(item => item.id === itemId ? res.data : item));
+        } catch (err) {
+            console.error('Failed to toggle checklist item', err);
+        }
+    };
+
+    const handleDeleteChecklistItem = async (itemId) => {
+        try {
+            await api.delete(`/projects/checklists/${itemId}/`);
+            setChecklistItems(prev => prev.filter(item => item.id !== itemId));
+        } catch (err) {
+            console.error('Failed to delete checklist item', err);
+        }
     };
 
     const handleFileUpload = async () => {
@@ -3153,7 +3189,7 @@ const ProjectDetails = () => {
                                                 {columns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                                             </select>
                                             <div className="h-4 w-px bg-[#DFE1E6] mx-1" />
-                                            <div className="flex items-center gap-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded px-2 py-0.5 cursor-pointer transition-colors group">
+                                            <div className="flex items-center gap-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded px-2 py-0.5 cursor-pointer transition-colors group" title="Story Points">
                                                 <TrendingUp size={12} className="text-[#5E6C84]" />
                                                 <input
                                                     type="number"
@@ -3162,6 +3198,17 @@ const ProjectDetails = () => {
                                                     onChange={(e) => handleUpdateTask(selectedTask.id, { story_points: parseInt(e.target.value) || 0 })}
                                                 />
                                                 <span className="text-[10px] font-bold text-[#5E6C84] group-hover:block hidden">Points</span>
+                                            </div>
+                                            <div className="flex items-center gap-1 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded px-2 py-0.5 cursor-pointer transition-colors group" title="Estimated Hours">
+                                                <Clock size={12} className="text-[#5E6C84]" />
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    className="w-10 bg-transparent text-xs font-bold text-[#172B4D] outline-none"
+                                                    value={selectedTask.estimated_hours || 0}
+                                                    onChange={(e) => handleUpdateTask(selectedTask.id, { estimated_hours: parseFloat(e.target.value) || 0 })}
+                                                />
+                                                <span className="text-[10px] font-bold text-[#5E6C84]">hrs</span>
                                             </div>
                                         </div>
                                     </div>
@@ -3330,6 +3377,72 @@ const ProjectDetails = () => {
                                                 </button>
                                             </div>
                                         )}
+                                    </div>
+
+                                    {/* In-Task Checklist Items */}
+                                    <div className="pt-2">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-xs font-semibold text-[#5E6C84] uppercase flex items-center gap-1.5">
+                                                <CheckSquare size={13} /> Checklist
+                                            </h4>
+                                            {checklistItems.length > 0 && (
+                                                <span className="text-xs text-[#5E6C84]">
+                                                    {checklistItems.filter(i => i.is_completed).length}/{checklistItems.length} ({Math.round((checklistItems.filter(i => i.is_completed).length / checklistItems.length) * 100)}%)
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {checklistItems.length > 0 && (
+                                            <div className="h-1.5 bg-[#EBECF0] rounded-full mb-3 overflow-hidden">
+                                                <div
+                                                    className="h-full bg-emerald-500 transition-all duration-300"
+                                                    style={{ width: `${(checklistItems.filter(i => i.is_completed).length / checklistItems.length) * 100}%` }}
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-1.5 mb-2">
+                                            {checklistItems.map(item => (
+                                                <div key={item.id} className="flex items-center gap-3 p-1.5 hover:bg-[#F4F5F7] rounded group transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={item.is_completed}
+                                                        onChange={() => handleToggleChecklistItem(item.id)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                                    />
+                                                    <span className={`flex-1 text-sm ${item.is_completed ? 'line-through text-[#5E6C84]' : 'text-[#172B4D]'}`}>
+                                                        {item.text}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleDeleteChecklistItem(item.id)}
+                                                        className="opacity-0 group-hover:opacity-100 text-[#5E6C84] hover:text-red-600 transition-opacity p-1"
+                                                        title="Delete item"
+                                                    >
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                className="flex-1 px-3 py-1.5 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF] bg-white"
+                                                placeholder="Add a checklist item..."
+                                                value={newChecklistText}
+                                                onChange={e => setNewChecklistText(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleAddChecklistItem();
+                                                }}
+                                            />
+                                            <button
+                                                onClick={handleAddChecklistItem}
+                                                disabled={!newChecklistText.trim()}
+                                                className="px-3 py-1.5 bg-[#0079BF] text-white rounded text-xs font-bold hover:bg-[#026AA7] disabled:opacity-50 transition"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Dependencies */}

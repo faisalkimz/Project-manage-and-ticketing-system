@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Play, Square, Clock } from 'lucide-react';
+import { Play, Square, Clock, Download } from 'lucide-react';
 import api from '../services/api';
 
 const TimerWidget = () => {
@@ -58,6 +58,21 @@ const TimerWidget = () => {
             setCurrentEntry(null);
             setElapsed(0);
         } catch (error) { } finally { setLoading(false); }
+    };
+
+    const handleExportCsv = async () => {
+        try {
+            const res = await api.get('/timetracking/entries/export-csv/', { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'timesheet_export.csv');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (err) {
+            console.error('Failed to export timesheet', err);
+        }
     };
 
     const formatTime = (seconds) => {
@@ -121,6 +136,15 @@ const TimerWidget = () => {
                     )}
                 </div>
             )}
+
+            <button
+                onClick={handleExportCsv}
+                className="w-full py-1.5 px-2 bg-gray-50 hover:bg-gray-100 border border-[#DFE1E6] rounded text-xs font-semibold text-[#172B4D] flex items-center justify-center gap-1.5 transition"
+                title="Export Timesheet CSV"
+            >
+                <Download size={13} className="text-[#5E6C84]" />
+                <span>Export Timesheet CSV</span>
+            </button>
         </div>
     );
 };

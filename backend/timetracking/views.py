@@ -90,6 +90,35 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             'week_formatted': f"{week_mins // 60}h {week_mins % 60}m"
         })
 
+    @action(detail=False, methods=['get'], url_path='export-csv')
+    def export_csv(self, request):
+        import csv
+        from django.http import HttpResponse
+
+        entries = self.filter_queryset(self.get_queryset())
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="timesheet_export.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'User', 'Project', 'Task', 'Start Time', 'End Time', 'Duration (Minutes)', 'Duration (Hours)', 'Billable', 'Description'])
+
+        for e in entries:
+            duration_hrs = round((e.duration_minutes or 0) / 60, 2)
+            writer.writerow([
+                e.id,
+                e.user.username if e.user else '',
+                e.project.name if e.project else '',
+                e.task.title if e.task else '',
+                e.start_time.isoformat() if e.start_time else '',
+                e.end_time.isoformat() if e.end_time else '',
+                e.duration_minutes or 0,
+                duration_hrs,
+                'Yes' if e.is_billable else 'No',
+                e.description or ''
+            ])
+
+        return response
+
 class WorkScheduleViewSet(viewsets.ModelViewSet):
     queryset = WorkSchedule.objects.all()
     serializer_class = WorkScheduleSerializer
