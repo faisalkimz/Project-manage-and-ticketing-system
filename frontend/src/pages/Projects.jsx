@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     Plus, Search, Star, Users, X, Briefcase, CheckCircle2,
-    Clock, Tag, Copy, Archive, Layers, Shield
+    Clock, Tag, Copy, Archive, Layers, Shield, RotateCcw
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -84,13 +84,26 @@ const Projects = () => {
         } catch (err) { console.error('Failed to toggle star', err); }
     };
 
+    const handleUnarchiveProject = async (e, projectId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+            await api.post(`/projects/projects/${projectId}/unarchive/`);
+            showToast('Project restored from archive!', 'success');
+            fetchData();
+        } catch (err) {
+            console.error(err);
+            showToast('Failed to unarchive project', 'error');
+        }
+    };
+
     const filteredProjects = projects.filter(p =>
         (p.name.toLowerCase().includes(search.toLowerCase()) ||
-            (p.key && p.key.toLowerCase().includes(search.toLowerCase()))) && !p.is_template && p.status !== 'COMPLETED'
+            (p.key && p.key.toLowerCase().includes(search.toLowerCase()))) && !p.is_template && !p.is_archived && p.status !== 'COMPLETED'
     );
 
     const templates = projects.filter(p => p.is_template);
-    const archived = projects.filter(p => p.status === 'COMPLETED');
+    const archived = projects.filter(p => p.is_archived || p.status === 'COMPLETED');
 
     const boardColors = [
         { from: '#0079BF', to: '#026AA7' },
@@ -147,6 +160,21 @@ const Projects = () => {
                     <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/20 text-white text-[10px] font-medium w-fit">
                         <Tag size={10} />
                         {project.category_details.name}
+                    </div>
+                )}
+                {project.is_archived && (
+                    <div className="mt-2 flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-black/40 text-amber-200">
+                            Archived
+                        </span>
+                        <button
+                            type="button"
+                            onClick={(e) => handleUnarchiveProject(e, project.id)}
+                            className="px-2 py-0.5 rounded bg-white/30 hover:bg-white/50 text-white text-[10px] font-bold transition flex items-center gap-1"
+                            title="Restore project from archive"
+                        >
+                            <RotateCcw size={10} /> Restore
+                        </button>
                     </div>
                 )}
                 {project.task_stats?.percentage > 0 && (

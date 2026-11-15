@@ -62,7 +62,7 @@ const TaskTableView = ({
     });
 
     const exportCSV = () => {
-        const headers = ['Key', 'Title', 'Status', 'Priority', 'Type', 'Story Points', 'Assignee', 'Due Date'];
+        const headers = ['Key', 'Title', 'Status', 'Priority', 'Type', 'Story Points', 'Estimated Hours', 'Assignee', 'Due Date'];
         const rows = filteredTasks.map(t => [
             `${project?.key || 'TASK'}-${t.id}`,
             `"${(t.title || '').replace(/"/g, '""')}"`,
@@ -70,6 +70,7 @@ const TaskTableView = ({
             t.priority,
             t.issue_type,
             t.story_points || 0,
+            t.estimated_hours || 0,
             t.assigned_to_details?.username || 'Unassigned',
             t.due_date ? new Date(t.due_date).toLocaleDateString() : ''
         ]);
@@ -167,6 +168,9 @@ const TaskTableView = ({
                             <th className="py-2.5 px-3 border-r border-[#DFE1E6] w-20 cursor-pointer hover:bg-[#EBECF0]" onClick={() => handleSort('story_points')}>
                                 <div className="flex items-center justify-between">Pts <ArrowUpDown size={11} /></div>
                             </th>
+                            <th className="py-2.5 px-3 border-r border-[#DFE1E6] w-20 cursor-pointer hover:bg-[#EBECF0]" onClick={() => handleSort('estimated_hours')}>
+                                <div className="flex items-center justify-between">Hrs <ArrowUpDown size={11} /></div>
+                            </th>
                             <th className="py-2.5 px-3 border-r border-[#DFE1E6] w-36">Assignee</th>
                             <th className="py-2.5 px-3 border-r border-[#DFE1E6] w-32 cursor-pointer hover:bg-[#EBECF0]" onClick={() => handleSort('due_date')}>
                                 <div className="flex items-center justify-between">Due Date <ArrowUpDown size={11} /></div>
@@ -220,6 +224,11 @@ const TaskTableView = ({
                                 <td className="py-2 px-3 border-r border-[#DFE1E6]">
                                     <span className="px-2 py-0.5 rounded bg-[#EBECF0] text-[#172B4D] font-mono font-bold text-[11px]">
                                         {task.story_points || 0}
+                                    </span>
+                                </td>
+                                <td className="py-2 px-3 border-r border-[#DFE1E6] text-center">
+                                    <span className="text-[11px] font-mono text-[#5E6C84]">
+                                        {task.estimated_hours ? `${task.estimated_hours}h` : '—'}
                                     </span>
                                 </td>
                                 <td className="py-1.5 px-2 border-r border-[#DFE1E6]">

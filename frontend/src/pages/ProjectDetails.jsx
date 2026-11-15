@@ -5,7 +5,7 @@ import {
     Paperclip, Tag, ChevronDown, ChevronRight, ChevronUp, List, Calendar as CalendarIcon, Layout, GitMerge, CheckSquare, Trash2,
     Flag, Target, TrendingUp, Shield, HelpCircle, AlertCircle, Package, BarChart, History,
     Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check, Circle,
-    Sparkles, Loader2, Copy
+    Sparkles, Loader2, Copy, Archive
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -720,6 +720,19 @@ const ProjectDetails = () => {
             showToast('Failed to save project as template', 'error');
         } finally {
             setIsSavingTemplate(false);
+        }
+    };
+
+    const handleToggleArchiveProject = async () => {
+        try {
+            const endpoint = project?.is_archived ? 'unarchive' : 'archive';
+            const res = await api.post(`/projects/projects/${id}/${endpoint}/`);
+            setProject(prev => ({ ...prev, is_archived: res.data.is_archived }));
+            showToast(res.data.is_archived ? 'Project archived!' : 'Project unarchived!', 'success');
+            setShowSettingsModal(false);
+        } catch (err) {
+            console.error('Failed to toggle archive state', err);
+            showToast('Failed to change archive state', 'error');
         }
     };
 
@@ -1577,6 +1590,24 @@ const ProjectDetails = () => {
                                                                     {task.story_points > 0 && (
                                                                         <span className="ml-1 bg-[#DFE1E6] text-[#42526E] text-[10px] font-bold px-1.5 py-0.5 rounded-full" title="Story Points">
                                                                             {task.story_points}
+                                                                        </span>
+                                                                    )}
+                                                                    {task.estimated_hours > 0 && (
+                                                                        <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200" title="Estimated Hours">
+                                                                            <Clock size={10} /> {task.estimated_hours}h
+                                                                        </span>
+                                                                    )}
+                                                                    {task.checklist_items?.length > 0 && (
+                                                                        <span
+                                                                            className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                                                task.checklist_items.every(i => i.is_completed)
+                                                                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                                                    : 'bg-[#DFE1E6] text-[#42526E]'
+                                                                            }`}
+                                                                            title="Checklist items completed"
+                                                                        >
+                                                                            <CheckSquare size={10} />
+                                                                            {task.checklist_items.filter(i => i.is_completed).length}/{task.checklist_items.length}
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -4125,6 +4156,28 @@ const ProjectDetails = () => {
                                     </div>
                                     <p className="text-[10px] text-[#5E6C84] mt-2 italic">Note: Creating custom statuses will override the default To Do/In Progress/Done columns.</p>
                                 </div>
+
+                                {/* Save as Template & Archive Actions */}
+                                <div className="pt-4 border-t border-[#DFE1E6] flex items-center justify-between">
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveAsTemplate}
+                                        disabled={isSavingTemplate}
+                                        className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-xs font-semibold flex items-center gap-1.5 transition"
+                                    >
+                                        <Copy size={13} />
+                                        <span>{isSavingTemplate ? 'Saving...' : 'Save as Template'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleToggleArchiveProject}
+                                        className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition ${project?.is_archived ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200' : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'}`}
+                                    >
+                                        <Archive size={13} />
+                                        <span>{project?.is_archived ? 'Unarchive Project' : 'Archive Project'}</span>
+                                    </button>
+                                </div>
+
                                 <div className="flex justify-end gap-2 pt-2">
                                     <button
                                         type="button"
