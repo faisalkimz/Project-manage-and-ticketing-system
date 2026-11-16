@@ -126,8 +126,26 @@ const ProjectDetails = () => {
     const [isSummarizingTask, setIsSummarizingTask] = useState(false);
     const [newTimeEntry, setNewTimeEntry] = useState({ task: '', description: '', duration_minutes: 0, is_billable: true, start_time: '' });
     const [timeStats, setTimeStats] = useState({ today_minutes: 0, week_minutes: 0 });
+    const PRESET_TAG_COLORS = [
+        '#EF4444',
+        '#F97316',
+        '#EAB308',
+        '#22C55E',
+        '#3B82F6',
+        '#8B5CF6',
+        '#EC4899',
+        '#6B7280'
+    ];
     const [availableTags, setAvailableTags] = useState([]);
     const [selectedTagIds, setSelectedTagIds] = useState([]);
+    const [selectedAssigneeIds, setSelectedAssigneeIds] = useState([]);
+    const [newTagName, setNewTagName] = useState('');
+    const [newTagColor, setNewTagColor] = useState('#3B82F6');
+    const [isCreatingTag, setIsCreatingTag] = useState(false);
+    const [showInlineTagCreate, setShowInlineTagCreate] = useState(false);
+    const [memberSearchQuery, setMemberSearchQuery] = useState('');
+    const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+    const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
     const [isDuplicatingTask, setIsDuplicatingTask] = useState(false);
     const [showAiRiskModal, setShowAiRiskModal] = useState(false);
     const [isLoadingRisk, setIsLoadingRisk] = useState(false);
@@ -160,8 +178,8 @@ const ProjectDetails = () => {
 
             // Fetch tags for the project
             try {
-                const tagsRes = await api.get(`/projects/tags/?project_id=${id}`);
-                setAvailableTags(tagsRes.data?.results || tagsRes.data || []);
+                const tagsRes = await api.get('/projects/tags/');
+                setAvailableTags(Array.isArray(tagsRes.data) ? tagsRes.data : (tagsRes.data?.results || []));
             } catch (_) {}
 
             // Fetch time tracking data
@@ -336,6 +354,8 @@ const ProjectDetails = () => {
                 parent_task: newTask.parent_task || null,
                 status: newTask.status || 'TODO',
                 tags: selectedTagIds,
+                assignees: selectedAssigneeIds,
+                assigned_to: selectedAssigneeIds[0] || null,
             };
 
             await api.post('/projects/tasks/', payload);
@@ -351,6 +371,7 @@ const ProjectDetails = () => {
                 parent_task: null
             });
             setSelectedTagIds([]);
+            setSelectedAssigneeIds([]);
             fetchProjectDetails();
             showToast("Issue created successfully", "success");
         } catch (error) {
@@ -375,12 +396,104 @@ const ProjectDetails = () => {
 
     const handleUpdateTask = async (taskId, data) => {
         try {
-            await api.patch(`/projects/tasks/${taskId}/`, data);
-            fetchProjectDetails();
+            const res = await api.patch(`/projects/tasks/${taskId}/`, data);
+            const updated = res.data || data;
             if (selectedTask && selectedTask.id === taskId) {
-                setSelectedTask({ ...selectedTask, ...data });
+                setSelectedTask(prev => ({ ...prev, ...updated }));
             }
-        } catch (error) { }
+            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated } : t));
+            fetchProjectDetails();
+            return updated;
+        } catch (error) {
+            console.error('Failed to update task:', error);
+            throw error;
+        }
+    };
+
+    const handleToggleAssignee = async (userId) => {
+        if (!selectedTask) return;
+        const currentAssigneeIds = (selectedTask.assignees_details && selectedTask.assignees_details.length > 0)
+            ? selectedTask.assignees_details.map(u => u.id)
+            : (selectedTask.assignees || []).map(u => typeof u === 'object' ? u.id : u);
+
+        if (currentAssigneeIds.length === 0 && selectedTask.assigned_to) {
+            currentAssigneeIds.push(selectedTask.assigned_to);
+        }
+
+        const newAssigneeIds = currentAssigneeIds.includes(userId)
+            ? currentAssigneeIds.filter(id => id !== userId)
+            : [...currentAssigneeIds, userId];
+
+        const patchData = { assignees: newAssigneeIds };
+        if (newAssigneeIds.length > 0) {
+            if (!newAssigneeIds.includes(selectedTask.assigned_to)) {
+                patchData.assigned_to = newAssigneeIds[0];
+            }
+        } else {
+            patchData.assigned_to = null;
+        }
+
+        try {
+            await handleUpdateTask(selectedTask.id, patchData);
+            showToast(newAssigneeIds.includes(userId) ? 'Assignee added' : 'Assignee removed', 'success');
+        } catch (err) {
+            showToast('Failed to update assignees', 'error');
+        }
+    };
+
+    const handleCreateInlineTag = async (e) => {
+        if (e) e.preventDefault();
+        if (!newTagName.trim()) {
+            showToast('Please enter a tag name', 'error');
+            return;
+        }
+        setIsCreatingTag(true);
+        try {
+            const res = await api.post('/projects/tags/', {
+                name: newTagName.trim(),
+                color: newTagColor || '#3B82F6'
+            });
+            const created = res.data;
+            setAvailableTags(prev => [...prev, created]);
+            setNewTagName('');
+            showToast(`Tag "${created.name}" created!`, 'success');
+
+            if (selectedTask) {
+                const currentIds = (selectedTask.tags_details && selectedTask.tags_details.length > 0)
+                    ? selectedTask.tags_details.map(t => t.id)
+                    : (selectedTask.tags || []).map(t => typeof t === 'object' ? t.id : t);
+                const nextIds = Array.from(new Set([...currentIds, created.id]));
+                await handleUpdateTask(selectedTask.id, { tags: nextIds });
+            } else if (isTaskModalOpen) {
+                setSelectedTagIds(prev => Array.from(new Set([...prev, created.id])));
+            }
+            setShowInlineTagCreate(false);
+        } catch (err) {
+            console.error('Failed to create tag', err);
+            showToast(err.response?.data?.name?.[0] || 'Failed to create tag', 'error');
+        } finally {
+            setIsCreatingTag(false);
+        }
+    };
+
+    const handleToggleTaskTag = async (taskId, tagId) => {
+        const task = tasks.find(t => t.id === taskId) || (selectedTask?.id === taskId ? selectedTask : null);
+        if (!task) return;
+
+        const currentIds = (task.tags_details && task.tags_details.length > 0)
+            ? task.tags_details.map(t => t.id)
+            : (task.tags || []).map(t => typeof t === 'object' ? t.id : t);
+
+        const newIds = currentIds.includes(tagId)
+            ? currentIds.filter(id => id !== tagId)
+            : [...currentIds, tagId];
+
+        try {
+            await handleUpdateTask(taskId, { tags: newIds });
+            showToast(newIds.includes(tagId) ? 'Tag added' : 'Tag removed', 'success');
+        } catch (err) {
+            showToast('Failed to update tags', 'error');
+        }
     };
 
     const handleBulkOperation = async (operation, value = null) => {
@@ -1567,6 +1680,34 @@ const ProjectDetails = () => {
                                                         </div>
 
                                                         <div className="flex flex-col gap-2">
+                                                            {/* Tag chips (up to 3, then +N more) */}
+                                                            {(() => {
+                                                                const cardTags = (task.tags_details && task.tags_details.length > 0)
+                                                                    ? task.tags_details
+                                                                    : (task.tags || []).map(t => typeof t === 'object' ? t : availableTags.find(at => at.id === t)).filter(Boolean);
+
+                                                                if (!cardTags || cardTags.length === 0) return null;
+
+                                                                return (
+                                                                    <div className="flex flex-wrap gap-1 items-center">
+                                                                        {cardTags.slice(0, 3).map(tag => (
+                                                                            <span
+                                                                                key={tag.id}
+                                                                                className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white tracking-tight shadow-xs"
+                                                                                style={{ backgroundColor: tag.color || '#3B82F6' }}
+                                                                            >
+                                                                                {tag.name}
+                                                                            </span>
+                                                                        ))}
+                                                                        {cardTags.length > 3 && (
+                                                                            <span className="text-[10px] font-bold text-[#5E6C84] bg-[#EBECF0] px-1.5 py-0.5 rounded-full">
+                                                                                +{cardTags.length - 3} more
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
+
                                                             <p className="text-sm text-[#172B4D] leading-snug">{task.title}</p>
 
                                                             <div className="flex items-center justify-between mt-1">
@@ -1618,15 +1759,42 @@ const ProjectDetails = () => {
                                                                             {task.comment_count}
                                                                         </div>
                                                                     )}
-                                                                    {task.assigned_to_details ? (
-                                                                        <div className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[9px] font-bold ring-2 ring-white" title={task.assigned_to_details.username}>
-                                                                            {task.assigned_to_details.username[0].toUpperCase()}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className="w-6 h-6 rounded-full bg-[#EBECF0] text-[#5E6C84] flex items-center justify-center">
-                                                                            <Users size={12} />
-                                                                        </div>
-                                                                    )}
+                                                                    {/* Stacked avatar circles for all assignees (up to 3, then +N) */}
+                                                                    {(() => {
+                                                                        const cardAssignees = (task.assignees_details && task.assignees_details.length > 0)
+                                                                            ? task.assignees_details
+                                                                            : (task.assigned_to_details ? [task.assigned_to_details] : []);
+
+                                                                        if (cardAssignees.length === 0) {
+                                                                            return (
+                                                                                <div className="w-6 h-6 rounded-full bg-[#EBECF0] text-[#5E6C84] flex items-center justify-center" title="Unassigned">
+                                                                                    <Users size={12} />
+                                                                                </div>
+                                                                            );
+                                                                        }
+
+                                                                        return (
+                                                                            <div className="flex -space-x-1.5 items-center">
+                                                                                {cardAssignees.slice(0, 3).map((assignee, idx) => (
+                                                                                    <div
+                                                                                        key={assignee.id || idx}
+                                                                                        className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[9px] font-bold ring-2 ring-white shadow-xs"
+                                                                                        title={assignee.username}
+                                                                                    >
+                                                                                        {assignee.username?.[0]?.toUpperCase() || '?'}
+                                                                                    </div>
+                                                                                ))}
+                                                                                {cardAssignees.length > 3 && (
+                                                                                    <div
+                                                                                        className="w-6 h-6 rounded-full bg-[#EBECF0] text-[#42526E] flex items-center justify-center text-[9px] font-bold ring-2 ring-white shadow-xs"
+                                                                                        title={`${cardAssignees.length - 3} more assignees`}
+                                                                                    >
+                                                                                        +{cardAssignees.length - 3}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })()}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1875,16 +2043,57 @@ const ProjectDetails = () => {
                                             <span className="text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">{project.key}-{task.id}</span>
                                             {getIssueTypeIcon(task.issue_type)}
                                         </div>
+                                        {/* Tag chips in grid */}
+                                        {(() => {
+                                            const cardTags = (task.tags_details && task.tags_details.length > 0)
+                                                ? task.tags_details
+                                                : (task.tags || []).map(t => typeof t === 'object' ? t : availableTags.find(at => at.id === t)).filter(Boolean);
+                                            if (!cardTags || cardTags.length === 0) return null;
+                                            return (
+                                                <div className="flex flex-wrap gap-1 items-center mb-2">
+                                                    {cardTags.slice(0, 3).map(tag => (
+                                                        <span
+                                                            key={tag.id}
+                                                            className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+                                                            style={{ backgroundColor: tag.color || '#3B82F6' }}
+                                                        >
+                                                            {tag.name}
+                                                        </span>
+                                                    ))}
+                                                    {cardTags.length > 3 && (
+                                                        <span className="text-[10px] font-bold text-[#5E6C84] bg-[#EBECF0] px-1.5 py-0.5 rounded-full">
+                                                            +{cardTags.length - 3}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
                                         <h3 className="font-bold text-[#172B4D] mb-4 min-h-[40px]">{task.title}</h3>
                                         <div className="flex items-center justify-between">
                                             <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase ${task.status === 'DONE' ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#DEEBFF] text-[#0052CC]'}`}>
                                                 {task.status}
                                             </span>
-                                            {task.assigned_to_details && (
-                                                <div className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[10px] font-bold">
-                                                    {task.assigned_to_details.username[0].toUpperCase()}
-                                                </div>
-                                            )}
+                                            {(() => {
+                                                const cardAssignees = (task.assignees_details && task.assignees_details.length > 0)
+                                                    ? task.assignees_details
+                                                    : (task.assigned_to_details ? [task.assigned_to_details] : []);
+                                                if (cardAssignees.length === 0) return null;
+                                                return (
+                                                    <div className="flex -space-x-1.5 items-center">
+                                                        {cardAssignees.slice(0, 3).map((a, idx) => (
+                                                            <div key={a.id || idx} className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[10px] font-bold ring-1 ring-white" title={a.username}>
+                                                                {a.username?.[0]?.toUpperCase()}
+                                                            </div>
+                                                        ))}
+                                                        {cardAssignees.length > 3 && (
+                                                            <div className="w-6 h-6 rounded-full bg-[#EBECF0] text-[#42526E] flex items-center justify-center text-[9px] font-bold ring-1 ring-white">
+                                                                +{cardAssignees.length - 3}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 )) : (
@@ -3269,20 +3478,276 @@ const ProjectDetails = () => {
                             <div className="flex gap-4 px-6 pb-6">
                                 {/* Main Content */}
                                 <div className="flex-1 space-y-6">
-                                    {/* Labels */}
-                                    {selectedTask.priority && (
+                                    {/* Assignees & Priority Info Row */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white rounded-lg border border-[#DFE1E6] shadow-xs">
+                                        {/* Multi-Assignee Section */}
                                         <div>
-                                            <h4 className="text-xs font-semibold text-[#5E6C84] uppercase mb-2">Labels</h4>
-                                            <div className="flex gap-1">
-                                                <div
-                                                    className="px-3 py-1.5 rounded text-white text-xs font-medium"
-                                                    style={{ backgroundColor: getPriorityColor(selectedTask.priority) }}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <h4 className="text-xs font-bold text-[#5E6C84] uppercase tracking-wider flex items-center gap-1.5">
+                                                    <Users size={14} className="text-[#5E6C84]" /> Assignees
+                                                </h4>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+                                                    className="text-xs text-[#0052CC] hover:text-[#0747A6] font-bold flex items-center gap-1 transition-colors"
                                                 >
-                                                    {selectedTask.priority}
+                                                    <Plus size={13} /> {showAssigneeDropdown ? 'Close' : 'Manage'}
+                                                </button>
+                                            </div>
+
+                                            {/* Stacked Avatar Circles of Selected Assignees */}
+                                            {(() => {
+                                                const currentAssignees = (selectedTask.assignees_details && selectedTask.assignees_details.length > 0)
+                                                    ? selectedTask.assignees_details
+                                                    : (selectedTask.assigned_to_details ? [selectedTask.assigned_to_details] : []);
+
+                                                return (
+                                                    <div className="flex items-center gap-2">
+                                                        {currentAssignees.length > 0 ? (
+                                                            <div className="flex -space-x-2 items-center">
+                                                                {currentAssignees.map((assignee, idx) => (
+                                                                    <div
+                                                                        key={assignee.id || idx}
+                                                                        title={assignee.username}
+                                                                        className="w-8 h-8 rounded-full border-2 border-white bg-[#0052CC] text-white flex items-center justify-center text-xs font-bold ring-1 ring-[#DFE1E6] shadow-xs"
+                                                                    >
+                                                                        {assignee.username?.[0]?.toUpperCase() || '?'}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-[#5E6C84] italic">Unassigned</span>
+                                                        )}
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+                                                            className="w-7 h-7 rounded-full border border-dashed border-[#DFE1E6] hover:border-[#0052CC] flex items-center justify-center text-[#5E6C84] hover:text-[#0052CC] transition-colors"
+                                                            title="Add or remove assignees"
+                                                        >
+                                                            <Plus size={14} />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            {/* Dropdown Multi-Select for Assignees */}
+                                            {showAssigneeDropdown && (
+                                                <div className="mt-3 p-3 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md shadow-sm animate-in fade-in slide-in-from-top-1">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search project members..."
+                                                        value={assigneeSearchQuery}
+                                                        onChange={(e) => setAssigneeSearchQuery(e.target.value)}
+                                                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#DFE1E6] rounded outline-none focus:border-[#0052CC] mb-2"
+                                                    />
+                                                    <div className="max-h-44 overflow-y-auto space-y-1 custom-scrollbar">
+                                                        {allUsers
+                                                            .filter(u => u.username.toLowerCase().includes(assigneeSearchQuery.toLowerCase()))
+                                                            .map(member => {
+                                                                const isAssigned = (selectedTask.assignees_details && selectedTask.assignees_details.some(a => a.id === member.id)) ||
+                                                                    (selectedTask.assignees && selectedTask.assignees.some(a => (typeof a === 'object' ? a.id : a) === member.id)) ||
+                                                                    selectedTask.assigned_to === member.id;
+
+                                                                return (
+                                                                    <button
+                                                                        key={member.id}
+                                                                        type="button"
+                                                                        onClick={() => handleToggleAssignee(member.id)}
+                                                                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition-colors ${
+                                                                            isAssigned ? 'bg-[#DEEBFF] text-[#0052CC] font-bold' : 'hover:bg-white text-[#172B4D]'
+                                                                        }`}
+                                                                    >
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="w-6 h-6 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[10px] font-bold">
+                                                                                {member.username?.[0]?.toUpperCase() || '?'}
+                                                                            </div>
+                                                                            <span>{member.username}</span>
+                                                                        </div>
+                                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                                                                            isAssigned ? 'bg-[#0052CC] border-[#0052CC] text-white' : 'border-[#DFE1E6] bg-white'
+                                                                        }`}>
+                                                                            {isAssigned && <Check size={11} />}
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                    </div>
                                                 </div>
+                                            )}
+                                        </div>
+
+                                        {/* Priority Section */}
+                                        <div>
+                                            <h4 className="text-xs font-bold text-[#5E6C84] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                <Flag size={14} className="text-[#5E6C84]" /> Priority
+                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                                <select
+                                                    className="px-2.5 py-1 rounded text-xs font-bold text-white outline-none cursor-pointer shadow-xs"
+                                                    style={{ backgroundColor: getPriorityColor(selectedTask.priority) }}
+                                                    value={selectedTask.priority || 'MEDIUM'}
+                                                    onChange={(e) => handleUpdateTask(selectedTask.id, { priority: e.target.value })}
+                                                >
+                                                    <option value="LOW" className="text-black bg-white">Low</option>
+                                                    <option value="MEDIUM" className="text-black bg-white">Medium</option>
+                                                    <option value="HIGH" className="text-black bg-white">High</option>
+                                                    <option value="CRITICAL" className="text-black bg-white">Critical</option>
+                                                </select>
                                             </div>
                                         </div>
-                                    )}
+                                    </div>
+
+                                    {/* Tags Section */}
+                                    <div className="p-4 bg-white rounded-lg border border-[#DFE1E6] shadow-xs space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="text-xs font-bold text-[#5E6C84] uppercase tracking-wider flex items-center gap-1.5">
+                                                <Tag size={14} className="text-[#5E6C84]" /> Tags
+                                            </h4>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowInlineTagCreate(!showInlineTagCreate)}
+                                                className="text-xs text-[#0052CC] hover:text-[#0747A6] font-bold flex items-center gap-1 transition-colors"
+                                            >
+                                                <Plus size={13} /> {showInlineTagCreate ? 'Cancel' : 'New Tag'}
+                                            </button>
+                                        </div>
+
+                                        {/* Current Task Tags Badges */}
+                                        <div className="flex flex-wrap items-center gap-1.5 min-h-[26px]">
+                                            {(() => {
+                                                const taskTags = (selectedTask.tags_details && selectedTask.tags_details.length > 0)
+                                                    ? selectedTask.tags_details
+                                                    : (selectedTask.tags || []).map(t => typeof t === 'object' ? t : availableTags.find(at => at.id === t)).filter(Boolean);
+
+                                                if (taskTags.length === 0) {
+                                                    return <span className="text-xs text-[#5E6C84] italic">No tags attached to this task.</span>;
+                                                }
+
+                                                return taskTags.map(tag => (
+                                                    <span
+                                                        key={tag.id}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-white shadow-xs"
+                                                        style={{ backgroundColor: tag.color || '#3B82F6' }}
+                                                    >
+                                                        <span>{tag.name}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleToggleTaskTag(selectedTask.id, tag.id)}
+                                                            className="hover:bg-black/20 rounded-full p-0.5 transition"
+                                                            title="Remove tag"
+                                                        >
+                                                            <X size={11} />
+                                                        </button>
+                                                    </span>
+                                                ));
+                                            })()}
+                                        </div>
+
+                                        {/* Available Tags Toggle Chips */}
+                                        {availableTags.length > 0 && (
+                                            <div className="pt-2 border-t border-[#DFE1E6]">
+                                                <p className="text-[11px] font-bold text-[#5E6C84] uppercase mb-1.5">Select tags to apply:</p>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {availableTags.map(tag => {
+                                                        const isSelected = (selectedTask.tags_details && selectedTask.tags_details.some(t => t.id === tag.id)) ||
+                                                            (selectedTask.tags && selectedTask.tags.some(t => (typeof t === 'object' ? t.id : t) === tag.id));
+
+                                                        return (
+                                                            <button
+                                                                key={tag.id}
+                                                                type="button"
+                                                                onClick={() => handleToggleTaskTag(selectedTask.id, tag.id)}
+                                                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all border ${
+                                                                    isSelected
+                                                                        ? 'text-white border-transparent shadow-xs'
+                                                                        : 'bg-white text-[#42526E] border-[#DFE1E6] hover:border-[#0052CC]'
+                                                                }`}
+                                                                style={isSelected ? { backgroundColor: tag.color || '#3B82F6' } : {}}
+                                                            >
+                                                                {isSelected && <Check size={11} />}
+                                                                <span>{tag.name}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Inline Create New Tag Form */}
+                                        {showInlineTagCreate && (
+                                            <div className="p-3 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md space-y-3 animate-in fade-in slide-in-from-top-1">
+                                                <h5 className="text-xs font-bold text-[#172B4D]">Create New Tag</h5>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Tag name (e.g. Bug, Frontend, Urgent)..."
+                                                        value={newTagName}
+                                                        onChange={(e) => setNewTagName(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                handleCreateInlineTag();
+                                                            }
+                                                        }}
+                                                        className="flex-1 px-3 py-1.5 bg-white border border-[#DFE1E6] rounded text-xs outline-none focus:border-[#0052CC]"
+                                                        autoFocus
+                                                    />
+                                                </div>
+
+                                                {/* 8 Preset Colors Swatches */}
+                                                <div>
+                                                    <label className="block text-[11px] font-bold text-[#5E6C84] uppercase mb-1.5">Choose Color</label>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {PRESET_TAG_COLORS.map(color => (
+                                                            <button
+                                                                key={color}
+                                                                type="button"
+                                                                onClick={() => setNewTagColor(color)}
+                                                                className={`w-6 h-6 rounded-full transition-transform flex items-center justify-center text-white ${
+                                                                    newTagColor === color ? 'scale-110 ring-2 ring-offset-2 ring-[#0052CC]' : 'hover:scale-105'
+                                                                }`}
+                                                                style={{ backgroundColor: color }}
+                                                                title={color}
+                                                            >
+                                                                {newTagColor === color && <Check size={12} />}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Preview & Action Buttons */}
+                                                <div className="flex items-center justify-between pt-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[11px] text-[#5E6C84]">Preview:</span>
+                                                        <span
+                                                            className="px-2.5 py-0.5 rounded-full text-xs font-bold text-white shadow-xs"
+                                                            style={{ backgroundColor: newTagColor }}
+                                                        >
+                                                            {newTagName.trim() || 'Preview'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowInlineTagCreate(false)}
+                                                            className="px-3 py-1 text-xs text-[#5E6C84] hover:bg-[#EBECF0] rounded font-bold"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isCreatingTag || !newTagName.trim()}
+                                                            onClick={handleCreateInlineTag}
+                                                            className="px-3 py-1 bg-[#0052CC] hover:bg-[#0747A6] text-white text-xs font-bold rounded disabled:opacity-50 transition"
+                                                        >
+                                                            {isCreatingTag ? 'Creating...' : 'Create Tag'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {/* Description */}
                                     <div>
@@ -3854,44 +4319,74 @@ const ProjectDetails = () => {
             {/* Members Modal */}
             {
                 showMembersModal && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowMembersModal(false)}>
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-xs" onClick={() => setShowMembersModal(false)}>
                         <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Members</h3>
+                                <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">
+                                    {selectedTask ? 'Assign Members' : 'Project Members'}
+                                </h3>
                                 <button onClick={() => setShowMembersModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
                                     <X size={16} className="text-[#5E6C84]" />
                                 </button>
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search members"
+                                placeholder="Search members..."
+                                value={memberSearchQuery}
+                                onChange={(e) => setMemberSearchQuery(e.target.value)}
                                 className="w-full px-3 py-2 mb-3 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0079BF]"
                             />
-                            <div className="space-y-1 max-h-64 overflow-y-auto">
-                                {allUsers.map((member) => {
-                                    const isProjectMember = project.members?.includes(member.id);
-                                    const isAssigned = selectedTask?.assigned_to === member.id;
+                            <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                {allUsers
+                                    .filter(u => u.username.toLowerCase().includes(memberSearchQuery.toLowerCase()))
+                                    .map((member) => {
+                                        const isProjectMember = project.members?.includes(member.id);
+                                        const isAssigned = selectedTask ? (
+                                            (selectedTask.assignees_details && selectedTask.assignees_details.some(a => a.id === member.id)) ||
+                                            (selectedTask.assignees && selectedTask.assignees.some(a => (typeof a === 'object' ? a.id : a) === member.id)) ||
+                                            selectedTask.assigned_to === member.id
+                                        ) : false;
 
-                                    return (
-                                        <button
-                                            key={member.id}
-                                            onClick={() => handleAssignMember(member.id)}
-                                            className="w-full flex items-center gap-3 p-2 rounded hover:bg-[#F4F5F7] transition-colors"
-                                        >
-                                            <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold">
-                                                {member.username?.[0]?.toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <p className="text-sm text-[#172B4D]">{member.username}</p>
-                                                {isProjectMember && !selectedTask && <p className="text-[10px] text-[#00875A] font-bold uppercase">Member</p>}
-                                            </div>
-                                            {(isAssigned || (isProjectMember && !selectedTask)) && (
-                                                <span className="ml-auto text-[#0079BF]">✓</span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
+                                        return (
+                                            <button
+                                                key={member.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    if (selectedTask) {
+                                                        handleToggleAssignee(member.id);
+                                                    } else {
+                                                        handleAssignMember(member.id);
+                                                    }
+                                                }}
+                                                className={`w-full flex items-center gap-3 p-2 rounded transition-colors ${
+                                                    isAssigned ? 'bg-[#DEEBFF] text-[#0052CC] font-bold' : 'hover:bg-[#F4F5F7]'
+                                                }`}
+                                            >
+                                                <div className="w-8 h-8 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-xs font-semibold">
+                                                    {member.username?.[0]?.toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 text-left">
+                                                    <p className="text-sm text-[#172B4D]">{member.username}</p>
+                                                    {isProjectMember && !selectedTask && <p className="text-[10px] text-[#00875A] font-bold uppercase">Member</p>}
+                                                </div>
+                                                {(isAssigned || (isProjectMember && !selectedTask)) && (
+                                                    <span className="ml-auto text-[#0052CC] font-bold">✓</span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
                             </div>
+                            {selectedTask && (
+                                <div className="mt-4 pt-3 border-t border-[#DFE1E6] flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMembersModal(false)}
+                                        className="px-4 py-1.5 bg-[#0052CC] hover:bg-[#0747A6] text-white text-xs font-bold rounded transition"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )
@@ -3900,26 +4395,101 @@ const ProjectDetails = () => {
             {/* Labels Modal */}
             {
                 showLabelsModal && selectedTask && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={() => setShowLabelsModal(false)}>
-                        <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Labels</h3>
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-xs" onClick={() => setShowLabelsModal(false)}>
+                        <div className="bg-white rounded-lg w-full max-w-sm p-4 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto custom-scrollbar" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-[#5E6C84] uppercase">Labels & Tags</h3>
                                 <button onClick={() => setShowLabelsModal(false)} className="p-1 hover:bg-[#EBECF0] rounded">
                                     <X size={16} className="text-[#5E6C84]" />
                                 </button>
                             </div>
-                            <div className="space-y-2">
-                                {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((priority) => (
-                                    <button
-                                        key={priority}
-                                        onClick={() => handleUpdatePriority(priority)}
-                                        className="w-full flex items-center gap-3 p-3 rounded hover:opacity-90 transition-opacity text-white font-medium"
-                                        style={{ backgroundColor: getPriorityColor(priority) }}
-                                    >
-                                        {priority}
-                                        {selectedTask.priority === priority && <span className="ml-auto">✓</span>}
-                                    </button>
-                                ))}
+
+                            {/* Tags in Labels Modal */}
+                            <div>
+                                <h4 className="text-xs font-bold text-[#5E6C84] uppercase tracking-wider mb-2">Task Tags</h4>
+                                {availableTags.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5 mb-3">
+                                        {availableTags.map(tag => {
+                                            const isSelected = (selectedTask.tags_details && selectedTask.tags_details.some(t => t.id === tag.id)) ||
+                                                (selectedTask.tags && selectedTask.tags.some(t => (typeof t === 'object' ? t.id : t) === tag.id));
+
+                                            return (
+                                                <button
+                                                    key={tag.id}
+                                                    type="button"
+                                                    onClick={() => handleToggleTaskTag(selectedTask.id, tag.id)}
+                                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all border ${
+                                                        isSelected
+                                                            ? 'text-white border-transparent shadow-xs'
+                                                            : 'bg-white text-[#42526E] border-[#DFE1E6] hover:border-[#0052CC]'
+                                                    }`}
+                                                    style={isSelected ? { backgroundColor: tag.color || '#3B82F6' } : {}}
+                                                >
+                                                    {isSelected && <Check size={11} />}
+                                                    <span>{tag.name}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-[#5E6C84] italic mb-2">No tags available yet.</p>
+                                )}
+
+                                {/* Inline Create New Tag in Modal */}
+                                <div className="p-2.5 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md space-y-2">
+                                    <p className="text-[11px] font-bold text-[#172B4D]">Create Tag</p>
+                                    <input
+                                        type="text"
+                                        placeholder="New tag name..."
+                                        value={newTagName}
+                                        onChange={(e) => setNewTagName(e.target.value)}
+                                        className="w-full px-2.5 py-1 text-xs bg-white border border-[#DFE1E6] rounded outline-none focus:border-[#0052CC]"
+                                    />
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        {PRESET_TAG_COLORS.map(color => (
+                                            <button
+                                                key={color}
+                                                type="button"
+                                                onClick={() => setNewTagColor(color)}
+                                                className={`w-5 h-5 rounded-full transition-transform flex items-center justify-center text-white ${
+                                                    newTagColor === color ? 'scale-110 ring-2 ring-offset-1 ring-[#0052CC]' : 'hover:scale-105'
+                                                }`}
+                                                style={{ backgroundColor: color }}
+                                            >
+                                                {newTagColor === color && <Check size={10} />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex justify-end pt-1">
+                                        <button
+                                            type="button"
+                                            disabled={isCreatingTag || !newTagName.trim()}
+                                            onClick={handleCreateInlineTag}
+                                            className="px-2.5 py-1 bg-[#0052CC] hover:bg-[#0747A6] text-white text-xs font-bold rounded disabled:opacity-50 transition"
+                                        >
+                                            {isCreatingTag ? 'Creating...' : 'Create'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Priority in Labels Modal */}
+                            <div className="pt-2 border-t border-[#DFE1E6]">
+                                <h4 className="text-xs font-bold text-[#5E6C84] uppercase tracking-wider mb-2">Priority</h4>
+                                <div className="space-y-1.5">
+                                    {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((priority) => (
+                                        <button
+                                            key={priority}
+                                            type="button"
+                                            onClick={() => handleUpdatePriority(priority)}
+                                            className="w-full flex items-center gap-3 p-2 rounded hover:opacity-90 transition-opacity text-white font-medium text-xs shadow-xs"
+                                            style={{ backgroundColor: getPriorityColor(priority) }}
+                                        >
+                                            <span>{priority}</span>
+                                            {selectedTask.priority === priority && <span className="ml-auto">✓</span>}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -4471,10 +5041,48 @@ const ProjectDetails = () => {
                                     />
                                 </div>
 
-                                {availableTags.length > 0 && (
-                                    <div>
-                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-2">Labels / Tags</label>
-                                        <div className="flex flex-wrap gap-2">
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Assignees</label>
+                                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar p-1">
+                                        {allUsers.map(member => {
+                                            const isSelected = selectedAssigneeIds.includes(member.id);
+                                            return (
+                                                <button
+                                                    key={member.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedAssigneeIds(prev =>
+                                                        prev.includes(member.id) ? prev.filter(id => id !== member.id) : [...prev, member.id]
+                                                    )}
+                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${
+                                                        isSelected
+                                                            ? 'bg-[#0052CC] text-white border-[#0052CC] shadow-xs'
+                                                            : 'bg-white text-[#42526E] border-[#DFE1E6] hover:border-[#0052CC]'
+                                                    }`}
+                                                >
+                                                    <div className="w-4 h-4 rounded-full bg-white/20 text-current flex items-center justify-center text-[9px]">
+                                                        {member.username?.[0]?.toUpperCase()}
+                                                    </div>
+                                                    <span>{member.username}</span>
+                                                    {isSelected && <Check size={11} />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase">Labels / Tags</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowInlineTagCreate(!showInlineTagCreate)}
+                                            className="text-[11px] text-[#0052CC] font-bold hover:underline flex items-center gap-1"
+                                        >
+                                            <Plus size={12} /> {showInlineTagCreate ? 'Cancel' : 'New Tag'}
+                                        </button>
+                                    </div>
+                                    {availableTags.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-2">
                                             {availableTags.map(tag => (
                                                 <button
                                                     key={tag.id}
@@ -4489,8 +5097,44 @@ const ProjectDetails = () => {
                                                 </button>
                                             ))}
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                    {showInlineTagCreate && (
+                                        <div className="p-2.5 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md space-y-2">
+                                            <input
+                                                type="text"
+                                                placeholder="New tag name..."
+                                                value={newTagName}
+                                                onChange={(e) => setNewTagName(e.target.value)}
+                                                className="w-full px-2.5 py-1 text-xs bg-white border border-[#DFE1E6] rounded outline-none focus:border-[#0052CC]"
+                                            />
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {PRESET_TAG_COLORS.map(color => (
+                                                    <button
+                                                        key={color}
+                                                        type="button"
+                                                        onClick={() => setNewTagColor(color)}
+                                                        className={`w-5 h-5 rounded-full transition-transform flex items-center justify-center text-white ${
+                                                            newTagColor === color ? 'scale-110 ring-2 ring-offset-1 ring-[#0052CC]' : 'hover:scale-105'
+                                                        }`}
+                                                        style={{ backgroundColor: color }}
+                                                    >
+                                                        {newTagColor === color && <Check size={10} />}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <div className="flex justify-end pt-1">
+                                                <button
+                                                    type="button"
+                                                    disabled={isCreatingTag || !newTagName.trim()}
+                                                    onClick={handleCreateInlineTag}
+                                                    className="px-2.5 py-1 bg-[#0052CC] hover:bg-[#0747A6] text-white text-xs font-bold rounded disabled:opacity-50 transition"
+                                                >
+                                                    {isCreatingTag ? 'Creating...' : 'Create'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
 
                                 <div className="border-t border-[#DFE1E6] pt-4">
                                     <div className="flex items-center justify-between">
