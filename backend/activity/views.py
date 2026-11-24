@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from users.utils import user_role_in
 from .models import Comment, Attachment, AuditLog
 from .serializers import CommentSerializer, AttachmentSerializer, AuditLogSerializer
+import re
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all().order_by('-created_at')
@@ -11,7 +12,38 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        comment = serializer.save(user=self.request.user)
+        # Parse @mentions from comment text and send notifications
+        self._process_mentions(comment)
+
+    def _process_mentions(self, comment):
+        try:
+            from django.contrib.auth import get_user_model
+            from collaboration.models import Notification
+            from django.contrib.contenttypes.models import ContentType
+            
+            User = get_user_model()
+            # Extract @username patterns (alphanumeric and underscore)
+            mentioned_usernames = set(re.findall(r'@([a-zA-Z0-9_\.\-]+)', comment.text))
+            if not mentioned_usernames:
+                return
+
+            # Lookup users in the database
+            users = User.objects.filter(username__in=mentioned_usernames).exclude(id=self.request.user.id)
+            ct = ContentType.objects.get_for_model(comment)
+            
+            for u in users:
+                preview = (comment.text[:80] + '...') if len(comment.text) > 80 else comment.text
+                Notification.objects.create(
+                    user=u,
+                    actor=self.request.user,
+                    verb='mentioned you in a comment',
+                    description=f'"{preview}"',
+                    content_type=ct,
+                    object_id=comment.id
+                )
+        except Exception:
+            pass
 
     def get_queryset(self):
         user = self.request.user

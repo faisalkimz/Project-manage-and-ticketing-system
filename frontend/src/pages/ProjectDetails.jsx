@@ -4126,7 +4126,7 @@ const ProjectDetails = () => {
                                             </div>
                                             <input
                                                 type="text"
-                                                placeholder="Write a comment..."
+                                                placeholder="Write a comment... (Type @username to mention a teammate)"
                                                 className="flex-1 px-3 py-2 bg-white border border-[#DFE1E6] rounded text-sm outline-none hover:border-[#0079BF] focus:border-[#0079BF]"
                                                 value={newComment}
                                                 onChange={(e) => setNewComment(e.target.value)}

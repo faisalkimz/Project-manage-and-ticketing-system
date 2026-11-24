@@ -224,7 +224,7 @@ Maturity classifications:
 | Comment reactions | ✅ Fully | ✅ Reaction buttons | ✅ Reaction model | Working |
 | Project chat | ✅ Fully | ✅ Collaboration tab | ✅ ChatMessage model | Working — not real-time |
 | Announcements | ✅ Fully | ✅ Collaboration tab | ✅ Announcement model | Working |
-| Mentions (@user) | ❌ Missing | ❌ | ❌ | No @mention system |
+| Mentions (@user) | ✅ Fully | ✅ Mention parsing in comments + notifications | ✅ Regex parser + Notification model | Working |
 | Real-time updates | ❌ Missing | ❌ | ❌ | No WebSockets/Django Channels |
 | File sharing in chat | ⚠️ Partial | ❌ No file in chat | ✅ ChatMessage.file field | Backend field, no upload UI |
 | Team chat (org-level) | ❌ Missing | ❌ | ❌ | Only project-level chat |
