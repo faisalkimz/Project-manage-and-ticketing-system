@@ -2,9 +2,14 @@ from rest_framework import serializers
 from .models import (
     Project, Task, TaskChecklistItem, Tag, Milestone, ProjectCategory, 
     Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
-    Release, SprintRetrospective, SprintCapacity, TaskHistory
+    Release, SprintRetrospective, SprintCapacity, TaskHistory, CustomFieldDefinition
 )
 from users.serializers import UserSerializer
+
+class CustomFieldDefinitionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomFieldDefinition
+        fields = '__all__'
 
 class ProjectCategorySerializer(serializers.ModelSerializer):
     class Meta:

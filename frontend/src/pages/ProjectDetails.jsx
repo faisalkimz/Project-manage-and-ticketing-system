@@ -137,6 +137,7 @@ const ProjectDetails = () => {
         '#6B7280'
     ];
     const [availableTags, setAvailableTags] = useState([]);
+    const [customFieldDefs, setCustomFieldDefs] = useState([]);
     const [selectedTagIds, setSelectedTagIds] = useState([]);
     const [selectedAssigneeIds, setSelectedAssigneeIds] = useState([]);
     const [newTagName, setNewTagName] = useState('');
@@ -180,6 +181,12 @@ const ProjectDetails = () => {
             try {
                 const tagsRes = await api.get('/projects/tags/');
                 setAvailableTags(Array.isArray(tagsRes.data) ? tagsRes.data : (tagsRes.data?.results || []));
+            } catch (_) {}
+
+            // Fetch custom field definitions for the project
+            try {
+                const cfRes = await api.get(`/projects/custom-fields/?project_id=${id}`);
+                setCustomFieldDefs(Array.isArray(cfRes.data) ? cfRes.data : (cfRes.data?.results || []));
             } catch (_) {}
 
             // Fetch time tracking data
@@ -3748,6 +3755,102 @@ const ProjectDetails = () => {
                                             </div>
                                         )}
                                     </div>
+
+                                    {/* Custom Fields Section */}
+                                    {customFieldDefs && customFieldDefs.length > 0 && (
+                                        <div className="bg-[#FAFBFC] border border-[#DFE1E6] rounded-md p-3.5 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-bold text-[#5E6C84] uppercase tracking-wider flex items-center gap-1.5">
+                                                    <Sliders size={13} className="text-[#0052CC]" /> Custom Fields
+                                                </h4>
+                                                <span className="text-[11px] text-[#5E6C84]">{customFieldDefs.length} field{customFieldDefs.length !== 1 ? 's' : ''} defined</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {customFieldDefs.map(def => {
+                                                    const currentVal = selectedTask.custom_fields?.[def.name] ?? '';
+                                                    return (
+                                                        <div key={def.id} className="space-y-1">
+                                                            <label className="block text-xs font-semibold text-[#172B4D]">
+                                                                {def.name} {def.is_required && <span className="text-red-500">*</span>}
+                                                            </label>
+                                                            {def.field_type === 'SELECT' ? (
+                                                                <select
+                                                                    value={currentVal}
+                                                                    onChange={async (e) => {
+                                                                        const nextFields = { ...(selectedTask.custom_fields || {}), [def.name]: e.target.value };
+                                                                        await handleUpdateTask(selectedTask.id, { custom_fields: nextFields });
+                                                                    }}
+                                                                    className="w-full text-xs border border-[#DFE1E6] rounded px-2.5 py-1.5 bg-white text-[#172B4D] focus:border-[#0052CC] outline-none"
+                                                                >
+                                                                    <option value="">-- Select option --</option>
+                                                                    {(def.options || []).map((opt, i) => (
+                                                                        <option key={i} value={opt}>{opt}</option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : def.field_type === 'BOOLEAN' ? (
+                                                                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={Boolean(currentVal)}
+                                                                        onChange={async (e) => {
+                                                                            const nextFields = { ...(selectedTask.custom_fields || {}), [def.name]: e.target.checked };
+                                                                            await handleUpdateTask(selectedTask.id, { custom_fields: nextFields });
+                                                                        }}
+                                                                        className="rounded border-[#DFE1E6] text-[#0052CC] focus:ring-0"
+                                                                    />
+                                                                    <span className="text-xs text-[#172B4D]">{def.name}</span>
+                                                                </label>
+                                                            ) : def.field_type === 'NUMBER' ? (
+                                                                <input
+                                                                    type="number"
+                                                                    value={currentVal}
+                                                                    placeholder={`Enter ${def.name}...`}
+                                                                    onBlur={async (e) => {
+                                                                        const nextFields = { ...(selectedTask.custom_fields || {}), [def.name]: e.target.value ? Number(e.target.value) : null };
+                                                                        await handleUpdateTask(selectedTask.id, { custom_fields: nextFields });
+                                                                    }}
+                                                                    onChange={(e) => {
+                                                                        setSelectedTask(prev => ({
+                                                                            ...prev,
+                                                                            custom_fields: { ...(prev.custom_fields || {}), [def.name]: e.target.value }
+                                                                        }));
+                                                                    }}
+                                                                    className="w-full text-xs border border-[#DFE1E6] rounded px-2.5 py-1.5 bg-white text-[#172B4D] focus:border-[#0052CC] outline-none"
+                                                                />
+                                                            ) : def.field_type === 'DATE' ? (
+                                                                <input
+                                                                    type="date"
+                                                                    value={currentVal}
+                                                                    onChange={async (e) => {
+                                                                        const nextFields = { ...(selectedTask.custom_fields || {}), [def.name]: e.target.value };
+                                                                        await handleUpdateTask(selectedTask.id, { custom_fields: nextFields });
+                                                                    }}
+                                                                    className="w-full text-xs border border-[#DFE1E6] rounded px-2.5 py-1.5 bg-white text-[#172B4D] focus:border-[#0052CC] outline-none"
+                                                                />
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={currentVal}
+                                                                    placeholder={`Enter ${def.name}...`}
+                                                                    onBlur={async (e) => {
+                                                                        const nextFields = { ...(selectedTask.custom_fields || {}), [def.name]: e.target.value };
+                                                                        await handleUpdateTask(selectedTask.id, { custom_fields: nextFields });
+                                                                    }}
+                                                                    onChange={(e) => {
+                                                                        setSelectedTask(prev => ({
+                                                                            ...prev,
+                                                                            custom_fields: { ...(prev.custom_fields || {}), [def.name]: e.target.value }
+                                                                        }));
+                                                                    }}
+                                                                    className="w-full text-xs border border-[#DFE1E6] rounded px-2.5 py-1.5 bg-white text-[#172B4D] focus:border-[#0052CC] outline-none"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Description */}
                                     <div>

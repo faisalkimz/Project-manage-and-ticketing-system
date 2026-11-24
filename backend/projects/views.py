@@ -8,14 +8,14 @@ from activity.models import AuditLog
 from .models import (
     Project, Task, TaskChecklistItem, Tag, Milestone, ProjectCategory,
     Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
-    Release, SprintRetrospective, SprintCapacity, TaskHistory
+    Release, SprintRetrospective, SprintCapacity, TaskHistory, CustomFieldDefinition
 )
 from .serializers import (
     ProjectSerializer, TaskSerializer, TaskChecklistItemSerializer, TagSerializer, MilestoneSerializer,
     ProjectCategorySerializer, PortfolioSerializer, ProgramSerializer,
     ProjectGoalSerializer, DeliverableSerializer, ProjectStatusSerializer,
     SprintSerializer, ReleaseSerializer, SprintRetrospectiveSerializer,
-    SprintCapacitySerializer, ReminderSerializer
+    SprintCapacitySerializer, ReminderSerializer, CustomFieldDefinitionSerializer
 )
 # Import Ticket model lazily to avoid circular imports in some test setups
 try:
@@ -661,4 +661,17 @@ class SprintCapacityViewSet(viewsets.ModelViewSet):
         if sprint_id:
             return SprintCapacity.objects.filter(sprint_id=sprint_id)
         return SprintCapacity.objects.all()
+
+
+class CustomFieldDefinitionViewSet(viewsets.ModelViewSet):
+    queryset = CustomFieldDefinition.objects.all()
+    serializer_class = CustomFieldDefinitionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            return CustomFieldDefinition.objects.filter(project_id=project_id)
+        return CustomFieldDefinition.objects.all()
+
 

@@ -5,7 +5,7 @@ from .views import (
     ProjectCategoryViewSet, PortfolioViewSet, ProgramViewSet,
     ProjectGoalViewSet, DeliverableViewSet, ProjectStatusViewSet,
     SprintViewSet, ReleaseViewSet, SprintRetrospectiveViewSet, SprintCapacityViewSet,
-    RemindersViewSet
+    RemindersViewSet, CustomFieldDefinitionViewSet
 )
 
 router = DefaultRouter()
@@ -13,6 +13,7 @@ router.register(r'projects', ProjectViewSet)
 router.register(r'tasks', TaskViewSet)
 router.register(r'checklists', TaskChecklistItemViewSet)
 router.register(r'tags', TagViewSet)
+router.register(r'custom-fields', CustomFieldDefinitionViewSet)
 router.register(r'milestones', MilestoneViewSet)
 router.register(r'categories', ProjectCategoryViewSet)
 router.register(r'portfolios', PortfolioViewSet)
