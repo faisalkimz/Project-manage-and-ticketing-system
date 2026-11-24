@@ -98,12 +98,12 @@ Maturity classifications:
 | Story points | ✅ Fully | ✅ Story points field | ✅ story_points field | Working |
 | Task description | ✅ Fully | ✅ Text area | ✅ TextField | Plain text only — no rich text |
 | Task assignment (single) | ✅ Fully | ✅ Member assignment | ✅ assigned_to FK | Working |
-| Multiple assignees | ❌ Missing | ❌ | ❌ | Only one assignee per task |
+| Multiple assignees | ✅ Fully | ✅ Multi-assignee picker + stacked avatars | ✅ M2M assignees | Working |
 | Subtasks | ✅ Fully | ✅ Subtask input | ✅ parent_task FK | Working |
 | Task dependencies | ✅ Fully | ✅ Dependency search | ✅ M2M dependencies | Working |
-| Task watchers | 🔧 Backend | ❌ No UI | ✅ watchers M2M | Backend only |
-| Tags/Labels | ⚠️ Partial | ❌ No tag UI on tasks | ✅ Tag M2M | Model exists, no frontend tag manager |
-| Custom fields | ⚠️ Partial | ❌ No custom field UI | ✅ custom_fields JSONField + definitions | Backend only |
+| Task watchers | ✅ Fully | ✅ Watch toggle button in modal | ✅ watchers M2M | Working |
+| Tags/Labels | ✅ Fully | ✅ Tag selector chips + inline create | ✅ Tag model + API | Working |
+| Custom fields | ✅ Fully | ✅ Dynamic inputs (text/num/date/check/select) | ✅ CustomFieldDefinition API | Working |
 | Task comments | ✅ Fully | ✅ Comment section | ✅ Generic Comment model | Working |
 | File attachments | ✅ Fully | ✅ Attachment modal | ✅ Generic Attachment model | Working |
 | Reactions on comments | ✅ Fully | ✅ Reaction buttons | ✅ Reaction model | Working |
@@ -259,7 +259,7 @@ Maturity classifications:
 | Trigger types (8 types) | ✅ Fully | — | ✅ TriggerType choices | Comprehensive |
 | Actions (JSON config) | ✅ Fully | — | ✅ actions JSONField | Flexible |
 | Scheduled automation | 🔧 Backend | ❌ | ✅ schedule_cron field | No Celery = not executing |
-| Webhook delivery | ⚠️ Partial | ❌ No webhook UI | ✅ Webhook model + send_webhook | Backend solid, no frontend |
+| Webhook delivery | ✅ Fully | ✅ Webhooks management tab + logs modal | ✅ Webhook model + send_webhook | Working |
 | Automation templates | 🔧 Backend | ❌ No UI | ✅ AutomationTemplate model | Backend only |
 | Automation execution log | 🔧 Backend | ❌ No UI | ✅ WorkflowExecution model | Backend only |
 | Automation builder UI | ❌ Missing | ❌ | — | Critical gap — the entire frontend |
