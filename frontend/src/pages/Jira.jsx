@@ -44,6 +44,12 @@ const Jira = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('ALL');
     const [statusFilter, setStatusFilter] = useState('ALL');
+    const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
+    const [savedViews, setSavedViews] = useState([]);
+    const [activeSavedViewId, setActiveSavedViewId] = useState(null);
+    const [isSaveViewModalOpen, setIsSaveViewModalOpen] = useState(false);
+    const [newViewName, setNewViewName] = useState('');
+    const [newViewShared, setNewViewShared] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
 
     useEffect(() => {
@@ -96,7 +102,93 @@ const Jira = () => {
     useEffect(() => {
         fetchTasks();
         fetchProjects();
+        fetchSavedViews();
     }, []);
+
+    const fetchSavedViews = async () => {
+        try {
+            const res = await api.get('/knowledge/saved-views/');
+            const views = (res.data || []).filter(v => !v.view_type || v.view_type === 'task');
+            setSavedViews(views);
+            const defaultView = views.find(v => v.is_default);
+            if (defaultView) {
+                applySavedView(defaultView, true);
+            }
+        } catch (error) {
+            console.error('Failed to fetch saved views', error);
+        }
+    };
+
+    const applySavedView = (sv, silent = false) => {
+        const f = sv.filters || {};
+        setStatusFilter(f.statusFilter || 'ALL');
+        setPriorityFilter(f.priorityFilter || 'ALL');
+        setSearchQuery(f.searchQuery || '');
+        setAssignedToMeOnly(!!f.assignedToMeOnly);
+        if (f.view) setView(f.view);
+        setActiveSavedViewId(sv.id);
+        setActiveDropdown(null);
+        if (!silent) showToast(`Applied view "${sv.name}"`, 'info');
+    };
+
+    const handleSaveCurrentView = async (e) => {
+        e.preventDefault();
+        if (!newViewName.trim()) return;
+        try {
+            const res = await api.post('/knowledge/saved-views/', {
+                name: newViewName.trim(),
+                view_type: 'task',
+                is_shared: newViewShared,
+                filters: {
+                    statusFilter,
+                    priorityFilter,
+                    searchQuery,
+                    assignedToMeOnly,
+                    view
+                }
+            });
+            setSavedViews([...savedViews, res.data]);
+            setActiveSavedViewId(res.data.id);
+            setNewViewName('');
+            setNewViewShared(false);
+            setIsSaveViewModalOpen(false);
+            showToast(`Saved view "${res.data.name}"!`, 'success');
+        } catch (error) {
+            showToast('Failed to save view.', 'error');
+        }
+    };
+
+    const handleSetDefaultView = async (e, svId) => {
+        e.stopPropagation();
+        try {
+            await api.post(`/knowledge/saved-views/${svId}/set_default/`);
+            setSavedViews(savedViews.map(v => ({ ...v, is_default: v.id === svId })));
+            showToast('Default view updated.', 'success');
+        } catch (error) {
+            showToast('Failed to set default view.', 'error');
+        }
+    };
+
+    const handleDeleteSavedView = async (e, svId) => {
+        e.stopPropagation();
+        try {
+            await api.delete(`/knowledge/saved-views/${svId}/`);
+            setSavedViews(savedViews.filter(v => v.id !== svId));
+            if (activeSavedViewId === svId) setActiveSavedViewId(null);
+            showToast('Saved view deleted.', 'info');
+        } catch (error) {
+            showToast('Failed to delete saved view.', 'error');
+        }
+    };
+
+    const resetFilters = () => {
+        setStatusFilter('ALL');
+        setPriorityFilter('ALL');
+        setSearchQuery('');
+        setAssignedToMeOnly(false);
+        setActiveSavedViewId(null);
+        setActiveDropdown(null);
+    };
 
     const fetchTasks = async () => {
         try {
@@ -166,7 +258,8 @@ const Jira = () => {
         const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesPriority = priorityFilter === 'ALL' || task.priority === priorityFilter;
         const matchesStatus = statusFilter === 'ALL' || task.status === statusFilter;
-        return matchesSearch && matchesPriority && matchesStatus;
+        const matchesAssignee = !assignedToMeOnly || task.assigned_to === user?.id || (Array.isArray(task.assignees) && task.assignees.includes(user?.id));
+        return matchesSearch && matchesPriority && matchesStatus && matchesAssignee;
     });
 
     if (loading) return (
@@ -238,17 +331,72 @@ const Jira = () => {
                         <div className="relative">
                             <button
                                 onClick={() => setActiveDropdown(activeDropdown === 'filters' ? null : 'filters')}
-                                className="px-3 py-1.5 text-sm font-medium text-[#42526E] hover:bg-[#F4F5F7] rounded-sm flex items-center gap-1 whitespace-nowrap transition-colors"
+                                className={`px-3 py-1.5 text-sm font-medium rounded-sm flex items-center gap-1 whitespace-nowrap transition-colors ${activeSavedViewId ? 'bg-[#DEEBFF] text-[#0052CC]' : 'text-[#42526E] hover:bg-[#F4F5F7]'}`}
                             >
                                 Filters <ChevronDown size={14} />
                             </button>
                             {activeDropdown === 'filters' && (
-                                <div className="absolute top-full left-0 w-64 bg-white border border-[#DFE1E6] shadow-xl rounded-sm py-2 z-50 animate-in fade-in slide-in-from-top-1 duration-200">
-                                    <div className="px-3 py-1 text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">Saved Filters</div>
-                                    <button className="w-full text-left px-3 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">My open issues</button>
-                                    <button className="w-full text-left px-3 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]">Reported by me</button>
+                                <div className="absolute top-full left-0 w-72 bg-white border border-[#DFE1E6] shadow-xl rounded-sm py-2 z-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <div className="px-3 py-1 text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">Quick Filters</div>
+                                    <button
+                                        onClick={() => { setAssignedToMeOnly(true); setStatusFilter('ALL'); setPriorityFilter('ALL'); setActiveSavedViewId(null); setActiveDropdown(null); }}
+                                        className="w-full text-left px-3 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]"
+                                    >
+                                        My open issues
+                                    </button>
+                                    <button
+                                        onClick={() => { setPriorityFilter('CRITICAL'); setStatusFilter('ALL'); setAssignedToMeOnly(false); setActiveSavedViewId(null); setActiveDropdown(null); }}
+                                        className="w-full text-left px-3 py-2 text-sm text-[#172B4D] hover:bg-[#F4F5F7]"
+                                    >
+                                        Critical priority
+                                    </button>
+                                    <button
+                                        onClick={resetFilters}
+                                        className="w-full text-left px-3 py-1.5 text-xs text-[#5E6C84] hover:bg-[#F4F5F7]"
+                                    >
+                                        Reset all filters
+                                    </button>
+
+                                    <div className="mx-2 my-1.5 border-t border-[#DFE1E6]" />
+                                    <div className="px-3 py-1 text-[10px] font-bold text-[#5E6C84] uppercase tracking-wider">Saved Views</div>
+                                    {savedViews.length === 0 ? (
+                                        <div className="px-3 py-2 text-xs text-[#5E6C84] italic">No saved views yet</div>
+                                    ) : (
+                                        savedViews.map(sv => (
+                                            <div
+                                                key={sv.id}
+                                                onClick={() => applySavedView(sv)}
+                                                className={`px-3 py-2 text-sm hover:bg-[#F4F5F7] flex items-center justify-between cursor-pointer ${activeSavedViewId === sv.id ? 'bg-[#DEEBFF]/50 text-[#0052CC] font-semibold' : 'text-[#172B4D]'}`}
+                                            >
+                                                <span className="truncate flex-1">{sv.name}</span>
+                                                <div className="flex items-center gap-1 ml-2 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => handleSetDefaultView(e, sv.id)}
+                                                        title={sv.is_default ? 'Default view' : 'Set as default'}
+                                                        className={`p-1 rounded hover:bg-[#DFE1E6] ${sv.is_default ? 'text-[#FFAB00]' : 'text-[#5E6C84]'}`}
+                                                    >
+                                                        <Star size={12} className={sv.is_default ? 'fill-[#FFAB00]' : ''} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => handleDeleteSavedView(e, sv.id)}
+                                                        title="Delete view"
+                                                        className="p-1 rounded hover:bg-[#FFEBE6] text-[#5E6C84] hover:text-[#DE350B]"
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
                                     <div className="mx-2 my-1 border-t border-[#DFE1E6]" />
-                                    <button className="w-full text-left px-3 py-2 text-sm text-[#0052CC] font-medium hover:bg-[#F4F5F7]">View all filters</button>
+                                    <button
+                                        onClick={() => { setActiveDropdown(null); setIsSaveViewModalOpen(true); }}
+                                        className="w-full text-left px-3 py-2 text-sm text-[#0052CC] font-medium hover:bg-[#F4F5F7] flex items-center gap-1.5"
+                                    >
+                                        <Bookmark size={14} /> Save current filter as view
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -336,11 +484,11 @@ const Jira = () => {
                             </button>
                         </div>
                         <div className="h-4 w-px bg-[#DFE1E6] hidden sm:block" />
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <select
                                 className="text-sm font-medium text-[#42526E] bg-[#FAFBFC] border border-[#DFE1E6] px-3 py-1 rounded-sm focus:border-[#0052CC] outline-none"
                                 value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
+                                onChange={(e) => { setStatusFilter(e.target.value); setActiveSavedViewId(null); }}
                             >
                                 <option value="ALL">All Statuses</option>
                                 {columns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
@@ -348,7 +496,7 @@ const Jira = () => {
                             <select
                                 className="text-sm font-medium text-[#42526E] bg-[#FAFBFC] border border-[#DFE1E6] px-3 py-1 rounded-sm focus:border-[#0052CC] outline-none"
                                 value={priorityFilter}
-                                onChange={(e) => setPriorityFilter(e.target.value)}
+                                onChange={(e) => { setPriorityFilter(e.target.value); setActiveSavedViewId(null); }}
                             >
                                 <option value="ALL">All Priorities</option>
                                 <option value="LOW">Low</option>
@@ -356,6 +504,20 @@ const Jira = () => {
                                 <option value="HIGH">High</option>
                                 <option value="CRITICAL">Critical</option>
                             </select>
+                            <button
+                                type="button"
+                                onClick={() => { setAssignedToMeOnly(!assignedToMeOnly); setActiveSavedViewId(null); }}
+                                className={`px-3 py-1 rounded-sm text-xs font-semibold border transition-colors ${assignedToMeOnly ? 'bg-[#DEEBFF] text-[#0052CC] border-[#0052CC]' : 'bg-[#FAFBFC] text-[#42526E] border-[#DFE1E6] hover:bg-[#EBECF0]'}`}
+                            >
+                                Assigned to me
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsSaveViewModalOpen(true)}
+                                className="px-3 py-1 rounded-sm text-xs font-semibold bg-[#FAFBFC] text-[#0052CC] border border-[#DFE1E6] hover:bg-[#DEEBFF] flex items-center gap-1 transition-colors"
+                            >
+                                <Bookmark size={12} /> Save View
+                            </button>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs font-bold text-[#5E6C84] uppercase tracking-wider self-end md:self-auto">
@@ -697,6 +859,52 @@ const Jira = () => {
                             <div className="p-4 border-t border-[#DFE1E6] flex justify-end gap-2 bg-[#F4F5F7]">
                                 <button type="button" onClick={() => setIsAddColumnModalOpen(false)} className="px-4 py-2 hover:bg-[#EBECF0] rounded text-sm font-medium text-[#42526E]">Cancel</button>
                                 <button type="submit" className="px-4 py-2 bg-[#0052CC] text-white rounded hover:bg-[#0065FF] text-sm font-bold shadow-sm">Add Column</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Save View Modal */}
+            {isSaveViewModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setIsSaveViewModalOpen(false)}>
+                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                        <form onSubmit={handleSaveCurrentView}>
+                            <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between">
+                                <h3 className="font-bold text-[#172B4D]">Save Filter View</h3>
+                                <button type="button" onClick={() => setIsSaveViewModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded text-[#5E6C84]">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-4 space-y-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1.5">View Name</label>
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        required
+                                        className="w-full px-3 py-2 bg-[#FAFBFC] border-2 border-[#DFE1E6] rounded-sm focus:bg-white focus:border-[#0052CC] outline-none transition-all text-sm font-medium"
+                                        placeholder="e.g. My High Priority Tasks"
+                                        value={newViewName}
+                                        onChange={e => setNewViewName(e.target.value)}
+                                    />
+                                </div>
+                                <label className="flex items-center gap-2 text-xs text-[#42526E] cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={newViewShared}
+                                        onChange={e => setNewViewShared(e.target.checked)}
+                                        className="rounded border-[#DFE1E6]"
+                                    />
+                                    Share this view with the team
+                                </label>
+                                <div className="text-[11px] text-[#5E6C84] bg-[#F4F5F7] p-2 rounded">
+                                    Saves: status ({statusFilter}), priority ({priorityFilter}), {assignedToMeOnly ? 'assigned to me, ' : ''}layout ({view}).
+                                </div>
+                            </div>
+                            <div className="p-4 border-t border-[#DFE1E6] flex justify-end gap-2 bg-[#F4F5F7]">
+                                <button type="button" onClick={() => setIsSaveViewModalOpen(false)} className="px-4 py-2 hover:bg-[#EBECF0] rounded text-sm font-medium text-[#42526E]">Cancel</button>
+                                <button type="submit" className="px-4 py-2 bg-[#0052CC] text-white rounded hover:bg-[#0065FF] text-sm font-bold shadow-sm">Save View</button>
                             </div>
                         </form>
                     </div>

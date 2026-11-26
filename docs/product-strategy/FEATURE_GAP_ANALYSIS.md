@@ -137,7 +137,7 @@ Maturity classifications:
 | Dashboard (custom widgets) | ❌ Missing | ❌ | ❌ | Fixed layout only |
 | Mind map | ❌ Missing | ❌ | ❌ | Not implemented |
 | Whiteboard | ❌ Missing | ❌ | ❌ | Not implemented |
-| Saved filters/views | 🔧 Backend | ❌ No UI | ✅ SavedView model | Backend only |
+| Saved filters/views | ✅ Fully | ✅ Saved Views dropdown + Save/Default/Delete in Jira.jsx | ✅ SavedView model + API | Working |
 | Group by (assignee/priority) | ✅ Fully | ✅ groupBy state | ✅ | Frontend grouping only |
 | Sort options | ✅ Fully | ✅ Sort by date/priority | ✅ | Per-column sort |
 | Filter tasks | ⚠️ Partial | ⚠️ Search in Jira view | ✅ | Limited filter UI |
