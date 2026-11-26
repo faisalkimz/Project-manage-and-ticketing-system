@@ -194,3 +194,71 @@ class OAuthConnectionsView(generics.GenericAPIView):
             return Response({'error': 'provider is required'}, status=status.HTTP_400_BAD_REQUEST)
         deleted_count, _ = OAuthConnection.objects.filter(user=request.user, provider=provider.lower()).delete()
         return Response({'message': f'{provider} disconnected', 'deleted': deleted_count > 0})
+
+
+class TwoFactorSetupView(generics.GenericAPIView):
+    """Generates a TOTP secret and QR code for the authenticated user."""
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        import qrcode
+        import io
+        import base64
+
+        user = request.user
+        # Generate new secret if not already set or requested
+        if not user.otp_secret or request.query_params.get('regenerate') == 'true':
+            user.generate_otp_secret()
+
+        uri = user.get_totp_uri()
+        img = qrcode.make(uri)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        qr_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        return Response({
+            'otp_secret': user.otp_secret,
+            'totp_uri': uri,
+            'qr_code': f"data:image/png;base64,{qr_base64}",
+            'is_2fa_enabled': user.is_2fa_enabled
+        })
+
+
+class TwoFactorVerifyView(generics.GenericAPIView):
+    """Verifies a 6-digit TOTP token to enable 2FA on the account."""
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        token = request.data.get('token')
+        if not token:
+            return Response({'error': 'Verification token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        if user.verify_otp(str(token).strip()):
+            user.is_2fa_enabled = True
+            user.save(update_fields=['is_2fa_enabled'])
+            return Response({
+                'message': 'Two-factor authentication successfully enabled!',
+                'is_2fa_enabled': True
+            })
+        return Response({'error': 'Invalid 6-digit verification code. Please check your authenticator app.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TwoFactorDisableView(generics.GenericAPIView):
+    """Disables 2FA on the user's account after verifying current password."""
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        password = request.data.get('password')
+        user = request.user
+        if not user.check_password(password):
+            return Response({'error': 'Incorrect password'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.is_2fa_enabled = False
+        user.otp_secret = None
+        user.save(update_fields=['is_2fa_enabled', 'otp_secret'])
+        return Response({
+            'message': 'Two-factor authentication has been disabled.',
+            'is_2fa_enabled': False
+        })
+

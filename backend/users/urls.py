@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     LoginView, RegisterView, UserProfileView, UserListView,
     TeamInviteViewSet, TeamViewSet, UserDetailView, ChangePasswordView,
-    OAuthConnectionsView
+    OAuthConnectionsView, TwoFactorSetupView, TwoFactorVerifyView, TwoFactorDisableView
 )
 
 router = DefaultRouter()
@@ -21,4 +21,7 @@ urlpatterns = [
     path('<int:pk>/', UserDetailView.as_view(), name='user-detail'),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('oauth/', OAuthConnectionsView.as_view(), name='oauth-connections'),
+    path('2fa/setup/', TwoFactorSetupView.as_view(), name='2fa-setup'),
+    path('2fa/verify/', TwoFactorVerifyView.as_view(), name='2fa-verify'),
+    path('2fa/disable/', TwoFactorDisableView.as_view(), name='2fa-disable'),
 ]

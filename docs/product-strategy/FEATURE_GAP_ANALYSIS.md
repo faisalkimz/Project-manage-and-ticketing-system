@@ -30,7 +30,7 @@ Maturity classifications:
 | Email/Password Registration | ✅ Fully | ✅ Login/Signup pages | ✅ JWT + AbstractUser | Working |
 | JWT Authentication | ✅ Fully | ✅ Token in localStorage | ✅ SimpleJWT | Working |
 | Login with token refresh | ✅ Fully | ✅ 401 auto-redirect | ✅ Interceptor | Working |
-| 2FA / TOTP | ⚠️ Partial | ⚠️ Settings UI exists | ✅ django-otp, pyotp | Setup flow incomplete |
+| 2FA / TOTP | ✅ Fully | ✅ Full setup wizard with QR code | ✅ django-otp, pyotp + API endpoints | Working |
 | Social/OAuth Login | 🎭 UI Only | ✅ SocialLoginButtons.jsx | ❌ No OAuth views | Buttons render, no backend |
 | Account lockout (brute force) | 🔧 Backend | ❌ No UI | ✅ failed_login_attempts field | Not enforced in views |
 | IP Whitelist enforcement | 🔧 Backend | ❌ No UI | ✅ Users.middleware.py | Partial enforcement |

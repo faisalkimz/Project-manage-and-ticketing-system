@@ -9,7 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'role', 'permissions', 'profile_image', 'bio', 'is_active', 'department', 'job_title', 'email_notifications', 'push_notifications', 'task_updates_only']
+        fields = ['id', 'username', 'email', 'role', 'permissions', 'profile_image', 'bio', 'is_active', 'department', 'job_title', 'email_notifications', 'push_notifications', 'task_updates_only', 'is_2fa_enabled']
 
     def get_permissions(self, obj):
         if obj.role == 'ADMIN':
