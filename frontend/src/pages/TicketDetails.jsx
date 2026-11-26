@@ -15,6 +15,8 @@ const TicketDetails = () => {
     const [ticket, setTicket] = useState(null);
     const [isInternal, setIsInternal] = useState(false);
     const [newComment, setNewComment] = useState('');
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [replyText, setReplyText] = useState('');
     const [users, setUsers] = useState([]);
     const [projects, setProjects] = useState([]);
     const [selectedProject, setSelectedProject] = useState('');
@@ -50,17 +52,26 @@ const TicketDetails = () => {
         if (user?.role !== 'EMPLOYEE') fetchMeta();
     }, [id]);
 
-    const handlePostComment = async () => {
-        if (!newComment.trim()) return;
+    const handlePostComment = async (parentId = null) => {
+        const isReply = parentId !== null && typeof parentId !== 'object';
+        const text = isReply ? replyText : newComment;
+        if (!text.trim()) return;
         try {
-            await api.post('/activity/comments/', {
-                text: newComment,
+            const payload = {
+                text,
                 is_internal: isInternal,
                 content_type_name: 'ticket', // Fixed for compatibility
                 object_id: id
-            });
+            };
+            if (isReply) payload.parent = parentId;
+            await api.post('/activity/comments/', payload);
             fetchTicket();
-            setNewComment('');
+            if (isReply) {
+                setReplyText('');
+                setReplyingTo(null);
+            } else {
+                setNewComment('');
+            }
         } catch (error) {
             console.error('Comment failed', error);
         }
@@ -111,8 +122,9 @@ const TicketDetails = () => {
         </div>
     );
 
+    const allComments = ticket.comments_details || [];
     const combinedFeed = [
-        ...(ticket.comments_details?.map(c => ({ ...c, type: 'comment' })) || []),
+        ...(allComments.filter(c => !c.parent).map(c => ({ ...c, type: 'comment' }))),
         ...(ticket.audit_logs_details?.map(l => ({ ...l, type: 'log' })) || [])
     ].sort((a, b) => new Date(a.created_at || a.timestamp) - new Date(b.created_at || b.timestamp));
 
@@ -251,25 +263,79 @@ const TicketDetails = () => {
 
                         {/* Activity Feed */}
                         <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-[#EBECF0]">
-                            {combinedFeed.map((item, i) => (
-                                <div key={i} className="relative animate-fade-in">
+                            {combinedFeed.map((item, i) => {
+                                const replies = item.type === 'comment'
+                                    ? allComments.filter(r => r.parent === item.id).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                                    : [];
+                                return (
+                                <div key={item.type === 'comment' ? `c-${item.id}` : `l-${i}`} className="relative animate-fade-in">
                                     {item.type === 'comment' ? (
-                                        <div className={`p-4 rounded-lg border shadow-sm ${item.is_internal
-                                                ? 'bg-[#FFF0B3]/20 border-[#FFFAE6]'
-                                                : 'bg-white border-[#DFE1E6]'
-                                            }`}>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold text-sm text-[#172B4D]">{item.user_details.username}</span>
-                                                    <span className="text-xs text-[#5E6C84]">{new Date(item.created_at).toLocaleString()}</span>
-                                                </div>
-                                                {item.is_internal && (
-                                                    <div className="px-1.5 py-0.5 rounded bg-[#FFFAE6] text-[#FF991F] text-[10px] font-bold border border-[#FFF0B3] flex items-center gap-1">
-                                                        <Lock size={10} /> Internal
+                                        <div>
+                                            <div className={`p-4 rounded-lg border shadow-sm ${item.is_internal
+                                                    ? 'bg-[#FFF0B3]/20 border-[#FFFAE6]'
+                                                    : 'bg-white border-[#DFE1E6]'
+                                                }`}>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-sm text-[#172B4D]">{item.user_details.username}</span>
+                                                        <span className="text-xs text-[#5E6C84]">{new Date(item.created_at).toLocaleString()}</span>
                                                     </div>
-                                                )}
+                                                    {item.is_internal && (
+                                                        <div className="px-1.5 py-0.5 rounded bg-[#FFFAE6] text-[#FF991F] text-[10px] font-bold border border-[#FFF0B3] flex items-center gap-1">
+                                                            <Lock size={10} /> Internal
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm text-[#172B4D] whitespace-pre-wrap">{item.text}</p>
+                                                <div className="mt-2 pt-2 border-t border-[#F4F5F7] flex items-center gap-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setReplyingTo(replyingTo === item.id ? null : item.id);
+                                                            setReplyText('');
+                                                        }}
+                                                        className="text-xs font-semibold text-[#5E6C84] hover:text-[#0052CC]"
+                                                    >
+                                                        {replyingTo === item.id ? 'Cancel' : `Reply${replies.length > 0 ? ` (${replies.length})` : ''}`}
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <p className="text-sm text-[#172B4D] whitespace-pre-wrap">{item.text}</p>
+
+                                            {replies.length > 0 && (
+                                                <div className="mt-2 ml-6 pl-4 border-l-2 border-[#DFE1E6] space-y-2">
+                                                    {replies.map(reply => (
+                                                        <div key={reply.id} className="p-3 rounded-lg border border-[#DFE1E6] bg-[#F9FAFB]">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="font-bold text-xs text-[#172B4D]">{reply.user_details?.username}</span>
+                                                                <span className="text-[11px] text-[#5E6C84]">{new Date(reply.created_at).toLocaleString()}</span>
+                                                            </div>
+                                                            <p className="text-xs text-[#172B4D] whitespace-pre-wrap">{reply.text}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {replyingTo === item.id && (
+                                                <div className="mt-2 ml-6 pl-4 border-l-2 border-[#0052CC] flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder={`Reply to ${item.user_details?.username}...`}
+                                                        className="flex-1 px-3 py-1.5 bg-white border border-[#DFE1E6] rounded text-xs outline-none focus:border-[#0052CC]"
+                                                        value={replyText}
+                                                        onChange={e => setReplyText(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && handlePostComment(item.id)}
+                                                        autoFocus
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePostComment(item.id)}
+                                                        disabled={!replyText.trim()}
+                                                        className="px-3 py-1.5 bg-[#0079BF] text-white rounded text-xs font-semibold hover:bg-[#026AA7] disabled:opacity-50"
+                                                    >
+                                                        Reply
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-3 ml-2">
@@ -280,7 +346,8 @@ const TicketDetails = () => {
                                         </div>
                                     )}
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 </div>

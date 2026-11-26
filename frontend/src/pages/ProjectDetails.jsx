@@ -28,6 +28,8 @@ const ProjectDetails = () => {
     const [selectedTask, setSelectedTask] = useState(null);
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [replyText, setReplyText] = useState('');
     const [checklistItems, setChecklistItems] = useState([]);
     const [newChecklistText, setNewChecklistText] = useState('');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -536,15 +538,24 @@ const ProjectDetails = () => {
         } catch (error) { }
     };
 
-    const handlePostComment = async () => {
-        if (!newComment.trim()) return;
+    const handlePostComment = async (parentId = null) => {
+        const isReply = parentId !== null && typeof parentId !== 'object';
+        const text = isReply ? replyText : newComment;
+        if (!text.trim()) return;
         try {
-            await api.post('/activity/comments/', {
-                text: newComment,
+            const payload = {
+                text,
                 content_type_name: 'task',
                 object_id: selectedTask.id
-            });
-            setNewComment('');
+            };
+            if (isReply) payload.parent = parentId;
+            await api.post('/activity/comments/', payload);
+            if (isReply) {
+                setReplyText('');
+                setReplyingTo(null);
+            } else {
+                setNewComment('');
+            }
             fetchTaskSideData(selectedTask);
         } catch (error) {
             console.error('Failed to post comment:', error);
@@ -4134,10 +4145,14 @@ const ProjectDetails = () => {
                                             />
                                         </div>
                                         <div className="space-y-4">
-                                            {[...comments.map(c => ({ ...c, type: 'comment' })), ...auditLogs.map(a => ({ ...a, type: 'audit', created_at: a.timestamp }))]
+                                            {[...comments.filter(c => !c.parent).map(c => ({ ...c, type: 'comment' })), ...auditLogs.map(a => ({ ...a, type: 'audit', created_at: a.timestamp }))]
                                                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                                                .map((item, i) => (
-                                                    <div key={i} className="flex gap-2">
+                                                .map((item, i) => {
+                                                    const replies = item.type === 'comment'
+                                                        ? comments.filter(r => r.parent === item.id).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                                                        : [];
+                                                    return (
+                                                    <div key={item.type === 'comment' ? `c-${item.id}` : `a-${i}`} className="flex gap-2">
                                                         <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-xs font-semibold shrink-0">
                                                             {item.user_details?.username[0].toUpperCase() || 'S'}
                                                         </div>
@@ -4149,7 +4164,64 @@ const ProjectDetails = () => {
                                                                 </span>
                                                             </div>
                                                             {item.type === 'comment' ? (
-                                                                <div className="bg-white p-2 rounded text-sm text-[#172B4D] border border-[#DFE1E6]">{item.text}</div>
+                                                                <div>
+                                                                    <div className="bg-white p-2 rounded text-sm text-[#172B4D] border border-[#DFE1E6]">{item.text}</div>
+                                                                    <div className="mt-1 flex items-center gap-3">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setReplyingTo(replyingTo === item.id ? null : item.id);
+                                                                                setReplyText('');
+                                                                            }}
+                                                                            className="text-[11px] font-semibold text-[#5E6C84] hover:text-[#0052CC]"
+                                                                        >
+                                                                            {replyingTo === item.id ? 'Cancel' : `Reply${replies.length > 0 ? ` (${replies.length})` : ''}`}
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {replies.length > 0 && (
+                                                                        <div className="mt-2 pl-3 border-l-2 border-[#DFE1E6] space-y-2">
+                                                                            {replies.map(reply => (
+                                                                                <div key={reply.id} className="flex gap-2">
+                                                                                    <div className="w-6 h-6 rounded-full bg-[#DFE1E6] flex items-center justify-center text-[10px] font-semibold shrink-0">
+                                                                                        {reply.user_details?.username?.[0]?.toUpperCase() || 'U'}
+                                                                                    </div>
+                                                                                    <div className="flex-1">
+                                                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                                                            <span className="text-xs font-semibold text-[#172B4D]">{reply.user_details?.username}</span>
+                                                                                            <span className="text-[10px] text-[#5E6C84]">
+                                                                                                {new Date(reply.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <div className="bg-[#F4F5F7] p-2 rounded text-xs text-[#172B4D] border border-[#DFE1E6]">{reply.text}</div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {replyingTo === item.id && (
+                                                                        <div className="mt-2 pl-3 border-l-2 border-[#0052CC] flex gap-2">
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder={`Reply to ${item.user_details?.username}...`}
+                                                                                className="flex-1 px-2.5 py-1.5 bg-white border border-[#DFE1E6] rounded text-xs outline-none focus:border-[#0052CC]"
+                                                                                value={replyText}
+                                                                                onChange={(e) => setReplyText(e.target.value)}
+                                                                                onKeyDown={(e) => e.key === 'Enter' && handlePostComment(item.id)}
+                                                                                autoFocus
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handlePostComment(item.id)}
+                                                                                disabled={!replyText.trim()}
+                                                                                className="px-3 py-1.5 bg-[#0052CC] text-white rounded text-xs font-semibold hover:bg-[#0065FF] disabled:opacity-50"
+                                                                            >
+                                                                                Reply
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             ) : (
                                                                 <div className="text-xs text-[#5E6C84]">
                                                                     <span className="font-bold">{item.action.replace('_', ' ')}:</span>
@@ -4164,7 +4236,8 @@ const ProjectDetails = () => {
                                                             )}
                                                         </div>
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                         </div>
                                     </div>
                                 </div>

@@ -220,7 +220,7 @@ Maturity classifications:
 | Feature | Status | Frontend | Backend | Notes |
 |---|---|---|---|---|
 | Task comments | ✅ Fully | ✅ Comment sections | ✅ Generic Comment | Working |
-| Threaded comments | ⚠️ Partial | ❌ No thread UI | ✅ parent field on Comment | Backend supports threads, no UI |
+| Threaded comments | ✅ Fully | ✅ Inline Reply + nested threads in Tasks & Tickets | ✅ parent field + CommentSerializer | Working |
 | Comment reactions | ✅ Fully | ✅ Reaction buttons | ✅ Reaction model | Working |
 | Project chat | ✅ Fully | ✅ Collaboration tab | ✅ ChatMessage model | Working — not real-time |
 | Announcements | ✅ Fully | ✅ Collaboration tab | ✅ Announcement model | Working |
