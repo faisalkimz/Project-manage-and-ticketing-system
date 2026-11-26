@@ -149,6 +149,39 @@ class WikiPageViewSet(viewsets.ModelViewSet):
         versions = page.versions.all()
         serializer = WikiPageVersionSerializer(versions, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def toggle_pin(self, request, slug=None):
+        """Toggle pinned status for a wiki page"""
+        page = self.get_object()
+        page.is_pinned = not page.is_pinned
+        page.save(update_fields=['is_pinned'])
+        return Response({
+            'is_pinned': page.is_pinned,
+            'message': 'Article pinned' if page.is_pinned else 'Article unpinned'
+        })
+
+    @action(detail=True, methods=['post'])
+    def restore_version(self, request, slug=None):
+        """Restore wiki page content from a previous version"""
+        page = self.get_object()
+        version_id = request.data.get('version_id')
+        try:
+            version = page.versions.get(id=version_id)
+        except WikiPageVersion.DoesNotExist:
+            return Response({'error': 'Version not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        page.content = version.content
+        page.last_edited_by = request.user
+        page.save(update_fields=['content', 'last_edited_by', 'updated_at'])
+
+        WikiPageVersion.objects.create(
+            page=page,
+            content=page.content,
+            edited_by=request.user,
+            change_summary=f"Restored from version #{version.id}"
+        )
+        return Response(self.get_serializer(page).data)
     
     @action(detail=False, methods=['get'])
     def search(self, request):

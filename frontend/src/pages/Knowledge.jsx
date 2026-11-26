@@ -52,9 +52,15 @@ const Knowledge = () => {
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [newDoc, setNewDoc] = useState({ title: '', description: '', category: 'PROJECT_DOC', file: null });
 
+    // Folders states
+    const [folders, setFolders] = useState([]);
+    const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+    const [newFolder, setNewFolder] = useState({ name: '', description: '' });
+
     useEffect(() => {
         fetchWikiPages();
         fetchDocuments();
+        fetchFolders();
     }, []);
 
     const fetchWikiPages = async () => {
@@ -85,9 +91,86 @@ const Knowledge = () => {
         }
     };
 
-    const handleSelectPage = (page) => {
+    const fetchFolders = async () => {
+        try {
+            const res = await api.get('/knowledge/folders/');
+            setFolders(res.data.results || res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch folders:', err);
+        }
+    };
+
+    const handleCreateFolder = async (e) => {
+        e.preventDefault();
+        if (!newFolder.name.trim()) return;
+        try {
+            const res = await api.post('/knowledge/folders/', newFolder);
+            setFolders([...folders, res.data]);
+            setNewFolder({ name: '', description: '' });
+            setShowNewFolderModal(false);
+            showToast('Folder created!', 'success');
+        } catch (err) {
+            showToast('Failed to create folder', 'error');
+        }
+    };
+
+    const handleDeleteFolder = async (folderId) => {
+        const ok = await confirm({
+            title: 'Delete Folder',
+            message: 'Are you sure you want to delete this folder?',
+            confirmText: 'Delete',
+            isDanger: true,
+        });
+        if (!ok) return;
+        try {
+            await api.delete(`/knowledge/folders/${folderId}/`);
+            setFolders(folders.filter(f => f.id !== folderId));
+            showToast('Folder deleted', 'info');
+        } catch (err) {
+            showToast('Failed to delete folder', 'error');
+        }
+    };
+
+    const handleUploadNewDocVersion = async (docId, file) => {
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await api.post(`/knowledge/documents/${docId}/create_version/`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setDocuments([res.data, ...documents]);
+            showToast(`Uploaded v${res.data.version}!`, 'success');
+        } catch (err) {
+            showToast('Failed to upload new version', 'error');
+        }
+    };
+
+    const handleDeleteDoc = async (docId) => {
+        const ok = await confirm({
+            title: 'Delete Document',
+            message: 'Permanently delete this document?',
+            confirmText: 'Delete',
+            isDanger: true,
+        });
+        if (!ok) return;
+        try {
+            await api.delete(`/knowledge/documents/${docId}/`);
+            setDocuments(documents.filter(d => d.id !== docId));
+            showToast('Document deleted', 'info');
+        } catch (err) {
+            showToast('Failed to delete document', 'error');
+        }
+    };
+
+    const handleSelectPage = async (page) => {
         setSelectedPage(page);
         setIsEditingWiki(false);
+        try {
+            const res = await api.get(`/knowledge/wiki/${page.slug}/view/`);
+            setSelectedPage(res.data);
+            setWikiPages(prev => prev.map(p => p.slug === page.slug ? res.data : p));
+        } catch (err) { /* silent */ }
     };
 
     const handleTogglePin = async (slug) => {
@@ -454,6 +537,47 @@ const Knowledge = () => {
             {/* TAB 2: DOCUMENTS VAULT */}
             {activeTab === 'documents' && (
                 <div className="space-y-6">
+                    {/* Folders Strip */}
+                    <div className="bg-white p-4 rounded-xl border border-[#DFE1E6] shadow-sm">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-xs font-bold text-[#5E6C84] uppercase tracking-wider flex items-center gap-1.5">
+                                <FolderIcon size={14} className="text-[#0052CC]" /> Shared Folders ({folders.length})
+                            </h3>
+                            <button
+                                onClick={() => setShowNewFolderModal(true)}
+                                className="px-2.5 py-1 bg-[#F4F5F7] hover:bg-[#EBECF0] text-[#172B4D] rounded text-xs font-semibold flex items-center gap-1"
+                            >
+                                <Plus size={12} /> New Folder
+                            </button>
+                        </div>
+                        {folders.length === 0 ? (
+                            <p className="text-xs text-[#5E6C84] italic">No shared folders yet. Create one to organize workspace documents.</p>
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                {folders.map(folder => (
+                                    <div key={folder.id} className="p-3 rounded-lg border border-[#DFE1E6] bg-[#FAFBFC] hover:border-[#0052CC] transition-colors flex items-start justify-between group">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-1.5 font-semibold text-sm text-[#172B4D] truncate">
+                                                <FolderIcon size={15} className="text-[#0052CC] shrink-0" />
+                                                <span className="truncate">{folder.name}</span>
+                                            </div>
+                                            {folder.description && (
+                                                <p className="text-[11px] text-[#5E6C84] truncate mt-0.5">{folder.description}</p>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeleteFolder(folder.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-[#5E6C84] hover:text-[#DE350B] rounded transition-opacity"
+                                            title="Delete folder"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     <div className="flex items-center justify-between">
                         <div className="relative max-w-md w-full">
                             <Search size={16} className="absolute left-3 top-2.5 text-[#5E6C84]" />
@@ -506,21 +630,42 @@ const Knowledge = () => {
                                         </div>
                                     </div>
 
-                                    <div className="pt-4 mt-2">
+                                    <div className="pt-4 mt-2 flex items-center gap-2">
                                         {doc.file_url ? (
                                             <a
                                                 href={doc.file_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                                                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
                                             >
-                                                <Download size={14} /> Download Asset
+                                                <Download size={14} /> Download
                                             </a>
                                         ) : (
-                                            <button disabled className="w-full py-2 bg-slate-50 text-slate-400 rounded-lg text-xs font-medium cursor-not-allowed">
+                                            <button disabled className="flex-1 py-2 bg-slate-50 text-slate-400 rounded-lg text-xs font-medium cursor-not-allowed">
                                                 No Attachment
                                             </button>
                                         )}
+                                        <label
+                                            title="Upload new version"
+                                            className="px-2.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1 transition-colors"
+                                        >
+                                            <Upload size={13} /> v{(doc.version || 1) + 1}
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                onChange={e => {
+                                                    if (e.target.files?.[0]) handleUploadNewDocVersion(doc.id, e.target.files[0]);
+                                                    e.target.value = '';
+                                                }}
+                                            />
+                                        </label>
+                                        <button
+                                            onClick={() => handleDeleteDoc(doc.id)}
+                                            title="Delete document"
+                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
                                     </div>
                                 </div>
                             ))}
@@ -685,6 +830,53 @@ const Knowledge = () => {
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal: New Folder */}
+            {showNewFolderModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+                        <div className="p-4 border-b flex items-center justify-between bg-slate-50">
+                            <h3 className="font-bold text-[#172B4D] text-base flex items-center gap-2">
+                                <FolderIcon size={18} className="text-blue-600" /> New Shared Folder
+                            </h3>
+                            <button onClick={() => setShowNewFolderModal(false)} className="p-1 hover:bg-slate-200 rounded">
+                                <X size={18} className="text-[#5E6C84]" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreateFolder} className="p-5 space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Folder Name</label>
+                                <input
+                                    type="text"
+                                    required
+                                    autoFocus
+                                    placeholder="e.g. Architecture Specs"
+                                    value={newFolder.name}
+                                    onChange={e => setNewFolder({ ...newFolder, name: e.target.value })}
+                                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Description</label>
+                                <input
+                                    type="text"
+                                    placeholder="Optional description"
+                                    value={newFolder.description}
+                                    onChange={e => setNewFolder({ ...newFolder, description: e.target.value })}
+                                    className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2 border-t">
+                                <button type="button" onClick={() => setShowNewFolderModal(false)} className="px-4 py-2 border rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                    Cancel
+                                </button>
+                                <button type="submit" className="px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-lg text-xs font-bold">
+                                    Create Folder
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

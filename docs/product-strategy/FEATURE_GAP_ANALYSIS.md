@@ -336,12 +336,12 @@ Maturity classifications:
 
 | Feature | Status | Frontend | Backend | Notes |
 |---|---|---|---|---|
-| Document upload | ⚠️ Partial | ❌ No dedicated docs UI | ✅ Document model | Backend solid, no main UI |
-| Wiki pages | ⚠️ Partial | ❌ No wiki UI | ✅ WikiPage model | Backend solid, no frontend |
-| Wiki version history | 🔧 Backend | ❌ | ✅ WikiPageVersion model | Backend only |
-| Folder organization | 🔧 Backend | ❌ | ✅ Folder model | Backend only |
+| Document upload | ✅ Fully | ✅ Document Vault upload/download/delete UI | ✅ Document model + API | Working |
+| Wiki pages | ✅ Fully | ✅ Knowledge.jsx Wiki editor, pin & views | ✅ WikiPage model + view/toggle_pin API | Working |
+| Wiki version history | ✅ Fully | ✅ Revision history modal + restore | ✅ WikiPageVersion + restore_version API | Working |
+| Folder organization | ✅ Fully | ✅ Shared Folders strip + create/delete | ✅ Folder model + API | Working |
 | Document permissions | 🔧 Backend | ❌ | ✅ allowed_users M2M | Backend only |
-| File version control | 🔧 Backend | ❌ | ✅ parent_version FK | Backend only |
+| File version control | ✅ Fully | ✅ Upload v+1 button on document cards | ✅ parent_version FK + create_version API | Working |
 | Search in documents | ✅ Fully | ✅ Global search | ✅ | Working |
 
 **Gap Severity:** HIGH — Extensive backend with zero frontend is wasted investment
