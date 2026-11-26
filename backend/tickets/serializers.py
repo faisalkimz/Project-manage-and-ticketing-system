@@ -1,9 +1,19 @@
 from rest_framework import serializers
-from .models import Ticket, TicketNote
+from .models import Ticket, TicketNote, TicketQueue
 from users.serializers import UserSerializer
 from projects.serializers import TaskSerializer, TagSerializer
 from activity.serializers import CommentSerializer, AttachmentSerializer, AuditLogSerializer
 from django.utils import timezone
+
+
+class TicketQueueSerializer(serializers.ModelSerializer):
+    assigned_users_details = UserSerializer(source='assigned_users', many=True, read_only=True)
+    ticket_count = serializers.IntegerField(source='tickets.count', read_only=True)
+
+    class Meta:
+        model = TicketQueue
+        fields = ['id', 'name', 'description', 'is_default', 'auto_assign', 'assigned_users', 'assigned_users_details', 'ticket_count', 'created_at']
+        read_only_fields = ['created_at']
 
 class TicketNoteSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='author.username', read_only=True)
@@ -27,6 +37,7 @@ class TicketSerializer(serializers.ModelSerializer):
     internal_notes_details = TicketNoteSerializer(source='internal_notes', many=True, read_only=True)
     time_remaining_hours = serializers.SerializerMethodField()
     sla_status = serializers.SerializerMethodField()
+    queue_name = serializers.CharField(source='queue.name', read_only=True)
     
     class Meta:
         model = Ticket

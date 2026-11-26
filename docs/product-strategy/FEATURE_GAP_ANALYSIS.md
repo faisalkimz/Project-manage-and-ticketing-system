@@ -179,8 +179,8 @@ Maturity classifications:
 | Ticket status workflow | ✅ Fully | ✅ Status management | ✅ Status choices | Working |
 | SLA management | ✅ Fully | ⚠️ Limited SLA display | ✅ SLAPolicy model + auto-calculate | Backend excellent, UI minimal |
 | SLA breach escalation | ✅ Fully | ❌ No UI | ✅ trigger_escalation() | Automatic in backend |
-| Ticket queues | 🔧 Backend | ❌ No queue UI | ✅ TicketQueue model | Backend only |
-| Auto-assignment | 🔧 Backend | ❌ No UI | ✅ auto_assign field | Backend only |
+| Ticket queues | ✅ Fully | ✅ Queues & Routing tab + filter + Create modal | ✅ TicketQueue model + API | Working |
+| Auto-assignment | ✅ Fully | ✅ Auto-assign toggle + agent picker per queue | ✅ Load-balanced round-robin on ticket create | Working |
 | Internal ticket notes | ✅ Fully | ✅ TicketDetails internal notes card | ✅ TicketNote model + add-note API | Working |
 | Ticket→Task conversion | ✅ Fully | ✅ TicketDetails convert action + 🎫 TKT badge link | ✅ convert_to_task endpoint | Working |
 | Ticket search | ✅ Fully | ✅ Global search | ✅ Search API | Working |

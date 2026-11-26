@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     Plus, Search, AlertCircle, Clock, MessageSquare, X,
     Sparkles, Loader2, Check, Shield, TrendingUp, AlertTriangle,
-    CheckCircle2, BarChart2, Activity, Timer, Zap
+    CheckCircle2, BarChart2, Activity, Timer, Zap, Inbox, Users, Trash2
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -15,9 +15,14 @@ const Tickets = () => {
     const [tickets, setTickets] = useState([]);
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('ALL');
-    const [activeTab, setActiveTab] = useState('tickets'); // 'tickets' | 'sla'
+    const [activeTab, setActiveTab] = useState('tickets'); // 'tickets' | 'sla' | 'queues'
+    const [queues, setQueues] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [filterQueue, setFilterQueue] = useState('ALL');
+    const [showQueueModal, setShowQueueModal] = useState(false);
+    const [newQueue, setNewQueue] = useState({ name: '', description: '', is_default: false, auto_assign: true, assigned_users: [] });
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'MEDIUM', category: 'BUG' });
+    const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'MEDIUM', category: 'BUG', queue: '' });
     const [isTriaging, setIsTriaging] = useState(false);
     const [aiTriageResult, setAiTriageResult] = useState(null);
     const [slaLoading, setSlaLoading] = useState(false);
@@ -45,7 +50,55 @@ const Tickets = () => {
         }
     };
 
-    useEffect(() => { fetchTickets(); }, []);
+    const fetchQueues = async () => {
+        try {
+            const res = await api.get('/tickets/queues/');
+            setQueues(res.data?.results || res.data || []);
+        } catch (err) { console.error(err); }
+    };
+
+    const fetchUsers = async () => {
+        try {
+            const res = await api.get('/users/list/');
+            setUsers(res.data?.results || res.data || []);
+        } catch (err) { console.error(err); }
+    };
+
+    const handleCreateQueue = async (e) => {
+        e.preventDefault();
+        if (!newQueue.name.trim()) return;
+        try {
+            const res = await api.post('/tickets/queues/', newQueue);
+            setQueues(prev => [...prev, res.data]);
+            setNewQueue({ name: '', description: '', is_default: false, auto_assign: true, assigned_users: [] });
+            setShowQueueModal(false);
+            showToast('Ticket queue created!', 'success');
+        } catch (err) {
+            showToast('Failed to create queue', 'error');
+        }
+    };
+
+    const handleToggleQueueAutoAssign = async (queue) => {
+        try {
+            const res = await api.patch(`/tickets/queues/${queue.id}/`, { auto_assign: !queue.auto_assign });
+            setQueues(prev => prev.map(q => q.id === queue.id ? res.data : q));
+            showToast(`Auto-assign ${res.data.auto_assign ? 'enabled' : 'disabled'} for ${queue.name}`, 'info');
+        } catch (err) {
+            showToast('Failed to update queue', 'error');
+        }
+    };
+
+    const handleDeleteQueue = async (queueId) => {
+        try {
+            await api.delete(`/tickets/queues/${queueId}/`);
+            setQueues(prev => prev.filter(q => q.id !== queueId));
+            showToast('Queue deleted', 'info');
+        } catch (err) {
+            showToast('Failed to delete queue', 'error');
+        }
+    };
+
+    useEffect(() => { fetchTickets(); fetchQueues(); fetchUsers(); }, []);
 
     const handleAiTriage = async () => {
         if (!newTicket.title) { showToast('Enter a ticket title first', 'info'); return; }
@@ -74,12 +127,19 @@ const Tickets = () => {
     const handleCreateTicket = async (e) => {
         e.preventDefault();
         try {
-            const res = await api.post('/tickets/tickets/', newTicket);
+            const payload = { ...newTicket };
+            if (!payload.queue) delete payload.queue;
+            const res = await api.post('/tickets/tickets/', payload);
             setTickets([res.data, ...tickets]);
             setIsCreateModalOpen(false);
-            setNewTicket({ title: '', description: '', priority: 'MEDIUM', category: 'BUG' });
+            setNewTicket({ title: '', description: '', priority: 'MEDIUM', category: 'BUG', queue: '' });
             setAiTriageResult(null);
-            showToast('Ticket created successfully!', 'success');
+            showToast(
+                res.data.assigned_to_username
+                    ? `Ticket created & auto-assigned to ${res.data.assigned_to_username}!`
+                    : 'Ticket created successfully!',
+                'success'
+            );
         } catch (err) {
             showToast('Failed to create ticket', 'error');
         }
@@ -89,7 +149,8 @@ const Tickets = () => {
         const matchesSearch = t.title?.toLowerCase().includes(search.toLowerCase()) ||
             t.ticket_number?.toLowerCase().includes(search.toLowerCase());
         const matchesStatus = filterStatus === 'ALL' || t.status === filterStatus;
-        return matchesSearch && matchesStatus;
+        const matchesQueue = filterQueue === 'ALL' || String(t.queue) === String(filterQueue);
+        return matchesSearch && matchesStatus && matchesQueue;
     });
 
     const getPriorityColor = (p) => {
@@ -171,6 +232,10 @@ const Tickets = () => {
                         <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'sla' ? 'bg-white/20' : 'bg-red-100 text-red-600'}`}>{sla.breached.length}</span>
                     )}
                 </button>
+                <button onClick={() => setActiveTab('queues')} className={`px-4 py-1.5 rounded text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'queues' ? 'bg-[#0052CC] text-white' : 'text-[#5E6C84] hover:bg-[#F4F5F7]'}`}>
+                    <Inbox size={14} /> Queues & Routing
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'queues' ? 'bg-white/20' : 'bg-[#EBECF0]'}`}>{queues.length}</span>
+                </button>
             </div>
 
             {/* ── TICKET LIST TAB ── */}
@@ -188,7 +253,7 @@ const Tickets = () => {
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                         </div>
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-2 flex-wrap items-center">
                             {['ALL', 'OPEN', 'IN_PROGRESS', 'RESOLVED'].map(status => (
                                 <button
                                     key={status}
@@ -198,6 +263,18 @@ const Tickets = () => {
                                     {status === 'ALL' ? 'All' : status.replace('_', ' ')}
                                 </button>
                             ))}
+                            {queues.length > 0 && (
+                                <select
+                                    value={filterQueue}
+                                    onChange={(e) => setFilterQueue(e.target.value)}
+                                    className="px-3 py-1.5 rounded text-sm font-medium border border-[#DFE1E6] bg-white text-[#42526E] outline-none focus:border-[#0052CC]"
+                                >
+                                    <option value="ALL">All Queues</option>
+                                    {queues.map(q => (
+                                        <option key={q.id} value={q.id}>{q.name}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
                     </div>
 
@@ -497,6 +574,91 @@ const Tickets = () => {
                 </div>
             )}
 
+            {/* ── QUEUES TAB ── */}
+            {activeTab === 'queues' && (
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between bg-white p-5 rounded-xl border border-[#DFE1E6] shadow-sm">
+                        <div>
+                            <h2 className="text-base font-bold text-[#172B4D]">Ticket Queues & Auto-Assignment</h2>
+                            <p className="text-xs text-[#5E6C84] mt-0.5">
+                                Route incoming tickets to specialized queues and automatically balance workload across assigned agents.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setShowQueueModal(true)}
+                            className="px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                        >
+                            <Plus size={14} /> New Queue
+                        </button>
+                    </div>
+
+                    {queues.length === 0 ? (
+                        <div className="bg-white border-2 border-dashed border-[#DFE1E6] rounded-xl p-10 text-center">
+                            <Inbox size={32} className="mx-auto text-[#0052CC] mb-3" />
+                            <h3 className="text-sm font-bold text-[#172B4D]">No Ticket Queues Configured</h3>
+                            <p className="text-xs text-[#5E6C84] mt-1">Create a queue like "Tier 1 Support" or "Billing" and enable round-robin auto-assignment.</p>
+                            <button
+                                onClick={() => setShowQueueModal(true)}
+                                className="mt-4 px-4 py-2 bg-[#0052CC] text-white rounded-lg text-xs font-bold"
+                            >
+                                Create First Queue
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {queues.map(q => (
+                                <div key={q.id} className="bg-white border border-[#DFE1E6] rounded-xl p-5 shadow-sm flex flex-col justify-between space-y-4">
+                                    <div className="space-y-2">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-bold text-[#172B4D] text-sm">{q.name}</h3>
+                                                {q.is_default && (
+                                                    <span className="px-1.5 py-0.5 bg-[#DEEBFF] text-[#0052CC] text-[10px] font-bold rounded uppercase">Default</span>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteQueue(q.id)}
+                                                className="p-1 text-[#5E6C84] hover:text-[#DE350B] rounded"
+                                                title="Delete queue"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-[#5E6C84]">{q.description || 'No description provided.'}</p>
+                                        <div className="flex items-center justify-between pt-2 text-xs">
+                                            <span className="text-[#5E6C84] font-medium">{q.ticket_count || 0} tickets</span>
+                                            <span className="text-[#5E6C84] flex items-center gap-1">
+                                                <Users size={12} /> {q.assigned_users_details?.length || 0} agents
+                                            </span>
+                                        </div>
+                                        {q.assigned_users_details?.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 pt-1">
+                                                {q.assigned_users_details.map(u => (
+                                                    <span key={u.id} className="px-2 py-0.5 bg-[#F4F5F7] text-[#172B4D] rounded-full text-[10px] font-semibold">
+                                                        {u.username}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="pt-3 border-t border-[#F4F5F7] flex items-center justify-between">
+                                        <span className="text-xs font-semibold text-[#172B4D]">Auto-Assign (Round-Robin)</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleQueueAutoAssign(q)}
+                                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${q.auto_assign ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#EBECF0] text-[#5E6C84]'}`}
+                                        >
+                                            {q.auto_assign ? 'ON' : 'OFF'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* ── Create Modal ── */}
             {isCreateModalOpen && (
                 <div
@@ -570,10 +732,111 @@ const Tickets = () => {
                                         </select>
                                     </div>
                                 </div>
+                                {queues.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Queue</label>
+                                        <select
+                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] bg-white"
+                                            value={newTicket.queue}
+                                            onChange={(e) => setNewTicket({ ...newTicket, queue: e.target.value })}
+                                        >
+                                            <option value="">Default Queue</option>
+                                            {queues.map(q => (
+                                                <option key={q.id} value={q.id}>
+                                                    {q.name}{q.auto_assign ? ' (Auto-Assign)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                             </div>
                             <div className="p-5 border-t border-[#DFE1E6] flex justify-end gap-2">
                                 <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#42526E] hover:bg-[#EBECF0] rounded transition-colors">Cancel</button>
                                 <button type="submit" className="px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded text-sm font-bold transition-colors">Create Ticket</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Create Queue Modal ── */}
+            {showQueueModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6" onClick={() => setShowQueueModal(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <form onSubmit={handleCreateQueue}>
+                            <div className="p-5 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                                <h3 className="text-lg font-bold text-[#172B4D]">New Ticket Queue</h3>
+                                <button type="button" onClick={() => setShowQueueModal(false)} className="p-1 hover:bg-[#EBECF0] rounded-sm text-[#5E6C84]">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-5 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Queue Name</label>
+                                    <input
+                                        type="text" required autoFocus
+                                        placeholder="e.g. Tier 1 Support"
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                        value={newQueue.name}
+                                        onChange={e => setNewQueue({ ...newQueue, name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Description</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Optional routing notes..."
+                                        className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC]"
+                                        value={newQueue.description}
+                                        onChange={e => setNewQueue({ ...newQueue, description: e.target.value })}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-[#172B4D] cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={newQueue.auto_assign}
+                                            onChange={e => setNewQueue({ ...newQueue, auto_assign: e.target.checked })}
+                                        />
+                                        Enable Auto-Assign
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-[#172B4D] cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={newQueue.is_default}
+                                            onChange={e => setNewQueue({ ...newQueue, is_default: e.target.checked })}
+                                        />
+                                        Default Queue
+                                    </label>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Assign Agents</label>
+                                    <div className="max-h-36 overflow-y-auto border border-[#DFE1E6] rounded p-2 space-y-1">
+                                        {users.map(u => {
+                                            const checked = newQueue.assigned_users.includes(u.id);
+                                            return (
+                                                <label key={u.id} className="flex items-center gap-2 text-xs text-[#172B4D] cursor-pointer p-1 hover:bg-[#F4F5F7] rounded">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={e => {
+                                                            const next = e.target.checked
+                                                                ? [...newQueue.assigned_users, u.id]
+                                                                : newQueue.assigned_users.filter(id => id !== u.id);
+                                                            setNewQueue({ ...newQueue, assigned_users: next });
+                                                        }}
+                                                    />
+                                                    <span>{u.username}</span>
+                                                    <span className="text-[10px] text-[#5E6C84] ml-auto">{u.role}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-5 border-t border-[#DFE1E6] flex justify-end gap-2">
+                                <button type="button" onClick={() => setShowQueueModal(false)} className="px-4 py-2 text-sm font-bold text-[#42526E] hover:bg-[#EBECF0] rounded">Cancel</button>
+                                <button type="submit" className="px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded text-sm font-bold">Create Queue</button>
                             </div>
                         </form>
                     </div>

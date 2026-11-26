@@ -2,8 +2,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.utils import user_role_in
-from .models import Ticket, TicketNote
-from .serializers import TicketSerializer, TicketNoteSerializer
+from .models import Ticket, TicketNote, TicketQueue
+from .serializers import TicketSerializer, TicketNoteSerializer, TicketQueueSerializer
 from projects.models import Task, Project
 
 class TicketViewSet(viewsets.ModelViewSet):
@@ -36,7 +36,30 @@ class TicketViewSet(viewsets.ModelViewSet):
         ).distinct()
 
     def perform_create(self, serializer):
-        serializer.save(submitted_by=self.request.user)
+        queue = serializer.validated_data.get('queue') or TicketQueue.objects.filter(is_default=True).first()
+        assigned_to = serializer.validated_data.get('assigned_to')
+
+        if queue and queue.auto_assign and not assigned_to:
+            agents = list(queue.assigned_users.filter(is_active=True))
+            if agents:
+                # Load-balanced round-robin: assign to agent with fewest open tickets
+                from django.db.models import Count, Q
+                agent_loads = {
+                    u.id: Ticket.objects.filter(
+                        assigned_to=u,
+                        status__in=['OPEN', 'IN_PROGRESS']
+                    ).count()
+                    for u in agents
+                }
+                assigned_to = min(agents, key=lambda u: agent_loads.get(u.id, 0))
+
+        save_kwargs = {'submitted_by': self.request.user}
+        if queue and not serializer.validated_data.get('queue'):
+            save_kwargs['queue'] = queue
+        if assigned_to and not serializer.validated_data.get('assigned_to'):
+            save_kwargs['assigned_to'] = assigned_to
+
+        serializer.save(**save_kwargs)
 
     def perform_update(self, serializer):
         # We can track changes here to have the user context
@@ -177,3 +200,19 @@ class TicketViewSet(viewsets.ModelViewSet):
             note=note_text
         )
         return Response(TicketNoteSerializer(note).data, status=status.HTTP_201_CREATED)
+
+
+class TicketQueueViewSet(viewsets.ModelViewSet):
+    queryset = TicketQueue.objects.all().order_by('-is_default', 'name')
+    serializer_class = TicketQueueSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        if serializer.validated_data.get('is_default'):
+            TicketQueue.objects.filter(is_default=True).update(is_default=False)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        if serializer.validated_data.get('is_default'):
+            TicketQueue.objects.filter(is_default=True).exclude(id=self.get_object().id).update(is_default=False)
+        serializer.save()
