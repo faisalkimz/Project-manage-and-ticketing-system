@@ -108,7 +108,7 @@ Maturity classifications:
 | File attachments | ✅ Fully | ✅ Attachment modal | ✅ Generic Attachment model | Working |
 | Reactions on comments | ✅ Fully | ✅ Reaction buttons | ✅ Reaction model | Working |
 | Task history/audit | ✅ Fully | ✅ Audit log section | ✅ AuditLog + TaskHistory | Working |
-| Recurring tasks | 🔧 Backend | ❌ No UI | ✅ is_recurring + recurrence_rule | Backend only |
+| Recurring tasks | ✅ Fully | ✅ Recurring toggle + Daily/Weekly/Monthly in task modal | ✅ is_recurring + recurrence_rule + auto-clone on DONE | Working |
 | Task duplication | ✅ Fully | ✅ Duplicate action button | ✅ duplicate endpoint | Working |
 | Task templates | ❌ Missing | ❌ | ❌ | Not implemented |
 | Bulk operations | ✅ Fully | ✅ Bulk select + operations | ✅ bulk_operation endpoint | Working |
@@ -226,7 +226,7 @@ Maturity classifications:
 | Announcements | ✅ Fully | ✅ Collaboration tab | ✅ Announcement model | Working |
 | Mentions (@user) | ✅ Fully | ✅ Mention parsing in comments + notifications | ✅ Regex parser + Notification model | Working |
 | Real-time updates | ❌ Missing | ❌ | ❌ | No WebSockets/Django Channels |
-| File sharing in chat | ⚠️ Partial | ❌ No file in chat | ✅ ChatMessage.file field | Backend field, no upload UI |
+| File sharing in chat | ✅ Fully | ✅ Paperclip upload + file link in Project Chat | ✅ ChatMessage.file field + FormData | Working |
 | Team chat (org-level) | ❌ Missing | ❌ | ❌ | Only project-level chat |
 | DMs / Direct messages | ❌ Missing | ❌ | ❌ | Not implemented |
 | Video call integration | ❌ Missing | ❌ | ❌ | Not implemented |

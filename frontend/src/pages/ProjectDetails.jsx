@@ -5,7 +5,7 @@ import {
     Paperclip, Tag, ChevronDown, ChevronRight, ChevronUp, List, Calendar as CalendarIcon, Layout, GitMerge, CheckSquare, Trash2,
     Flag, Target, TrendingUp, Shield, HelpCircle, AlertCircle, Package, BarChart, History,
     Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check, Circle,
-    Sparkles, Loader2, Copy, Archive
+    Sparkles, Loader2, Copy, Archive, Repeat
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -113,6 +113,7 @@ const ProjectDetails = () => {
     const [notifications, setNotifications] = useState([]);
     const [collaborateMode, setCollaborateMode] = useState('chat'); // chat, announcements, notifications
     const [newChatText, setNewChatText] = useState('');
+    const [chatFile, setChatFile] = useState(null);
     const [newAnnounce, setNewAnnounce] = useState({ title: '', content: '' });
     const [showAnnounceModal, setShowAnnounceModal] = useState(false);
     const [timeEntries, setTimeEntries] = useState([]);
@@ -1015,14 +1016,26 @@ const ProjectDetails = () => {
     };
 
     const handleSendChat = async () => {
-        if (!newChatText.trim()) return;
+        if (!newChatText.trim() && !chatFile) return;
         try {
-            await api.post('/collaboration/chat/', {
-                text: newChatText,
-                content_type: 'project',
-                object_id: id
-            });
+            if (chatFile) {
+                const formData = new FormData();
+                formData.append('text', newChatText.trim() || chatFile.name);
+                formData.append('file', chatFile);
+                formData.append('content_type', 'project');
+                formData.append('object_id', id);
+                await api.post('/collaboration/chat/', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            } else {
+                await api.post('/collaboration/chat/', {
+                    text: newChatText,
+                    content_type: 'project',
+                    object_id: id
+                });
+            }
             setNewChatText('');
+            setChatFile(null);
             fetchChatMessages();
             // Scroll to bottom
             setTimeout(() => {
@@ -2804,7 +2817,18 @@ const ProjectDetails = () => {
                                                                 <span className="text-[10px] text-[#5E6C84]">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                             </div>
                                                             <div className={`p-3 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-[#0052CC] text-white rounded-tr-none' : 'bg-[#F4F5F7] text-[#172B4D] rounded-tl-none'}`}>
-                                                                {msg.text}
+                                                                {msg.text && <div>{msg.text}</div>}
+                                                                {msg.file && (
+                                                                    <a
+                                                                        href={msg.file}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className={`mt-2 flex items-center gap-1.5 text-xs underline ${isMe ? 'text-blue-100 hover:text-white' : 'text-[#0052CC] hover:text-[#0747A6]'}`}
+                                                                    >
+                                                                        <Paperclip size={12} />
+                                                                        {decodeURIComponent(msg.file.split('/').pop())}
+                                                                    </a>
+                                                                )}
                                                             </div>
                                                             {/* Reactions */}
                                                             <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -2842,7 +2866,32 @@ const ProjectDetails = () => {
                                             )}
                                         </div>
                                         <div className="p-4 border-t border-[#DFE1E6] bg-[#FAFBFC]">
-                                            <div className="flex gap-2">
+                                            {chatFile && (
+                                                <div className="mb-2 flex items-center gap-2 px-3 py-1.5 bg-[#DEEBFF] text-[#0052CC] rounded-lg text-xs font-medium w-fit">
+                                                    <Paperclip size={12} />
+                                                    <span className="truncate max-w-[200px]">{chatFile.name}</span>
+                                                    <button type="button" onClick={() => setChatFile(null)} className="hover:text-[#DE350B]">
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            <div className="flex gap-2 items-center">
+                                                <input
+                                                    id="chat-file-input"
+                                                    type="file"
+                                                    className="hidden"
+                                                    onChange={e => {
+                                                        if (e.target.files?.[0]) setChatFile(e.target.files[0]);
+                                                        e.target.value = '';
+                                                    }}
+                                                />
+                                                <label
+                                                    htmlFor="chat-file-input"
+                                                    title="Attach file"
+                                                    className="w-10 h-10 rounded-full border border-[#DFE1E6] bg-white text-[#42526E] flex items-center justify-center hover:bg-[#EBECF0] cursor-pointer transition-colors shrink-0"
+                                                >
+                                                    <Paperclip size={18} />
+                                                </label>
                                                 <input
                                                     type="text"
                                                     placeholder="Type a message..."
@@ -2853,8 +2902,8 @@ const ProjectDetails = () => {
                                                 />
                                                 <button
                                                     onClick={handleSendChat}
-                                                    disabled={!newChatText.trim()}
-                                                    className="w-10 h-10 rounded-full bg-[#0052CC] text-white flex items-center justify-center hover:bg-[#0747A6] transition-colors disabled:opacity-50 shadow-md"
+                                                    disabled={!newChatText.trim() && !chatFile}
+                                                    className="w-10 h-10 rounded-full bg-[#0052CC] text-white flex items-center justify-center hover:bg-[#0747A6] transition-colors disabled:opacity-50 shadow-md shrink-0"
                                                 >
                                                     <ChevronUp className="rotate-90" size={20} />
                                                 </button>
@@ -3764,6 +3813,52 @@ const ProjectDetails = () => {
                                                     </div>
                                                 </div>
                                             </div>
+                                        )}
+                                    </div>
+
+                                    {/* Recurring Task Schedule */}
+                                    <div className="bg-[#FAFBFC] border border-[#DFE1E6] rounded-md p-3 flex flex-wrap items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2.5">
+                                            <Repeat size={15} className={selectedTask.is_recurring ? 'text-[#0052CC]' : 'text-[#5E6C84]'} />
+                                            <div>
+                                                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-[#172B4D]">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(selectedTask.is_recurring)}
+                                                        onChange={async (e) => {
+                                                            const checked = e.target.checked;
+                                                            const rule = selectedTask.recurrence_rule || 'WEEKLY';
+                                                            await handleUpdateTask(selectedTask.id, {
+                                                                is_recurring: checked,
+                                                                recurrence_rule: checked ? rule : null
+                                                            });
+                                                        }}
+                                                        className="rounded border-[#DFE1E6] text-[#0052CC] focus:ring-0"
+                                                    />
+                                                    Recurring Task
+                                                </label>
+                                                <p className="text-[11px] text-[#5E6C84]">
+                                                    {selectedTask.is_recurring
+                                                        ? 'Creates the next occurrence automatically when marked Done.'
+                                                        : 'Enable to repeat this task on a schedule.'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {selectedTask.is_recurring && (
+                                            <select
+                                                value={selectedTask.recurrence_rule || 'WEEKLY'}
+                                                onChange={async (e) => {
+                                                    await handleUpdateTask(selectedTask.id, {
+                                                        is_recurring: true,
+                                                        recurrence_rule: e.target.value
+                                                    });
+                                                }}
+                                                className="text-xs font-semibold border border-[#DFE1E6] rounded px-2.5 py-1.5 bg-white text-[#172B4D] focus:border-[#0052CC] outline-none"
+                                            >
+                                                <option value="DAILY">Daily</option>
+                                                <option value="WEEKLY">Weekly</option>
+                                                <option value="MONTHLY">Monthly</option>
+                                            </select>
                                         )}
                                     </div>
 
