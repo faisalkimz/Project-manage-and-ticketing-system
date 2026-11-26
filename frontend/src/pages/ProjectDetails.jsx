@@ -1876,6 +1876,9 @@ const ProjectDetails = () => {
                                                     {sprint.status}
                                                 </span>
                                                 <span className="text-[10px] text-[#5E6C84]">{tasks.filter(t => t.sprint === sprint.id).length} issues</span>
+                                                <span className="text-[10px] font-bold text-[#0052CC] bg-[#DEEBFF] px-1.5 py-0.5 rounded">
+                                                    {tasks.filter(t => t.sprint === sprint.id).reduce((sum, t) => sum + (t.story_points || 0), 0)} pts
+                                                </span>
                                             </div>
                                             <div className="flex items-center gap-4">
                                                 <span className="text-[10px] text-[#5E6C84] font-medium">{new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}</span>
@@ -1889,14 +1892,23 @@ const ProjectDetails = () => {
                                                 )}
                                                 {sprint.status === 'ACTIVE' && (
                                                     <button onClick={async () => {
+                                                        const nextPlanned = sprints.find(s => s.status === 'PLANNED' && s.id !== sprint.id);
                                                         const ok = await confirm({
-                                                            title: 'Complete Sprint',
-                                                            message: 'Complete sprint and move all unfinished tasks back to the backlog?',
+                                                            title: 'Complete Sprint & Auto-Rollover',
+                                                            message: nextPlanned
+                                                                ? `Complete "${sprint.name}" and automatically roll over unfinished tasks to "${nextPlanned.name}"?`
+                                                                : `Complete "${sprint.name}" and move unfinished tasks back to the Backlog?`,
                                                             confirmText: 'Complete Sprint',
                                                             isDanger: false,
                                                         });
                                                         if (ok) {
-                                                            await api.post(`/projects/sprints/${sprint.id}/complete_sprint/`);
+                                                            const res = await api.post(`/projects/sprints/${sprint.id}/complete_sprint/`, {
+                                                                rollover_to: nextPlanned ? 'next_sprint' : 'backlog'
+                                                            });
+                                                            showToast(
+                                                                `Sprint completed! ${res.data.rolled_over_count} unfinished task(s) moved to ${res.data.target_sprint_name}.`,
+                                                                'success'
+                                                            );
                                                             fetchProjectDetails();
                                                         }
                                                     }} className="px-3 py-1 bg-[#F4F5F7] border border-[#DFE1E6] text-[#172B4D] text-[10px] font-bold rounded hover:bg-[#EBECF0]">
@@ -1908,12 +1920,32 @@ const ProjectDetails = () => {
                                         <div className="divide-y divide-[#F4F5F7]">
                                             {tasks.filter(t => t.sprint === sprint.id).map(task => (
                                                 <div key={task.id} onClick={() => setSelectedTask(task)} className="px-10 py-2 flex items-center justify-between hover:bg-[#FAFBFC] cursor-pointer group/item">
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-3 min-w-0">
                                                         {getIssueTypeIcon(task.issue_type)}
-                                                        <span className="text-xs text-[#172B4D] group-hover/item:text-[#0052CC] transition-colors">{task.title}</span>
+                                                        <span className={`text-xs truncate group-hover/item:text-[#0052CC] transition-colors ${task.status === 'DONE' ? 'line-through text-[#5E6C84]' : 'text-[#172B4D]'}`}>{task.title}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
-                                                        {task.story_points > 0 && <span className="text-[10px] font-bold bg-[#DFE1E6] px-1.5 py-0.5 rounded-full">{task.story_points}</span>}
+                                                    <div className="flex items-center gap-3 shrink-0" onClick={e => e.stopPropagation()}>
+                                                        <select
+                                                            value={task.story_points || 0}
+                                                            onChange={e => handleUpdateTask(task.id, { story_points: Number(e.target.value) })}
+                                                            className="text-[10px] font-bold bg-[#F4F5F7] border border-[#DFE1E6] rounded px-1.5 py-0.5 text-[#172B4D] outline-none"
+                                                            title="Story Points"
+                                                        >
+                                                            {[0, 1, 2, 3, 5, 8, 13, 21].map(pts => (
+                                                                <option key={pts} value={pts}>{pts} pts</option>
+                                                            ))}
+                                                        </select>
+                                                        <select
+                                                            value={task.sprint || ''}
+                                                            onChange={e => handleUpdateTask(task.id, { sprint: e.target.value ? Number(e.target.value) : null })}
+                                                            className="text-[10px] font-medium bg-white border border-[#DFE1E6] rounded px-1.5 py-0.5 text-[#42526E] outline-none"
+                                                            title="Move to Sprint / Backlog"
+                                                        >
+                                                            <option value="">Backlog</option>
+                                                            {sprints.filter(s => s.status !== 'COMPLETED').map(s => (
+                                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                                            ))}
+                                                        </select>
                                                         <div className={`w-5 h-5 rounded-full bg-[#0052CC] text-white flex items-center justify-center text-[9px] font-bold`}>
                                                             {task.assigned_to_details?.username?.[0].toUpperCase() || '?'}
                                                         </div>
@@ -1934,18 +1966,41 @@ const ProjectDetails = () => {
                                             <ChevronDown size={14} className="text-[#5E6C84]" />
                                             <span className="text-xs font-bold text-[#172B4D]">Backlog</span>
                                             <span className="text-[10px] text-[#5E6C84]">{tasks.filter(t => !t.sprint).length} issues</span>
+                                            <span className="text-[10px] font-bold text-[#42526E] bg-white px-1.5 py-0.5 rounded">
+                                                {tasks.filter(t => !t.sprint).reduce((sum, t) => sum + (t.story_points || 0), 0)} pts
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="divide-y divide-[#F4F5F7]">
                                         {tasks.filter(t => !t.sprint).map(task => (
                                             <div key={task.id} onClick={() => setSelectedTask(task)} className="px-10 py-2 flex items-center justify-between hover:bg-[#FAFBFC] cursor-pointer group/item">
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 min-w-0">
                                                     {getIssueTypeIcon(task.issue_type)}
-                                                    <span className="text-xs text-[#172B4D] group-hover/item:text-[#0052CC] transition-colors">{task.title}</span>
+                                                    <span className="text-xs text-[#172B4D] truncate group-hover/item:text-[#0052CC] transition-colors">{task.title}</span>
                                                 </div>
-                                                <div className="flex items-center gap-3 text-[10px] text-[#5E6C84] font-bold">
+                                                <div className="flex items-center gap-3 text-[10px] text-[#5E6C84] font-bold shrink-0" onClick={e => e.stopPropagation()}>
                                                     <span className="uppercase">{task.priority}</span>
-                                                    {task.story_points > 0 && <span className="bg-[#DFE1E6] px-1.5 py-0.5 rounded-full">{task.story_points}</span>}
+                                                    <select
+                                                        value={task.story_points || 0}
+                                                        onChange={e => handleUpdateTask(task.id, { story_points: Number(e.target.value) })}
+                                                        className="text-[10px] font-bold bg-[#F4F5F7] border border-[#DFE1E6] rounded px-1.5 py-0.5 text-[#172B4D] outline-none"
+                                                        title="Story Points"
+                                                    >
+                                                        {[0, 1, 2, 3, 5, 8, 13, 21].map(pts => (
+                                                            <option key={pts} value={pts}>{pts} pts</option>
+                                                        ))}
+                                                    </select>
+                                                    <select
+                                                        value={task.sprint || ''}
+                                                        onChange={e => handleUpdateTask(task.id, { sprint: e.target.value ? Number(e.target.value) : null })}
+                                                        className="text-[10px] font-medium bg-white border border-[#DFE1E6] rounded px-1.5 py-0.5 text-[#0052CC] outline-none"
+                                                        title="Assign to Sprint"
+                                                    >
+                                                        <option value="">Backlog</option>
+                                                        {sprints.filter(s => s.status !== 'COMPLETED').map(s => (
+                                                            <option key={s.id} value={s.id}>Move to {s.name}</option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             </div>
                                         ))}

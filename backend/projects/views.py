@@ -135,6 +135,38 @@ class SprintViewSet(viewsets.ModelViewSet):
         sprint.save()
         return Response({'status': 'Sprint started'})
 
+    @action(detail=True, methods=['post'])
+    def complete_sprint(self, request, pk=None):
+        """Complete an active sprint and roll over unfinished tasks to the next planned sprint or backlog."""
+        sprint = self.get_object()
+        sprint.status = 'COMPLETED'
+        sprint.save(update_fields=['status'])
+
+        unfinished = Task.objects.filter(sprint=sprint).exclude(status='DONE')
+        rollover_to = request.data.get('rollover_to', 'next_sprint')  # 'next_sprint' | 'backlog' | <sprint_id>
+        target_sprint = None
+
+        if rollover_to == 'next_sprint':
+            target_sprint = Sprint.objects.filter(
+                project=sprint.project,
+                status='PLANNED'
+            ).exclude(id=sprint.id).order_by('start_date', 'id').first()
+        elif rollover_to and str(rollover_to).isdigit():
+            target_sprint = Sprint.objects.filter(
+                project=sprint.project,
+                id=int(rollover_to)
+            ).exclude(id=sprint.id).first()
+
+        rolled_over_count = unfinished.count()
+        unfinished.update(sprint=target_sprint)
+
+        return Response({
+            'status': 'Sprint completed',
+            'rolled_over_count': rolled_over_count,
+            'target_sprint_id': target_sprint.id if target_sprint else None,
+            'target_sprint_name': target_sprint.name if target_sprint else 'Backlog'
+        })
+
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer

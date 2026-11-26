@@ -154,15 +154,15 @@ Maturity classifications:
 | Sprint goal | ✅ Fully | ✅ Sprint form | ✅ goal field | Working |
 | Sprint start/end dates | ✅ Fully | ✅ Date pickers | ✅ | Working |
 | Sprint status (Planned/Active/Completed) | ✅ Fully | ✅ Status display | ✅ Status choices | Working |
-| Sprint backlog | ⚠️ Partial | ⚠️ Tasks filtered by sprint | ✅ task.sprint FK | No dedicated backlog management UI |
+| Sprint backlog | ✅ Fully | ✅ Dedicated Backlog tab with inline sprint/points grooming | ✅ task.sprint FK | Working |
 | Sprint capacity planning | ✅ Fully | ✅ Capacity modal | ✅ SprintCapacity model | Working |
 | Sprint retrospective | ✅ Fully | ✅ Retro modal | ✅ SprintRetrospective model | Working |
 | Burndown chart | ✅ Fully | ✅ Reports tab | ✅ burndown API | Working |
 | Burnup chart | ✅ Fully | ✅ Reports tab | ✅ burnup API | Working |
 | Velocity chart | ✅ Fully | ✅ Reports tab | ✅ velocity API | Working |
 | Sprint release | ✅ Fully | ✅ Release management | ✅ Release model | Working |
-| Backlog grooming | ❌ Missing | ❌ | ❌ | No dedicated backlog view |
-| Sprint auto-rollover | ❌ Missing | ❌ | ❌ | Linear's key differentiator |
+| Backlog grooming | ✅ Fully | ✅ Inline story-points & sprint assignment in Backlog | ✅ Task PATCH | Working |
+| Sprint auto-rollover | ✅ Fully | ✅ Complete Sprint auto-rollover confirmation & toast | ✅ complete_sprint endpoint rolls unfinished tasks | Working |
 | Epics management UI | ⚠️ Partial | ⚠️ Epic issue type only | ✅ IssueType.EPIC | No dedicated Epic view |
 
 **Gap Severity:** MEDIUM — Core sprint features work; dedicated backlog view needed
