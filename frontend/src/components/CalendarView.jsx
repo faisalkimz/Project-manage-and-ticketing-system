@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Plus, Download } from 'lucide-react';
+import api from '../services/api';
 
 const CalendarView = ({ tasks, onTaskClick }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -111,6 +112,21 @@ const CalendarView = ({ tasks, onTaskClick }) => {
                         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[2px] bg-[#FFEBE6] border border-[#FFBDAD]"></span> Priority</div>
                         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[2px] bg-[#E3FCEF] border border-[#ABF5D1]"></span> Done</div>
                     </div>
+                    <button
+                        onClick={async () => {
+                            try {
+                                const res = await api.get('/projects/tasks/ical/', { responseType: 'blob' });
+                                const url = window.URL.createObjectURL(new Blob([res.data]));
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'omni_pms_tasks.ics';
+                                a.click();
+                            } catch (e) { console.error(e); }
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-[#EBECF0] hover:bg-[#DFE1E6] text-[#172B4D] rounded-sm text-xs font-semibold transition-colors"
+                    >
+                        <Download size={13} /> Sync .ics
+                    </button>
                 </div>
             </header>
             <div className="flex-1 overflow-y-auto custom-scrollbar">

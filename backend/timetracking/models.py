@@ -15,6 +15,14 @@ class TimeEntry(models.Model):
     is_running = models.BooleanField(default=False)
     is_billable = models.BooleanField(default=True)
     is_manual = models.BooleanField(default=False)
+    approval_status = models.CharField(
+        max_length=20,
+        choices=[('PENDING', 'Pending'), ('APPROVED', 'Approved'), ('REJECTED', 'Rejected')],
+        default='PENDING'
+    )
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_time_entries')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

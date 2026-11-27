@@ -5,7 +5,7 @@ import {
     Paperclip, Tag, ChevronDown, ChevronRight, ChevronUp, List, Calendar as CalendarIcon, Layout, GitMerge, CheckSquare, Trash2,
     Flag, Target, TrendingUp, Shield, HelpCircle, AlertCircle, Package, BarChart, History,
     Layers, Activity, Briefcase, Share, PieChart, Info, Kanban, Settings, User, Edit2, Check, Circle,
-    Sparkles, Loader2, Copy, Archive, Repeat
+    Sparkles, Loader2, Copy, Archive, Repeat, BookmarkPlus
 } from 'lucide-react';
 import api from '../services/api';
 import useAuthStore from '../store/authStore';
@@ -44,6 +44,10 @@ const ProjectDetails = () => {
         parent_task: null
     });
     const [sprints, setSprints] = useState([]);
+    const [taskTemplates, setTaskTemplates] = useState([]);
+    useEffect(() => {
+        api.get('/projects/task-templates/').then(r => setTaskTemplates(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    }, []);
     const [showSprintModal, setShowSprintModal] = useState(false);
     const [newSprint, setNewSprint] = useState({ name: '', goal: '', start_date: '', end_date: '' });
     const [searchParams, setSearchParams] = useSearchParams();
@@ -1528,6 +1532,18 @@ const ProjectDetails = () => {
                         <button onClick={() => setViewMode('table')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'table' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
                             Table
                         </button>
+                        <button onClick={() => setViewMode('mindmap')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'mindmap' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
+                            Mind Map
+                        </button>
+                        <button onClick={() => setViewMode('whiteboard')} className={`px-3 py-2 border-b-2 text-sm font-bold transition-colors ${viewMode === 'whiteboard' ? 'border-[#0052CC] text-[#0052CC]' : 'border-transparent text-[#42526E] hover:text-[#0052CC]'}`}>
+                            Whiteboard
+                        </button>
+                        <button
+                            onClick={() => window.open(`https://meet.jit.si/omni-pms-project-${id}`, '_blank')}
+                            className="px-3 py-2 border-b-2 text-sm font-bold border-transparent text-emerald-700 hover:text-emerald-900"
+                        >
+                            Video Call
+                        </button>
                     </div>
 
                     <button onClick={openSettings} className="px-3 py-2 border-b-2 text-sm font-bold border-transparent text-[#42526E] hover:text-[#0052CC] shrink-0">
@@ -2030,6 +2046,48 @@ const ProjectDetails = () => {
                         </div>
                     )
                 }
+
+                {viewMode === 'mindmap' && (
+                    <div className="flex-1 overflow-auto p-8 bg-[#F4F5F7]">
+                        <div className="max-w-5xl mx-auto">
+                            <div className="flex flex-col items-center">
+                                <div className="px-6 py-3 bg-[#0052CC] text-white font-bold rounded-lg shadow-md mb-8">
+                                    {project?.name || 'Project Mind Map'}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                                    {['TODO', 'IN_PROGRESS', 'DONE'].map(statusKey => (
+                                        <div key={statusKey} className="bg-white border border-[#DFE1E6] rounded-lg p-4 shadow-sm">
+                                            <div className="text-xs font-bold uppercase text-[#5E6C84] mb-3 pb-2 border-b border-[#DFE1E6]">
+                                                {statusKey.replace('_', ' ')} ({tasks.filter(t => t.status === statusKey).length})
+                                            </div>
+                                            <div className="space-y-2">
+                                                {tasks.filter(t => t.status === statusKey).map(t => (
+                                                    <div
+                                                        key={t.id}
+                                                        onClick={() => setSelectedTask(t)}
+                                                        className="p-2.5 bg-[#FAFBFC] hover:bg-[#DEEBFF] border border-[#DFE1E6] rounded cursor-pointer text-xs font-medium text-[#172B4D] transition"
+                                                    >
+                                                        {t.title}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {viewMode === 'whiteboard' && (
+                    <div className="flex-1 p-4 bg-white">
+                        <iframe
+                            title="Project Whiteboard"
+                            src="https://excalidraw.com/"
+                            className="w-full h-[78vh] border border-[#DFE1E6] rounded-lg"
+                        />
+                    </div>
+                )}
 
                 {
                     viewMode === 'workload' && (
@@ -4491,6 +4549,23 @@ const ProjectDetails = () => {
                                     </div>
 
                                     <p className="text-xs font-semibold text-[#5E6C84] uppercase mb-2 pt-2">Actions</p>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                const res = await api.post('/projects/task-templates/', {
+                                                    name: selectedTask.title,
+                                                    description: selectedTask.description || '',
+                                                    priority: selectedTask.priority || 'MEDIUM',
+                                                    issue_type: selectedTask.issue_type || 'TASK',
+                                                });
+                                                setTaskTemplates(prev => [res.data, ...prev]);
+                                                showToast('Saved as Task Template!', 'success');
+                                            } catch (e) { showToast('Failed to save template', 'error'); }
+                                        }}
+                                        className="w-full text-left px-3 py-2 bg-[#EBECF0] hover:bg-[#DFE1E6] rounded text-sm font-medium text-[#172B4D] flex items-center gap-2 mb-2"
+                                    >
+                                        <BookmarkPlus size={14} /> Save as Template
+                                    </button>
                                     {activeTimer?.task === selectedTask.id && (
                                         <div className="bg-blue-50 p-3 rounded border border-blue-100 flex items-center justify-between mb-2">
                                             <div className="flex items-center gap-2">
@@ -5275,6 +5350,32 @@ const ProjectDetails = () => {
                                 <button onClick={() => setIsTaskModalOpen(false)} className="p-1 hover:bg-[#EBECF0] rounded"><X size={18} /></button>
                             </div>
                             <form onSubmit={handleCreateTask} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                                {taskTemplates.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Apply Task Template</label>
+                                        <select
+                                            defaultValue=""
+                                            onChange={(e) => {
+                                                const tpl = taskTemplates.find(t => String(t.id) === e.target.value);
+                                                if (tpl) {
+                                                    setNewTask(prev => ({
+                                                        ...prev,
+                                                        title: tpl.name,
+                                                        description: tpl.description || '',
+                                                        priority: tpl.priority || 'MEDIUM',
+                                                        issue_type: tpl.issue_type || 'TASK',
+                                                    }));
+                                                }
+                                            }}
+                                            className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm bg-[#FAFBFC]"
+                                        >
+                                            <option value="" disabled>Select a template...</option>
+                                            {taskTemplates.map(tpl => (
+                                                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                                 <div>
                                     <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">Issue Type</label>
                                     <div className="flex gap-2">

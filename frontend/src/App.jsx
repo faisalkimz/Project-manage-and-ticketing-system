@@ -22,6 +22,10 @@ import Automation from './pages/Automation';
 import Knowledge from './pages/Knowledge';
 import Reports from './pages/Reports';
 import UniversalTimeline from './pages/UniversalTimeline';
+import PublicPortal from './pages/PublicPortal';
+import Messages from './pages/Messages';
+import CustomDashboard from './pages/CustomDashboard';
+import Approvals from './pages/Approvals';
 import GlobalSearch from './components/GlobalSearch';
 import ProtectedRoute from './components/ProtectedRoute';
 import useAuthStore from './store/authStore';
@@ -127,6 +131,7 @@ function App() {
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/portal" element={<PublicPortal />} />
           <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
           {/* Protected Main App Routes */}
@@ -149,6 +154,9 @@ function App() {
             <Route path="reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="timeline" element={<ProtectedRoute><UniversalTimeline /></ProtectedRoute>} />
             <Route path="jira" element={<ProtectedRoute><Jira /></ProtectedRoute>} />
+            <Route path="messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+            <Route path="dashboard/custom" element={<ProtectedRoute><CustomDashboard /></ProtectedRoute>} />
+            <Route path="approvals" element={<ProtectedRoute><Approvals /></ProtectedRoute>} />
           </Route>
         </Routes>
         </ConfirmProvider>

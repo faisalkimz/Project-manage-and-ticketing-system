@@ -8,14 +8,16 @@ from activity.models import AuditLog
 from .models import (
     Project, Task, TaskChecklistItem, Tag, Milestone, ProjectCategory,
     Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
-    Release, SprintRetrospective, SprintCapacity, TaskHistory, CustomFieldDefinition
+    Release, SprintRetrospective, SprintCapacity, TaskHistory, CustomFieldDefinition,
+    Report, TaskTemplate, ScheduledReport
 )
 from .serializers import (
     ProjectSerializer, TaskSerializer, TaskChecklistItemSerializer, TagSerializer, MilestoneSerializer,
     ProjectCategorySerializer, PortfolioSerializer, ProgramSerializer,
     ProjectGoalSerializer, DeliverableSerializer, ProjectStatusSerializer,
     SprintSerializer, ReleaseSerializer, SprintRetrospectiveSerializer,
-    SprintCapacitySerializer, ReminderSerializer, CustomFieldDefinitionSerializer
+    SprintCapacitySerializer, ReminderSerializer, CustomFieldDefinitionSerializer,
+    ReportSerializer, TaskTemplateSerializer, ScheduledReportSerializer
 )
 # Import Ticket model lazily to avoid circular imports in some test setups
 try:
@@ -51,6 +53,44 @@ class PortfolioViewSet(viewsets.ModelViewSet):
         project_ids = request.data.get('project_ids', [])
         Project.objects.filter(id__in=project_ids).update(portfolio=portfolio)
         return Response({'status': 'Projects linked successfully'})
+
+    @action(detail=True, methods=['get'], url_path='report')
+    def portfolio_report(self, request, pk=None):
+        portfolio = self.get_object()
+        projects = portfolio.projects.all()
+        tasks = Task.objects.filter(project__in=projects)
+        total_tasks = tasks.count()
+        completed_tasks = tasks.filter(status='DONE').count()
+        in_progress_tasks = tasks.filter(status='IN_PROGRESS').count()
+        todo_tasks = tasks.filter(status='TODO').count()
+        overdue_tasks = tasks.filter(due_date__lt=timezone.now().date()).exclude(status='DONE').count()
+        total_budget = sum(float(getattr(p, 'budget', 0) or 0) for p in projects)
+        member_ids = set()
+        for p in projects:
+            member_ids.update(p.members.values_list('id', flat=True))
+        return Response({
+            'portfolio_id': portfolio.id,
+            'portfolio_name': portfolio.name,
+            'total_projects': projects.count(),
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'in_progress_tasks': in_progress_tasks,
+            'todo_tasks': todo_tasks,
+            'overdue_tasks': overdue_tasks,
+            'completion_rate': round((completed_tasks / total_tasks) * 100, 1) if total_tasks else 0,
+            'total_budget': total_budget,
+            'unique_members': len(member_ids),
+            'projects_summary': [
+                {
+                    'id': p.id,
+                    'name': p.name,
+                    'status': p.status,
+                    'task_count': p.tasks.count(),
+                    'done_count': p.tasks.filter(status='DONE').count(),
+                }
+                for p in projects
+            ]
+        })
 
 class ProgramViewSet(viewsets.ModelViewSet):
     queryset = Program.objects.all()
@@ -390,7 +430,32 @@ class MilestoneViewSet(viewsets.ModelViewSet):
             
         if project_id:
             return qs.filter(project_id=project_id)
-        return qs.filter(project__members=user)
+        return qs
+
+    @action(detail=False, methods=['get'], url_path='ical')
+    def ical_feed(self, request):
+        from django.http import HttpResponse
+        tasks = self.get_queryset().filter(due_date__isnull=False)
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Omni-PMS//Task Calendar//EN",
+        ]
+        for t in tasks:
+            dt = t.due_date.strftime('%Y%m%d')
+            summary = (t.title or '').replace('\n', ' ').replace(',', '\\,')
+            lines.extend([
+                "BEGIN:VEVENT",
+                f"UID:task-{t.id}@omni-pms.local",
+                f"DTSTART;VALUE=DATE:{dt}",
+                f"SUMMARY:{summary}",
+                f"STATUS:{t.status}",
+                "END:VEVENT",
+            ])
+        lines.append("END:VCALENDAR")
+        resp = HttpResponse("\r\n".join(lines), content_type='text/calendar; charset=utf-8')
+        resp['Content-Disposition'] = 'attachment; filename="omni_pms_tasks.ics"'
+        return resp.filter(project__members=user)
 
 class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
@@ -424,6 +489,31 @@ class TaskViewSet(viewsets.ModelViewSet):
             return qs.filter(project_id=project_id)
         return qs
 
+
+    @action(detail=False, methods=['get'], url_path='ical')
+    def ical_feed(self, request):
+        from django.http import HttpResponse
+        tasks = self.get_queryset().filter(due_date__isnull=False)
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Omni-PMS//Task Calendar//EN",
+        ]
+        for t in tasks:
+            dt = t.due_date.strftime('%Y%m%d')
+            summary = (t.title or '').replace('\n', ' ').replace(',', '\\,')
+            lines.extend([
+                "BEGIN:VEVENT",
+                f"UID:task-{t.id}@omni-pms.local",
+                f"DTSTART;VALUE=DATE:{dt}",
+                f"SUMMARY:{summary}",
+                f"STATUS:{t.status}",
+                "END:VEVENT",
+            ])
+        lines.append("END:VCALENDAR")
+        resp = HttpResponse("\r\n".join(lines), content_type='text/calendar; charset=utf-8')
+        resp['Content-Disposition'] = 'attachment; filename="omni_pms_tasks.ics"'
+        return resp
 
     def perform_create(self, serializer):
         instance = serializer.save()
@@ -705,5 +795,60 @@ class CustomFieldDefinitionViewSet(viewsets.ModelViewSet):
         if project_id:
             return CustomFieldDefinition.objects.filter(project_id=project_id)
         return CustomFieldDefinition.objects.all()
+
+
+class TaskTemplateViewSet(viewsets.ModelViewSet):
+    queryset = TaskTemplate.objects.all().order_by('-created_at')
+    serializer_class = TaskTemplateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def apply(self, request, pk=None):
+        template = self.get_object()
+        project_id = request.data.get('project')
+        if not project_id:
+            return Response({'error': 'project is required'}, status=400)
+        task = Task.objects.create(
+            project_id=project_id,
+            title=request.data.get('title') or template.name,
+            description=template.description,
+            priority=template.priority,
+            issue_type=template.issue_type,
+            estimated_hours=template.estimated_hours,
+            created_by=request.user,
+            status='TODO',
+        )
+        for item in (template.checklist_items or []):
+            text = item.get('text') if isinstance(item, dict) else str(item)
+            if text:
+                TaskChecklistItem.objects.create(task=task, text=text)
+        return Response(TaskSerializer(task).data, status=201)
+
+
+class ReportViewSet(viewsets.ModelViewSet):
+    queryset = Report.objects.all().order_by('-created_at')
+    serializer_class = ReportSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Report.objects.filter(created_by=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class ScheduledReportViewSet(viewsets.ModelViewSet):
+    queryset = ScheduledReport.objects.all().order_by('-created_at')
+    serializer_class = ScheduledReportSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return ScheduledReport.objects.filter(created_by=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 

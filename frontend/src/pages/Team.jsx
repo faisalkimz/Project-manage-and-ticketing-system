@@ -323,7 +323,7 @@ const Team = () => {
                                                             <div className="absolute right-8 top-8 w-56 bg-white border border-[#DFE1E6] rounded-[3px] shadow-xl z-20 animate-scale-in" onClick={e => e.stopPropagation()}>
                                                                 <div className="p-2 border-b border-[#DFE1E6]">
                                                                     <p className="text-xs font-bold text-[#5E6C84] px-2 mb-2 uppercase">Change Role</p>
-                                                                    {['EMPLOYEE', 'DEVELOPER', 'PROJECT_MANAGER', 'ADMIN'].map(role => (
+                                                                    {['EMPLOYEE', 'DEVELOPER', 'PROJECT_MANAGER', 'ADMIN', 'GUEST'].map(role => (
                                                                         <button
                                                                             key={role}
                                                                             onClick={() => handleUpdateUserRole(user.id, role)}
@@ -531,6 +531,7 @@ const Team = () => {
                                     <option value="DEVELOPER">Developer</option>
                                     <option value="PROJECT_MANAGER">Project Manager</option>
                                     <option value="ADMIN">Admin</option>
+                                    <option value="GUEST">Guest (External)</option>
                                 </select>
                             </div>
 

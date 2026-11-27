@@ -1,8 +1,8 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Notification, Announcement, ChatMessage
-from .serializers import NotificationSerializer, AnnouncementSerializer, ChatMessageSerializer
+from .models import Notification, Announcement, ChatMessage, DirectMessage
+from .serializers import NotificationSerializer, AnnouncementSerializer, ChatMessageSerializer, DirectMessageSerializer
 from django.contrib.contenttypes.models import ContentType
 
 class NotificationViewSet(viewsets.ModelViewSet):
@@ -67,6 +67,23 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
                 object_id=object_id
             )
         return ChatMessage.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(sender=self.request.user)
+
+
+class DirectMessageViewSet(viewsets.ModelViewSet):
+    serializer_class = DirectMessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from django.db.models import Q
+        user = self.request.user
+        peer_id = self.request.query_params.get('peer_id')
+        qs = DirectMessage.objects.filter(Q(sender=user) | Q(recipient=user))
+        if peer_id:
+            qs = qs.filter(Q(sender_id=peer_id) | Q(recipient_id=peer_id))
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(sender=self.request.user)

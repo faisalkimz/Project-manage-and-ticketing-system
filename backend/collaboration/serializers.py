@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Notification, Announcement, ChatMessage
+from .models import Notification, Announcement, ChatMessage, DirectMessage
 from django.contrib.contenttypes.models import ContentType
 from users.serializers import UserSerializer
 
@@ -43,3 +43,13 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         model = ChatMessage
         fields = ['id', 'sender', 'sender_details', 'content_type', 'object_id', 'text', 'file', 'created_at']
         read_only_fields = ['sender']
+
+
+class DirectMessageSerializer(serializers.ModelSerializer):
+    sender_details = UserSerializer(source='sender', read_only=True)
+    recipient_details = UserSerializer(source='recipient', read_only=True)
+
+    class Meta:
+        model = DirectMessage
+        fields = ['id', 'sender', 'sender_details', 'recipient', 'recipient_details', 'text', 'file', 'is_read', 'created_at']
+        read_only_fields = ['sender', 'is_read']

@@ -201,6 +201,46 @@ class TicketViewSet(viewsets.ModelViewSet):
         )
         return Response(TicketNoteSerializer(note).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], authentication_classes=[], url_path='public-submit')
+    def public_submit(self, request):
+        title = (request.data.get('title') or '').strip()
+        description = (request.data.get('description') or '').strip()
+        guest_name = (request.data.get('guest_name') or '').strip()
+        guest_email = (request.data.get('guest_email') or '').strip()
+        category = request.data.get('category', 'OTHER')
+        priority = request.data.get('priority', 'MEDIUM')
+        if not title or not description or not guest_email:
+            return Response({'error': 'title, description, and guest_email are required'}, status=status.HTTP_400_BAD_REQUEST)
+        ticket = Ticket.objects.create(
+            title=title,
+            description=description,
+            category=category,
+            priority=priority,
+            is_public=True,
+            guest_name=guest_name,
+            guest_email=guest_email,
+            submitted_by=None,
+        )
+        return Response({'id': ticket.id, 'ticket_number': ticket.ticket_number, 'status': ticket.status}, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny], authentication_classes=[], url_path='inbound-email')
+    def inbound_email(self, request):
+        from_email = (request.data.get('from_email') or request.data.get('sender') or '').strip()
+        subject = (request.data.get('subject') or 'Inbound Email Ticket').strip()
+        body = (request.data.get('body') or request.data.get('text') or '').strip()
+        if not from_email:
+            return Response({'error': 'from_email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        ticket = Ticket.objects.create(
+            title=subject[:255],
+            description=body or '(No body)',
+            category='OTHER',
+            priority='MEDIUM',
+            is_public=True,
+            guest_email=from_email,
+            submitted_by=None,
+        )
+        return Response({'id': ticket.id, 'ticket_number': ticket.ticket_number, 'status': ticket.status}, status=status.HTTP_201_CREATED)
+
 
 class TicketQueueViewSet(viewsets.ModelViewSet):
     queryset = TicketQueue.objects.all().order_by('-is_default', 'name')

@@ -4,12 +4,15 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     LoginView, RegisterView, UserProfileView, UserListView,
     TeamInviteViewSet, TeamViewSet, UserDetailView, ChangePasswordView,
-    OAuthConnectionsView, TwoFactorSetupView, TwoFactorVerifyView, TwoFactorDisableView
+    OAuthConnectionsView, TwoFactorSetupView, TwoFactorVerifyView, TwoFactorDisableView,
+    WorkspaceViewSet
 )
+from .scim import SCIMUsersView, SCIMUserDetailView
 
 router = DefaultRouter()
 router.register(r'invites', TeamInviteViewSet)
 router.register(r'teams', TeamViewSet)
+router.register(r'workspaces', WorkspaceViewSet, basename='workspaces')
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -24,4 +27,6 @@ urlpatterns = [
     path('2fa/setup/', TwoFactorSetupView.as_view(), name='2fa-setup'),
     path('2fa/verify/', TwoFactorVerifyView.as_view(), name='2fa-verify'),
     path('2fa/disable/', TwoFactorDisableView.as_view(), name='2fa-disable'),
+    path('scim/v2/Users', SCIMUsersView.as_view(), name='scim-users'),
+    path('scim/v2/Users/<int:pk>', SCIMUserDetailView.as_view(), name='scim-user-detail'),
 ]

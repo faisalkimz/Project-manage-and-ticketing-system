@@ -210,14 +210,26 @@ const Tickets = () => {
     return (
         <div className="min-h-screen bg-[#FAFBFC] p-4 md:p-6 pb-24 md:pb-6">
             {/* Header */}
-            <header className="flex items-center justify-between mb-6">
+            <header className="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-[#172B4D] mb-0.5">Support Tickets</h1>
-                    <p className="text-sm text-[#5E6C84]">Manage support requests with SLA compliance</p>
+                    <p className="text-sm text-[#5E6C84]">
+                        Manage support requests with SLA compliance • Inbound Email: <code className="bg-[#EBECF0] px-1.5 py-0.5 rounded text-xs">tickets@omni-pms.local</code>
+                    </p>
                 </div>
-                <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-md text-sm font-bold shadow-sm transition-all">
-                    <Plus size={16} /> Create Ticket
-                </button>
+                <div className="flex items-center gap-2">
+                    <a
+                        href="/portal"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#DFE1E6] hover:bg-[#F4F5F7] text-[#172B4D] rounded-md text-sm font-semibold transition-all"
+                    >
+                        Customer Portal
+                    </a>
+                    <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-md text-sm font-bold shadow-sm transition-all">
+                        <Plus size={16} /> Create Ticket
+                    </button>
+                </div>
             </header>
 
             {/* Tabs */}

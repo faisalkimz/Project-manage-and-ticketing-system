@@ -90,6 +90,30 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             'week_formatted': f"{week_mins // 60}h {week_mins % 60}m"
         })
 
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        if not user_role_in(request.user, ['ADMIN', 'PROJECT_MANAGER', 'MANAGER']):
+            return Response({'error': 'Only managers/admins can approve time entries'}, status=status.HTTP_403_FORBIDDEN)
+        entry = self.get_object()
+        entry.approval_status = 'APPROVED'
+        entry.approved_by = request.user
+        entry.approved_at = timezone.now()
+        entry.rejection_reason = ''
+        entry.save()
+        return Response(TimeEntrySerializer(entry).data)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        if not user_role_in(request.user, ['ADMIN', 'PROJECT_MANAGER', 'MANAGER']):
+            return Response({'error': 'Only managers/admins can reject time entries'}, status=status.HTTP_403_FORBIDDEN)
+        entry = self.get_object()
+        entry.approval_status = 'REJECTED'
+        entry.approved_by = request.user
+        entry.approved_at = timezone.now()
+        entry.rejection_reason = request.data.get('reason', '')
+        entry.save()
+        return Response(TimeEntrySerializer(entry).data)
+
     @action(detail=False, methods=['get'], url_path='export-csv')
     def export_csv(self, request):
         import csv

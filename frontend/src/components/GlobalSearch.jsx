@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Search, X, Briefcase, User, Layers, ArrowRight, Loader,
-    MessageSquare, BookOpen, Clock, Tag, Sparkles
+    MessageSquare, BookOpen, Clock, Tag, Sparkles, Bookmark, Trash2
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -20,19 +20,24 @@ const GlobalSearch = ({ isOpen, onClose }) => {
     const [category, setCategory] = useState('all');
     const [results, setResults] = useState([]);
     const [recentSearches, setRecentSearches] = useState([]);
+    const [savedSearches, setSavedSearches] = useState([]);
     const [loading, setLoading] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
     const navigate = useNavigate();
     const inputRef = useRef(null);
 
-    // Load recent searches from localStorage
+    // Load recent & saved searches
     useEffect(() => {
+        if (!isOpen) return;
         try {
             const saved = JSON.parse(localStorage.getItem('omni_recent_searches') || '[]');
             setRecentSearches(saved);
         } catch (e) {
             setRecentSearches([]);
         }
+        api.get('/knowledge/saved-views/', { params: { view_type: 'search' } })
+            .then(res => setSavedSearches(Array.isArray(res.data) ? res.data : (res.data?.results || [])))
+            .catch(() => setSavedSearches([]));
     }, [isOpen]);
 
     useEffect(() => {
@@ -75,6 +80,26 @@ const GlobalSearch = ({ isOpen, onClose }) => {
             setRecentSearches(updated);
             localStorage.setItem('omni_recent_searches', JSON.stringify(updated));
         } catch (e) { }
+    };
+
+    const handleSaveSearch = async () => {
+        if (query.trim().length < 2) return;
+        try {
+            const res = await api.post('/knowledge/saved-views/', {
+                name: query.trim(),
+                view_type: 'search',
+                filters: { q: query.trim(), type: category }
+            });
+            setSavedSearches(prev => [res.data, ...prev]);
+        } catch (e) { console.error('Failed to save search', e); }
+    };
+
+    const handleDeleteSavedSearch = async (id, e) => {
+        e.stopPropagation();
+        try {
+            await api.delete(`/knowledge/saved-views/${id}/`);
+            setSavedSearches(prev => prev.filter(s => s.id !== id));
+        } catch (err) { console.error(err); }
     };
 
     const handleKeyDown = (e) => {
@@ -138,6 +163,15 @@ const GlobalSearch = ({ isOpen, onClose }) => {
                         onChange={(e) => setQuery(e.target.value)}
                     />
                     {loading && <Loader size={18} className="text-indigo-600 animate-spin shrink-0" />}
+                    {query.trim().length >= 2 && (
+                        <button
+                            onClick={handleSaveSearch}
+                            title="Save Search"
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition"
+                        >
+                            <Bookmark size={16} />
+                        </button>
+                    )}
                     {query && (
                         <button
                             onClick={() => setQuery('')}
@@ -167,9 +201,36 @@ const GlobalSearch = ({ isOpen, onClose }) => {
 
                 {/* Content Area */}
                 <div className="overflow-y-auto p-3 bg-white flex-1 min-h-[220px]">
-                    {/* Empty Query: Recent Searches */}
+                    {/* Empty Query: Saved & Recent Searches */}
                     {query.trim().length < 2 && (
                         <div className="p-4 space-y-4">
+                            {savedSearches.length > 0 && (
+                                <div>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                                        Saved Searches
+                                    </span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {savedSearches.map((s) => (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => {
+                                                    setCategory(s.filters?.type || 'all');
+                                                    setQuery(s.filters?.q || s.name);
+                                                }}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg transition"
+                                            >
+                                                <Bookmark size={12} />
+                                                <span>{s.name}</span>
+                                                <Trash2
+                                                    size={11}
+                                                    className="ml-1 text-indigo-400 hover:text-rose-600"
+                                                    onClick={(e) => handleDeleteSavedSearch(s.id, e)}
+                                                />
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             {recentSearches.length > 0 ? (
                                 <div>
                                     <div className="flex items-center justify-between mb-2">

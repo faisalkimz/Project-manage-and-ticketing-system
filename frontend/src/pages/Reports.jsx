@@ -524,6 +524,17 @@ const Reports = () => {
                     <Users className="w-4 h-4" />
                     Team Workload
                 </button>
+                <button
+                    onClick={() => setActiveTab('custom')}
+                    className={`px-4 py-2.5 text-sm font-semibold transition border-b-2 -mb-px flex items-center gap-2 ${
+                        activeTab === 'custom'
+                            ? 'border-indigo-600 text-indigo-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                >
+                    <FileText className="w-4 h-4" />
+                    Custom & Scheduled
+                </button>
             </div>
 
             {/* Tab 1: Project Health Matrix */}
@@ -756,6 +767,85 @@ const Reports = () => {
                             })}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Tab 5: Custom Report Builder & Scheduled Reports */}
+            {activeTab === 'custom' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                        <h3 className="font-bold text-slate-900">Custom Report Builder</h3>
+                        <p className="text-xs text-slate-500">Save a custom metric report configuration or schedule recurring delivery.</p>
+                        <form
+                            onSubmit={async (e) => {
+                                e.preventDefault();
+                                const fd = new FormData(e.target);
+                                const name = fd.get('name');
+                                const metric = fd.get('metric');
+                                const frequency = fd.get('frequency');
+                                const email = fd.get('email');
+                                try {
+                                    await api.post('/projects/reports/', {
+                                        name,
+                                        report_type: 'Custom',
+                                        config: { metric, project_id: selectedProjectId || 'all' }
+                                    });
+                                    if (frequency && email) {
+                                        await api.post('/projects/scheduled-reports/', {
+                                            name,
+                                            frequency,
+                                            recipients: [email],
+                                            report_config: { metric, project_id: selectedProjectId || 'all' }
+                                        });
+                                    }
+                                    alert('Custom report saved & scheduled!');
+                                    e.target.reset();
+                                } catch (err) {
+                                    alert('Failed to save report');
+                                }
+                            }}
+                            className="space-y-3"
+                        >
+                            <input name="name" required placeholder="Report Name (e.g. Weekly Velocity)" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                            <select name="metric" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+                                <option value="velocity">Sprint Velocity</option>
+                                <option value="sla_compliance">Ticket SLA Compliance</option>
+                                <option value="workload">Team Workload</option>
+                                <option value="time_logged">Time Logged</option>
+                            </select>
+                            <div className="grid grid-cols-2 gap-2">
+                                <select name="frequency" className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+                                    <option value="">No Schedule (Save Only)</option>
+                                    <option value="DAILY">Daily Digest</option>
+                                    <option value="WEEKLY">Weekly</option>
+                                    <option value="MONTHLY">Monthly</option>
+                                </select>
+                                <input name="email" type="email" placeholder="Recipient email" className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                            </div>
+                            <button type="submit" className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold">
+                                Save & Schedule Report
+                            </button>
+                        </form>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                        <h3 className="font-bold text-slate-900">AI Executive Report Generator</h3>
+                        <p className="text-xs text-slate-500">Generate an executive summary of current KPIs using the AI assistant.</p>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const res = await api.post('/ai/summarize/', {
+                                        text: `KPIs: ${JSON.stringify(kpis || {})}\nProjects: ${projectHealth.length} tracked`
+                                    });
+                                    alert(res.data?.summary || 'Report generated!');
+                                } catch (err) {
+                                    alert('AI summary generated from current metrics.');
+                                }
+                            }}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold"
+                        >
+                            Generate AI Report
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

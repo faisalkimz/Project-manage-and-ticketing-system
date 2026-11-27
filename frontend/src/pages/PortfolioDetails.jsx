@@ -13,6 +13,7 @@ const PortfolioDetails = () => {
     const navigate = useNavigate();
     const { showToast } = useToast();
     const [portfolio, setPortfolio] = useState(null);
+    const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [availableProjects, setAvailableProjects] = useState([]);
@@ -24,6 +25,7 @@ const PortfolioDetails = () => {
             try {
                 const res = await api.get(`/projects/portfolios/${id}/`);
                 setPortfolio(res.data);
+                api.get(`/projects/portfolios/${id}/report/`).then(r => setReport(r.data)).catch(() => {});
             } catch (error) {
                 console.error("Failed to fetch portfolio", error);
                 showToast("Failed to load portfolio details", "error");
@@ -237,6 +239,32 @@ const PortfolioDetails = () => {
 
                 {/* Sidebar Column */}
                 <div className="space-y-6">
+                    <div className="bg-white border border-[#DFE1E6] rounded-xl p-6 shadow-sm">
+                        <h4 className="text-xs font-bold text-[#5E6C84] uppercase mb-3">Portfolio Report</h4>
+                        {report ? (
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div className="p-2.5 bg-[#F4F5F7] rounded">
+                                    <p className="text-[11px] text-[#5E6C84]">Completion</p>
+                                    <p className="font-bold text-lg text-[#0052CC]">{report.completion_rate}%</p>
+                                </div>
+                                <div className="p-2.5 bg-[#F4F5F7] rounded">
+                                    <p className="text-[11px] text-[#5E6C84]">Total Tasks</p>
+                                    <p className="font-bold text-lg">{report.total_tasks}</p>
+                                </div>
+                                <div className="p-2.5 bg-[#F4F5F7] rounded">
+                                    <p className="text-[11px] text-[#5E6C84]">Overdue</p>
+                                    <p className="font-bold text-lg text-rose-600">{report.overdue_tasks}</p>
+                                </div>
+                                <div className="p-2.5 bg-[#F4F5F7] rounded">
+                                    <p className="text-[11px] text-[#5E6C84]">Members</p>
+                                    <p className="font-bold text-lg">{report.unique_members}</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-[#5E6C84]">Loading report...</p>
+                        )}
+                    </div>
+
                     <div className="bg-white border border-[#DFE1E6] rounded-xl p-6 shadow-sm">
                         <h4 className="text-xs font-bold text-[#5E6C84] uppercase mb-4">Portfolio Owner</h4>
                         <div className="flex items-center gap-3">

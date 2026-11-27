@@ -289,3 +289,37 @@ class Report(models.Model):
     
     def __str__(self):
         return self.name
+
+
+class TaskTemplate(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    priority = models.CharField(max_length=20, default='MEDIUM')
+    issue_type = models.CharField(max_length=20, default='TASK')
+    estimated_hours = models.DecimalField(max_digits=6, decimal_places=2, default=0.0)
+    checklist_items = models.JSONField(default=list, blank=True)
+    custom_fields = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='task_templates')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class ScheduledReport(models.Model):
+    FREQUENCY_CHOICES = [
+        ('DAILY', 'Daily'),
+        ('WEEKLY', 'Weekly'),
+        ('MONTHLY', 'Monthly'),
+    ]
+    name = models.CharField(max_length=255)
+    report_config = models.JSONField(default=dict)
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, default='WEEKLY')
+    recipients = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='scheduled_reports')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.frequency})"

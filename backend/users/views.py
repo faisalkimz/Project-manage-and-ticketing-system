@@ -262,3 +262,21 @@ class TwoFactorDisableView(generics.GenericAPIView):
             'is_2fa_enabled': False
         })
 
+
+class WorkspaceViewSet(viewsets.ModelViewSet):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_serializer_class(self):
+        from .serializers import WorkspaceSerializer
+        return WorkspaceSerializer
+
+    def get_queryset(self):
+        from .models import Workspace
+        from django.db.models import Q
+        user = self.request.user
+        return Workspace.objects.filter(Q(owner=user) | Q(members=user)).distinct().order_by('name')
+
+    def perform_create(self, serializer):
+        ws = serializer.save(owner=self.request.user)
+        ws.members.add(self.request.user)
+

@@ -29,6 +29,7 @@ const Settings = () => {
     const [notifData, setNotifData] = useState({
         email_notifications: true,
         push_notifications: true,
+        digest_enabled: false,
         task_updates_only: false
     });
 
@@ -53,6 +54,7 @@ const Settings = () => {
             setNotifData({
                 email_notifications: user.email_notifications ?? true,
                 push_notifications: user.push_notifications ?? true,
+                digest_enabled: user.digest_enabled ?? false,
                 task_updates_only: user.task_updates_only ?? false
             });
         }
@@ -425,6 +427,24 @@ const Settings = () => {
                                                 className="sr-only peer"
                                                 checked={notifData.push_notifications}
                                                 onChange={() => setNotifData({ ...notifData, push_notifications: !notifData.push_notifications })}
+                                            />
+                                            <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0052CC]"></div>
+                                        </label>
+                                    </div>
+
+                                    <div className="w-full h-px bg-[#DFE1E6]"></div>
+
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-[#172B4D]">Daily Digest Emails</h4>
+                                            <p className="text-xs text-[#5E6C84]">Receive a daily summary of unread notifications.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={notifData.digest_enabled}
+                                                onChange={() => setNotifData({ ...notifData, digest_enabled: !notifData.digest_enabled })}
                                             />
                                             <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0052CC]"></div>
                                         </label>

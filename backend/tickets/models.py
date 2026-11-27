@@ -92,8 +92,11 @@ class Ticket(models.Model):
     ticket_category = models.ForeignKey(TicketCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='tickets')
     queue = models.ForeignKey(TicketQueue, on_delete=models.SET_NULL, null=True, blank=True, related_name='tickets')
     
-    submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='submitted_tickets')
+    submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='submitted_tickets', null=True, blank=True)
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='managed_tickets')
+    is_public = models.BooleanField(default=False)
+    guest_name = models.CharField(max_length=150, blank=True)
+    guest_email = models.EmailField(blank=True)
     
     project_task = models.OneToOneField(Task, on_delete=models.SET_NULL, null=True, blank=True, related_name='source_ticket')
     tags = models.ManyToManyField(Tag, blank=True, related_name='tickets')

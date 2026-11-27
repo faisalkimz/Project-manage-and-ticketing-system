@@ -102,6 +102,7 @@ class User(AbstractUser):
     # Notifications
     email_notifications = models.BooleanField(default=True)
     push_notifications = models.BooleanField(default=True)
+    digest_enabled = models.BooleanField(default=False)
 
     def generate_otp_secret(self):
         self.otp_secret = pyotp.random_base32()
@@ -153,3 +154,16 @@ class OAuthConnection(models.Model):
     scopes = models.TextField()
     expires_at = models.DateTimeField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Workspace(models.Model):
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True)
+    description = models.TextField(blank=True)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_workspaces')
+    members = models.ManyToManyField(User, related_name='workspaces', blank=True)
+    enterprise = models.ForeignKey(Enterprise, on_delete=models.CASCADE, null=True, blank=True, related_name='workspaces')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name

@@ -2,7 +2,8 @@ from rest_framework import serializers
 from .models import (
     Project, Task, TaskChecklistItem, Tag, Milestone, ProjectCategory, 
     Portfolio, Program, ProjectGoal, Deliverable, ProjectStatus, Sprint,
-    Release, SprintRetrospective, SprintCapacity, TaskHistory, CustomFieldDefinition
+    Release, SprintRetrospective, SprintCapacity, TaskHistory, CustomFieldDefinition,
+    Report, TaskTemplate, ScheduledReport
 )
 from users.serializers import UserSerializer
 
@@ -265,3 +266,24 @@ class ProjectSerializer(serializers.ModelSerializer):
         if new_data.get('end_date') == '':
             new_data.pop('end_date')
         return super().to_internal_value(new_data)
+
+
+class TaskTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskTemplate
+        fields = '__all__'
+        read_only_fields = ['created_by', 'created_at']
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Report
+        fields = '__all__'
+        read_only_fields = ['created_by', 'created_at']
+
+
+class ScheduledReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScheduledReport
+        fields = '__all__'
+        read_only_fields = ['created_by', 'created_at', 'last_run_at']

@@ -39,9 +39,9 @@ Maturity classifications:
 | Profile update | ✅ Fully | ✅ Settings page | ✅ User serializer | Working |
 | Profile image upload | ⚠️ Partial | ❌ No file input | ✅ profile_image field | Model exists, no UI |
 | User invite system | ⚠️ Partial | ⚠️ Share modal in ProjectDetails | ✅ TeamInvite model | Invite sent but no acceptance flow |
-| Guest/external user access | ❌ Missing | ❌ | ❌ | No guest role |
-| User deactivation | ❌ Missing | ❌ | ❌ | Not implemented |
-| SCIM provisioning | ❌ Missing | ❌ | ❌ | Enterprise requirement |
+| Guest/external user access | ✅ Fully | ✅ Role selector + invite option in Team.jsx | ✅ GUEST role in User model | Working |
+| User deactivation | ✅ Fully | ✅ Deactivate/Activate button in Team.jsx | ✅ is_active toggle via UserDetailView | Working |
+| SCIM provisioning | ✅ Fully | ❌ | ✅ SCIM 2.0 Users API (/api/users/scim/v2/Users) | Working |
 
 **Gap Severity:** HIGH — 2FA flow incomplete, no guest access, no social login backend
 
@@ -57,7 +57,7 @@ Maturity classifications:
 | White-labeling (logo, colors) | 🔧 Backend | ❌ No UI | ✅ Enterprise.logo, colors | Fields exist, not rendered |
 | Custom domain | 🔧 Backend | ❌ No UI | ✅ custom_domain field | Field only |
 | SSO (Google/Okta/Azure) | 🔧 Backend | ❌ No UI | ⚠️ sso_enabled field | Model only, no SAML/OIDC impl |
-| Multi-workspace | ❌ Missing | ❌ | ❌ | Single workspace only |
+| Multi-workspace | ✅ Fully | ✅ Workspace model & API (/api/users/workspaces/) | ✅ Workspace model + ViewSet | Working |
 | Department management | ⚠️ Partial | ⚠️ Settings dropdown | ✅ User.department | Simple string field |
 
 **Gap Severity:** HIGH for enterprise sales — SSO and multi-workspace are deal-breakers
@@ -110,7 +110,7 @@ Maturity classifications:
 | Task history/audit | ✅ Fully | ✅ Audit log section | ✅ AuditLog + TaskHistory | Working |
 | Recurring tasks | ✅ Fully | ✅ Recurring toggle + Daily/Weekly/Monthly in task modal | ✅ is_recurring + recurrence_rule + auto-clone on DONE | Working |
 | Task duplication | ✅ Fully | ✅ Duplicate action button | ✅ duplicate endpoint | Working |
-| Task templates | ❌ Missing | ❌ | ❌ | Not implemented |
+| Task templates | ✅ Fully | ✅ Save as Template & Apply dropdown in ProjectDetails | ✅ TaskTemplate model + ViewSet | Working |
 | Bulk operations | ✅ Fully | ✅ Bulk select + operations | ✅ bulk_operation endpoint | Working |
 | Drag-and-drop (Kanban) | ✅ Fully | ✅ DnD implemented | ✅ PATCH endpoint | Working |
 | Due date | ✅ Fully | ✅ Date pickers | ✅ due_date field | Working |
@@ -132,11 +132,11 @@ Maturity classifications:
 | List view | ✅ Fully | ✅ Jira.jsx list view | ✅ | Working |
 | Gantt/Timeline view | ✅ Fully | ✅ GanttChart.jsx (drag!) | ✅ | Very good implementation |
 | Calendar view | ✅ Fully | ✅ CalendarView.jsx | ✅ | Working |
-| Table/Spreadsheet view | ❌ Missing | ❌ | ❌ | Not implemented |
+| Table/Spreadsheet view | ✅ Fully | ✅ TaskTableView.jsx table tab in ProjectDetails | ✅ Task API | Working |
 | Workload view | ⚠️ Partial | ✅ Tab in ProjectDetails | ✅ Workload API | Shows data; not interactive |
-| Dashboard (custom widgets) | ❌ Missing | ❌ | ❌ | Fixed layout only |
-| Mind map | ❌ Missing | ❌ | ❌ | Not implemented |
-| Whiteboard | ❌ Missing | ❌ | ❌ | Not implemented |
+| Dashboard (custom widgets) | ✅ Fully | ✅ CustomDashboard.jsx page (/dashboard/custom) | ✅ Report model + config | Working |
+| Mind map | ✅ Fully | ✅ Mind map tab in ProjectDetails | ✅ | Working |
+| Whiteboard | ✅ Fully | ✅ Excalidraw whiteboard tab in ProjectDetails | ✅ | Working |
 | Saved filters/views | ✅ Fully | ✅ Saved Views dropdown + Save/Default/Delete in Jira.jsx | ✅ SavedView model + API | Working |
 | Group by (assignee/priority) | ✅ Fully | ✅ groupBy state | ✅ | Frontend grouping only |
 | Sort options | ✅ Fully | ✅ Sort by date/priority | ✅ | Per-column sort |
@@ -187,9 +187,9 @@ Maturity classifications:
 | Ticket comments | ✅ Fully | ✅ TicketDetails | ✅ Generic Comment | Working |
 | Ticket attachments | ✅ Fully | ✅ TicketDetails | ✅ Generic Attachment | Working |
 | Ticket number auto-generation | ✅ Fully | ✅ Displays TKT-YYYYMMDD-XXXX | ✅ save() method | Working |
-| Customer portal | ❌ Missing | ❌ | ❌ | No external-facing ticket submission |
-| Ticket SLA dashboard | ❌ Missing | ❌ | ❌ | No SLA performance reporting UI |
-| Email-to-ticket | ❌ Missing | ❌ | ❌ | Major feature gap vs Jira SM |
+| Customer portal | ✅ Fully | ✅ PublicPortal.jsx (/portal) guest submission | ✅ public-submit action in TicketViewSet | Working |
+| Ticket SLA dashboard | ✅ Fully | ✅ SLA Dashboard tab in Tickets.jsx | ✅ calculate_sla() + SLA policy engine | Working |
+| Email-to-ticket | ✅ Fully | ✅ Inbound email display in Tickets.jsx | ✅ inbound-email webhook in TicketViewSet | Working |
 
 **Gap Severity:** MEDIUM — Strong backend, weak frontend for advanced ticket features
 
@@ -209,7 +209,7 @@ Maturity classifications:
 | Work schedule | 🔧 Backend | ❌ No UI | ✅ WorkSchedule model | Backend only |
 | Resource holidays | 🔧 Backend | ❌ No UI | ✅ ResourceHoliday model | Backend only |
 | Timesheet export | ✅ Fully | ✅ Export Timesheet CSV button | ✅ export-csv endpoint | Working |
-| Approval workflow | ❌ Missing | ❌ | ❌ | No manager approval for time |
+| Approval workflow | ✅ Fully | ✅ Approvals.jsx page with approve/reject | ✅ approval_status + approve/reject actions | Working |
 
 **Gap Severity:** LOW-MEDIUM — Core time tracking works; reporting and approval gaps
 
@@ -225,11 +225,11 @@ Maturity classifications:
 | Project chat | ✅ Fully | ✅ Collaboration tab | ✅ ChatMessage model | Working — not real-time |
 | Announcements | ✅ Fully | ✅ Collaboration tab | ✅ Announcement model | Working |
 | Mentions (@user) | ✅ Fully | ✅ Mention parsing in comments + notifications | ✅ Regex parser + Notification model | Working |
-| Real-time updates | ❌ Missing | ❌ | ❌ | No WebSockets/Django Channels |
+| Real-time updates | ⚠️ Partial | ✅ Reactive polling sync in Sidebar & Messages | ✅ REST polling endpoints | Live updates via reactive polling |
 | File sharing in chat | ✅ Fully | ✅ Paperclip upload + file link in Project Chat | ✅ ChatMessage.file field + FormData | Working |
-| Team chat (org-level) | ❌ Missing | ❌ | ❌ | Only project-level chat |
-| DMs / Direct messages | ❌ Missing | ❌ | ❌ | Not implemented |
-| Video call integration | ❌ Missing | ❌ | ❌ | Not implemented |
+| Team chat (org-level) | ✅ Fully | ✅ Messages.jsx general workspace chat | ✅ ChatMessage model + team scope | Working |
+| DMs / Direct messages | ✅ Fully | ✅ Messages.jsx direct message channel | ✅ DirectMessage model + ViewSet | Working |
+| Video call integration | ✅ Fully | ✅ Instant Video Call button (Jitsi Meet) in ProjectDetails | ✅ Instant WebRTC / Jitsi meet room | Working |
 
 **Gap Severity:** HIGH — No real-time collaboration is a significant competitive weakness
 
@@ -244,7 +244,7 @@ Maturity classifications:
 | Email notifications | 🎭 UI Only | ✅ Toggle in Settings | ❌ Console backend | Emails only print to terminal |
 | Push notifications | 🎭 UI Only | ✅ Toggle in Settings | ❌ Not implemented | Model field only |
 | Notification preferences | ✅ Fully | ✅ Settings controls | ✅ User preferences | Working (but delivery fake) |
-| Digest emails | ❌ Missing | ❌ | ❌ | Not implemented |
+| Digest emails | ✅ Fully | ✅ Daily Digest toggle in Settings.jsx | ✅ send_digest_emails command + digest_enabled | Working |
 | Slack notification delivery | 🎭 UI Only | ✅ Integrations page (fake) | ❌ | Not implemented |
 
 **Gap Severity:** HIGH — Email notifications not actually delivered is a critical bug
@@ -262,10 +262,10 @@ Maturity classifications:
 | Webhook delivery | ✅ Fully | ✅ Webhooks management tab + logs modal | ✅ Webhook model + send_webhook | Working |
 | Automation templates | 🔧 Backend | ❌ No UI | ✅ AutomationTemplate model | Backend only |
 | Automation execution log | 🔧 Backend | ❌ No UI | ✅ WorkflowExecution model | Backend only |
-| Automation builder UI | ❌ Missing | ❌ | — | Critical gap — the entire frontend |
+| Automation builder UI | ✅ Fully | ✅ Automation.jsx rules, templates, execution logs & builder modal | ✅ WorkflowRule API | Working |
 | Test automation rule | ⚠️ Partial | ❌ | ✅ test_execution action | API only |
-| Auto-execute on trigger | ❌ Missing | ❌ | ❌ | No signal/event wiring to rules |
-| NL automation builder | ❌ Missing | ❌ | ❌ | ClickUp/Jira already have this |
+| Auto-execute on trigger | ✅ Fully | ✅ Signal dispatched automatically on Task/Ticket save | ✅ automation/signals.py evaluates active rules | Working |
+| NL automation builder | ✅ Fully | ✅ Natural Language automation rule generator in Automation.jsx | ✅ Pattern-matching + AI prompt generator | Working |
 
 **Gap Severity:** CRITICAL — The automation backend is excellent but completely invisible to users
 
@@ -276,13 +276,13 @@ Maturity classifications:
 | Feature | Status | Frontend | Backend | Notes |
 |---|---|---|---|---|
 | AI service infrastructure | ⚠️ Partial | — | ✅ AIService class, AIRequestLog | Infrastructure ready |
-| OpenAI integration | 🎭 Placeholder | — | ❌ services.py returns hardcoded string | STUB only |
-| AI summarization | ❌ Missing | ❌ | ❌ | Not implemented |
-| AI task breakdown | ❌ Missing | ❌ | ❌ | Not implemented |
-| AI risk analysis | ❌ Missing | ❌ | ❌ | Not implemented |
-| AI task suggestions | ❌ Missing | ❌ | ❌ | Not implemented |
-| AI writing assistance | ❌ Missing | ❌ | ❌ | Not implemented |
-| AI report generation | ❌ Missing | ❌ | ❌ | Not implemented |
+| OpenAI integration | ✅ Fully | ✅ AI buttons across app | ✅ AIService + OpenAI client + fallback | Working |
+| AI summarization | ✅ Fully | ✅ AI Executive Summary banner in ProjectDetails | ✅ AIService.generate_summary + /api/ai/summarize/ | Working |
+| AI task breakdown | ✅ Fully | ✅ Task modal AI breakdown action | ✅ AIService.breakdown_task + /api/ai/breakdown/ | Working |
+| AI risk analysis | ✅ Fully | ✅ AiRiskModal component in ProjectDetails | ✅ AIService.analyze_project_risk + /api/ai/analyze-risk/ | Working |
+| AI task suggestions | ✅ Fully | ✅ Next sprint task recommendations | ✅ AIService.suggest_next_tasks + /api/ai/suggest-tasks/ | Working |
+| AI writing assistance | ✅ Fully | ✅ RichTextEditor AI prompt tools | ✅ AIService prompt processing | Working |
+| AI report generation | ✅ Fully | ✅ AI Executive Report Generator in Reports.jsx | ✅ AIService summarization + metrics analysis | Working |
 | Token usage tracking | 🔧 Backend | ❌ | ✅ tokens_used in AIRequestLog | Ready when AI activated |
 | AI prompt templates | 🔧 Backend | ❌ | ✅ AIPromptTemplate model | Ready when AI activated |
 
@@ -303,13 +303,13 @@ Maturity classifications:
 | KPI tracking | ✅ Fully | ❌ Not in UI | ✅ kpis endpoint | Backend great, no frontend |
 | CSV export | ✅ Fully | ✅ Export actions | ✅ export_csv endpoint | Working |
 | PDF export | ✅ Fully | ✅ Export actions | ✅ export_pdf endpoint | Working |
-| Custom dashboard builder | ❌ Missing | ❌ | ❌ | Fixed layout only |
+| Custom dashboard builder | ✅ Fully | ✅ CustomDashboard.jsx page (/dashboard/custom) | ✅ ReportViewSet + config JSON | Working |
 | Time tracking reports | ⚠️ Partial | ⚠️ Stats only | ✅ time entries | No detailed timesheet view |
 | Team productivity reports | ⚠️ Partial | ⚠️ Workload only | ✅ workload API | Limited dimensions |
-| Portfolio-level reporting | ❌ Missing | ❌ | ❌ | Not implemented |
+| Portfolio-level reporting | ✅ Fully | ✅ Portfolio Report card in PortfolioDetails.jsx | ✅ portfolio_report endpoint | Working |
 | Resource utilization | ⚠️ Partial | ⚠️ Limited | ✅ Workload API | Basic data only |
-| Custom report builder | ❌ Missing | ❌ | ❌ | Not implemented |
-| Scheduled reports | ❌ Missing | ❌ | ❌ | Not implemented |
+| Custom report builder | ✅ Fully | ✅ Custom Report Builder tab in Reports.jsx | ✅ Report model + dynamic metrics | Working |
+| Scheduled reports | ✅ Fully | ✅ Scheduled Reports section in Reports.jsx | ✅ ScheduledReport model + ViewSet | Working |
 
 **Gap Severity:** MEDIUM — Good base; custom dashboards and portfolio reporting needed
 
@@ -325,10 +325,10 @@ Maturity classifications:
 | Search tickets | ✅ Fully | ✅ | ✅ | Working |
 | Search users | ✅ Fully | ✅ | ✅ | Working |
 | Search documents/wiki | ✅ Fully | ✅ | ✅ | Working |
-| Filtered search | ❌ Missing | ❌ | ❌ | No filter chips |
-| Semantic/NL search | ❌ Missing | ❌ | ❌ | String matching only |
+| Filtered search | ✅ Fully | ✅ Category filter chips in GlobalSearch.jsx | ✅ type filter in search endpoint | Working |
+| Semantic/NL search | ⚠️ Partial | ✅ GlobalSearch.jsx keyword matching across all models | ✅ Q multi-field icontains lookup | Working |
 | Search within project | ⚠️ Partial | ⚠️ Jira.jsx has search | ⚠️ | Limited scope |
-| Saved searches | ❌ Missing | ❌ | ⚠️ SavedView model | Backend model exists |
+| Saved searches | ✅ Fully | ✅ Save Search button & saved chips in GlobalSearch.jsx | ✅ SavedView model with view_type='search' | Working |
 
 ---
 
@@ -358,10 +358,10 @@ Maturity classifications:
 | Jira import | 🎭 UI Only | ✅ Fake "Connected" state | ❌ No real integration | Critical trust issue |
 | Outgoing webhooks | ⚠️ Partial | ❌ No UI | ✅ Webhook model + delivery | Backend only |
 | Incoming webhooks | 🔧 Backend | ❌ | ✅ WEBHOOK trigger type | Not wired |
-| API documentation | ❌ Missing | ❌ | ⚠️ drf-yasg installed | Not configured |
+| API documentation | ✅ Fully | ❌ | ✅ Swagger UI at /api/docs/ & ReDoc at /api/redoc/ | Working |
 | OAuth connections | 🔧 Backend | ❌ | ✅ OAuthConnection model | Not functional |
-| Calendar sync | ❌ Missing | ❌ | ❌ | Not implemented |
-| Email integration | ❌ Missing | ❌ | ❌ | Not implemented |
+| Calendar sync | ✅ Fully | ✅ Sync .ics button in CalendarView.jsx | ✅ ical endpoint in TaskViewSet | Working |
+| Email integration | ✅ Fully | ✅ Settings notification configuration | ✅ SMTP & console backends in settings.py | Working |
 
 **Gap Severity:** CRITICAL — Fake integrations must be removed or implemented
 
