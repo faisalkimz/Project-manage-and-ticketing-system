@@ -61,7 +61,8 @@ const useAuthStore = create((set) => ({
 
     updateProfile: async (data) => {
         try {
-            const response = await api.patch('/users/profile/', data);
+            const config = data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {};
+            const response = await api.patch('/users/profile/', data, config);
             set({ user: response.data });
             return true;
         } catch (error) {

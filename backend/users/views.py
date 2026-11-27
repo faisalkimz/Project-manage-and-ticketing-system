@@ -1,4 +1,5 @@
 from rest_framework import generics, permissions, status, filters, viewsets
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -120,6 +121,7 @@ class RegisterView(generics.CreateAPIView):
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = (permissions.IsAuthenticated,)
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:

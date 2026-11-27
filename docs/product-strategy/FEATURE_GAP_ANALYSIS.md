@@ -37,7 +37,7 @@ Maturity classifications:
 | Session management | 🔧 Backend | ❌ No UI | ✅ UserSession model | Logged but not exposed |
 | Password change | ✅ Fully | ✅ Settings page | ✅ change-password endpoint | Working |
 | Profile update | ✅ Fully | ✅ Settings page | ✅ User serializer | Working |
-| Profile image upload | ⚠️ Partial | ❌ No file input | ✅ profile_image field | Model exists, no UI |
+| Profile image upload | ✅ Fully | ✅ Upload photo, preview, camera overlay & remove in Settings.jsx | ✅ profile_image ImageField + MultiPartParser | Working |
 | User invite system | ⚠️ Partial | ⚠️ Share modal in ProjectDetails | ✅ TeamInvite model | Invite sent but no acceptance flow |
 | Guest/external user access | ✅ Fully | ✅ Role selector + invite option in Team.jsx | ✅ GUEST role in User model | Working |
 | User deactivation | ✅ Fully | ✅ Deactivate/Activate button in Team.jsx | ✅ is_active toggle via UserDetailView | Working |

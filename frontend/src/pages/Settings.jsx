@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
     User, Bell, Shield, Lock, Save, CheckCircle, CheckCircle2, Mail, Smartphone,
     AlertTriangle, Edit2, Key, CreditCard, Activity, Zap, ExternalLink,
-    ChevronRight, ZapOff, Info, Settings as SettingsIcon, X
+    ChevronRight, ZapOff, Info, Settings as SettingsIcon, X, Upload, Trash2, Camera
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
@@ -170,6 +170,11 @@ const Settings = () => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Image file size must be less than 5MB.', 'error');
+            return;
+        }
+
         setLoading(true);
         const formData = new FormData();
         formData.append('profile_image', file);
@@ -178,9 +183,20 @@ const Settings = () => {
         setLoading(false);
 
         if (success) {
-            showToast('Avatar updated!', 'success');
+            showToast('Avatar updated successfully!', 'success');
         } else {
             showToast('Failed to upload avatar.', 'error');
+        }
+    };
+
+    const handleRemoveAvatar = async () => {
+        setLoading(true);
+        const success = await updateProfile({ profile_image: null });
+        setLoading(false);
+        if (success) {
+            showToast('Avatar removed successfully.', 'info');
+        } else {
+            showToast('Failed to remove avatar.', 'error');
         }
     };
 
@@ -291,9 +307,9 @@ const Settings = () => {
                                         </button>
                                     </div>
 
-                                    <div className="flex items-center gap-6 mb-8 p-6 bg-white rounded border border-[#DFE1E6]">
-                                        <div className="relative cursor-pointer" onClick={handleAvatarClick}>
-                                            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#DFE1E6] hover:border-[#0052CC] transition-colors">
+                                    <div className="flex flex-col sm:flex-row items-center gap-6 mb-8 p-6 bg-white rounded-lg border border-[#DFE1E6] shadow-sm">
+                                        <div className="relative group cursor-pointer" onClick={handleAvatarClick} title="Click to upload avatar">
+                                            <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-[#DFE1E6] group-hover:border-[#0052CC] transition-all shadow-inner">
                                                 {user?.profile_image ? (
                                                     <img
                                                         src={user.profile_image.startsWith('http') ? user.profile_image : `http://localhost:8000${user.profile_image}`}
@@ -301,7 +317,7 @@ const Settings = () => {
                                                         className="w-full h-full object-cover"
                                                     />
                                                 ) : (
-                                                    <div className="w-full h-full bg-[#0052CC] flex items-center justify-center text-2xl font-bold text-white">
+                                                    <div className="w-full h-full bg-gradient-to-tr from-[#0052CC] to-[#0079BF] flex items-center justify-center text-3xl font-bold text-white">
                                                         {user?.username?.[0]?.toUpperCase()}
                                                     </div>
                                                 )}
@@ -313,17 +329,36 @@ const Settings = () => {
                                                 accept="image/*"
                                                 onChange={handleAvatarChange}
                                             />
-                                            <div className="absolute -bottom-1 -right-1 bg-white p-1.5 rounded-full border border-[#DFE1E6] text-[#5E6C84] hover:text-[#0052CC]">
-                                                <Edit2 size={16} />
+                                            <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                <Camera size={24} />
+                                            </div>
+                                            <div className="absolute -bottom-1 -right-1 bg-white p-1.5 rounded-full border border-[#DFE1E6] text-[#5E6C84] shadow-sm group-hover:text-[#0052CC]">
+                                                <Edit2 size={14} />
                                             </div>
                                         </div>
-                                        <div>
-                                            <div>
-                                                <h3 className="text-lg font-semibold text-[#172B4D] mb-1">{user?.username}</h3>
-                                                <p className="text-sm text-[#5E6C84] mb-3">{user?.email}</p>
-                                                <div className="flex gap-3 text-xs">
-                                                    <span className="text-[#5E6C84]">Role: <strong className="text-[#172B4D]">{user?.role?.replace('_', ' ')}</strong></span>
-                                                </div>
+                                        <div className="flex-1 text-center sm:text-left">
+                                            <h3 className="text-lg font-bold text-[#172B4D] mb-0.5">{user?.username}</h3>
+                                            <p className="text-sm text-[#5E6C84] mb-3">{user?.email}</p>
+                                            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAvatarClick}
+                                                    disabled={loading}
+                                                    className="px-3 py-1.5 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                                >
+                                                    <Upload size={13} /> Upload Photo
+                                                </button>
+                                                {user?.profile_image && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleRemoveAvatar}
+                                                        disabled={loading}
+                                                        className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                                    >
+                                                        <Trash2 size={13} /> Remove
+                                                    </button>
+                                                )}
+                                                <span className="text-[11px] text-[#5E6C84] block sm:inline ml-1">JPG, PNG or GIF, max 5MB</span>
                                             </div>
                                         </div>
                                     </div>
