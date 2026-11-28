@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import {
     User, Bell, Shield, Lock, Save, CheckCircle, CheckCircle2, Mail, Smartphone,
     AlertTriangle, Edit2, Key, CreditCard, Activity, Zap, ExternalLink,
-    ChevronRight, ZapOff, Info, Settings as SettingsIcon, X, Upload, Trash2, Camera
+    ChevronRight, ZapOff, Info, Settings as SettingsIcon, X, Upload, Trash2, Camera,
+    Globe, Monitor, Tablet, Wifi, Ban, RefreshCw, Plus
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
@@ -37,12 +38,18 @@ const Settings = () => {
     const [passwords, setPasswords] = useState({ old_password: '', new_password: '' });
 
     // 2FA State
-    const [twoFactorStep, setTwoFactorStep] = useState('idle'); // 'idle' | 'setup' | 'disable'
+    const [twoFactorStep, setTwoFactorStep] = useState('idle');
     const [qrCode, setQrCode] = useState('');
     const [otpSecret, setOtpSecret] = useState('');
     const [verificationCode, setVerificationCode] = useState('');
     const [disablePassword, setDisablePassword] = useState('');
     const [twoFactorLoading, setTwoFactorLoading] = useState(false);
+
+    // Security/Sessions State
+    const [securityInfo, setSecurityInfo] = useState(null);
+    const [sessions, setSessions] = useState([]);
+    const [ipInput, setIpInput] = useState('');
+    const [securityLoading, setSecurityLoading] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -64,6 +71,10 @@ const Settings = () => {
         if (activeTab === 'activity') {
             fetchActivity();
         }
+        if (activeTab === 'security') {
+            fetchSecurityInfo();
+            fetchSessions();
+        }
     }, [activeTab]);
 
     const fetchActivity = async () => {
@@ -72,6 +83,90 @@ const Settings = () => {
             setRecentActivity(res.data.slice(0, 15));
         } catch (e) {
             console.error('Failed to fetch activity', e);
+        }
+    };
+
+    const fetchSecurityInfo = async () => {
+        try {
+            const res = await api.get('/users/security/');
+            setSecurityInfo(res.data);
+        } catch (e) {
+            console.error('Failed to fetch security info', e);
+        }
+    };
+
+    const fetchSessions = async () => {
+        try {
+            const res = await api.get('/users/sessions/');
+            setSessions(res.data);
+        } catch (e) {
+            console.error('Failed to fetch sessions', e);
+        }
+    };
+
+    const handleRevokeSession = async (sessionId) => {
+        try {
+            await api.delete(`/users/sessions/?id=${sessionId}`);
+            setSessions(prev => prev.filter(s => s.id !== sessionId));
+            showToast('Session revoked.', 'success');
+        } catch (e) {
+            showToast('Failed to revoke session.', 'error');
+        }
+    };
+
+    const handleRevokeAllOtherSessions = async () => {
+        setSecurityLoading(true);
+        try {
+            await api.delete('/users/sessions/?id=others');
+            await fetchSessions();
+            showToast('All other sessions revoked.', 'success');
+        } catch (e) {
+            showToast('Failed to revoke sessions.', 'error');
+        } finally {
+            setSecurityLoading(false);
+        }
+    };
+
+    const handleAddIp = () => {
+        const trimmed = ipInput.trim();
+        if (!trimmed || !securityInfo) return;
+        const list = [...(securityInfo.ip_whitelist || [])];
+        if (!list.includes(trimmed)) {
+            setSecurityInfo({ ...securityInfo, ip_whitelist: [...list, trimmed] });
+        }
+        setIpInput('');
+    };
+
+    const handleRemoveIp = (ip) => {
+        setSecurityInfo({ ...securityInfo, ip_whitelist: securityInfo.ip_whitelist.filter(i => i !== ip) });
+    };
+
+    const handleSaveIpWhitelist = async () => {
+        setSecurityLoading(true);
+        try {
+            await api.patch('/users/security/', {
+                ip_whitelist: securityInfo.ip_whitelist,
+                enforce_ip_whitelist: securityInfo.enforce_ip_whitelist,
+            });
+            showToast('IP whitelist saved!', 'success');
+            await checkAuth();
+        } catch (e) {
+            showToast('Failed to save IP whitelist.', 'error');
+        } finally {
+            setSecurityLoading(false);
+        }
+    };
+
+    const handleUnlockAccount = async () => {
+        setSecurityLoading(true);
+        try {
+            await api.post('/users/security/', { action: 'unlock' });
+            showToast('Account unlocked!', 'success');
+            await fetchSecurityInfo();
+        } catch (e) {
+            showToast('Failed to unlock account.', 'error');
+        } finally {
+            setSecurityLoading(false);
         }
     };
 
@@ -632,9 +727,33 @@ const Settings = () => {
 
                         {activeTab === 'security' && (
                             <div className="animate-in fade-in duration-300">
-                                <h2 className="text-lg font-bold text-[#172B4D] mb-6">Security Settings</h2>
+                                <h2 className="text-lg font-bold text-[#172B4D] mb-6">Security & Privacy</h2>
 
                                 <div className="space-y-6 max-w-2xl">
+                                    {/* Account Lockout Status */}
+                                    {securityInfo && (
+                                        <div className={`border rounded p-4 flex items-start gap-3 ${securityInfo.account_locked ? 'bg-red-50 border-red-200' : 'bg-[#E3FCEF] border-[#ABF5D1]'}`}>
+                                            {securityInfo.account_locked ? <AlertTriangle size={18} className="text-red-500 mt-0.5 shrink-0" /> : <CheckCircle2 size={18} className="text-[#006644] mt-0.5 shrink-0" />}
+                                            <div className="flex-1 min-w-0">
+                                                <p className={`text-sm font-bold ${securityInfo.account_locked ? 'text-red-700' : 'text-[#006644]'}`}>
+                                                    {securityInfo.account_locked ? 'Account Locked' : 'Account in Good Standing'}
+                                                </p>
+                                                <p className={`text-xs mt-0.5 ${securityInfo.account_locked ? 'text-red-600' : 'text-[#006644]'}`}>
+                                                    {securityInfo.account_locked
+                                                        ? `Locked until ${new Date(securityInfo.account_locked_until).toLocaleString()} due to ${securityInfo.failed_login_attempts} failed attempts.`
+                                                        : `${securityInfo.failed_login_attempts} failed login attempt(s). Last login from ${securityInfo.last_login_ip || 'unknown'}. Current IP: ${securityInfo.current_ip}.`
+                                                    }
+                                                </p>
+                                            </div>
+                                            {securityInfo.account_locked && (
+                                                <button onClick={handleUnlockAccount} disabled={securityLoading} className="shrink-0 px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700 disabled:opacity-50">
+                                                    Unlock Now
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Change Password */}
                                     <div className="bg-white border border-[#DFE1E6] rounded p-6">
                                         <div className="flex items-start gap-4 mb-6">
                                             <div className="mt-1 text-[#0052CC]">
@@ -675,6 +794,7 @@ const Settings = () => {
                                         </div>
                                     </div>
 
+                                    {/* 2FA */}
                                     <div className="bg-white border border-[#DFE1E6] rounded p-6 flex items-start gap-4">
                                         <div className="mt-1 text-[#0052CC]">
                                             <Shield size={20} />
@@ -797,6 +917,123 @@ const Settings = () => {
                                                     {twoFactorLoading ? 'Loading...' : 'Enable 2FA'}
                                                 </button>
                                             )}
+                                        </div>
+                                    </div>
+
+                                    {/* IP Whitelist */}
+                                    <div className="bg-white border border-[#DFE1E6] rounded p-6">
+                                        <div className="flex items-start gap-4">
+                                            <div className="mt-1 text-[#0052CC]"><Globe size={20} /></div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <h3 className="text-sm font-bold text-[#172B4D]">IP Address Whitelist</h3>
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <span className="text-xs text-[#5E6C84]">Enforce</span>
+                                                        <button
+                                                            type="button"
+                                                            role="switch"
+                                                            aria-checked={securityInfo?.enforce_ip_whitelist}
+                                                            onClick={() => securityInfo && setSecurityInfo({ ...securityInfo, enforce_ip_whitelist: !securityInfo.enforce_ip_whitelist })}
+                                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${securityInfo?.enforce_ip_whitelist ? 'bg-[#0052CC]' : 'bg-slate-300'}`}
+                                                        >
+                                                            <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition duration-200 ${securityInfo?.enforce_ip_whitelist ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                        </button>
+                                                    </label>
+                                                </div>
+                                                <p className="text-xs text-[#5E6C84] mb-4">When enforcement is on, only listed IPs can log in to your account. Your current IP is <code className="bg-[#F4F5F7] px-1 rounded">{securityInfo?.current_ip || '...'}</code>.</p>
+
+                                                <div className="flex gap-2 mb-3">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="e.g. 192.168.1.1"
+                                                        value={ipInput}
+                                                        onChange={e => setIpInput(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddIp())}
+                                                        className="flex-1 px-3 py-2 border border-[#DFE1E6] rounded text-sm outline-none focus:border-[#0052CC] font-mono"
+                                                    />
+                                                    <button onClick={handleAddIp} className="px-3 py-2 bg-[#F4F5F7] border border-[#DFE1E6] rounded hover:bg-[#EBECF0] text-[#42526E]">
+                                                        <Plus size={14} />
+                                                    </button>
+                                                </div>
+
+                                                {securityInfo?.ip_whitelist?.length > 0 ? (
+                                                    <div className="space-y-1 mb-4">
+                                                        {securityInfo.ip_whitelist.map(ip => (
+                                                            <div key={ip} className="flex items-center justify-between bg-[#F4F5F7] px-3 py-1.5 rounded border border-[#DFE1E6]">
+                                                                <span className="text-xs font-mono text-[#172B4D]">{ip}</span>
+                                                                <button onClick={() => handleRemoveIp(ip)} className="text-[#DE350B] hover:text-[#BF2600] p-0.5">
+                                                                    <X size={12} />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs text-[#5E6C84] italic mb-4">No IPs added yet.</p>
+                                                )}
+
+                                                <button
+                                                    onClick={handleSaveIpWhitelist}
+                                                    disabled={securityLoading}
+                                                    className="px-4 py-2 bg-[#0052CC] text-white text-sm font-bold rounded hover:bg-[#0065FF] transition-colors disabled:opacity-50"
+                                                >
+                                                    {securityLoading ? 'Saving...' : 'Save Whitelist'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Active Sessions */}
+                                    <div className="bg-white border border-[#DFE1E6] rounded p-6">
+                                        <div className="flex items-start gap-4">
+                                            <div className="mt-1 text-[#0052CC]"><Monitor size={20} /></div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <h3 className="text-sm font-bold text-[#172B4D]">Active Sessions</h3>
+                                                    <button
+                                                        onClick={handleRevokeAllOtherSessions}
+                                                        disabled={securityLoading || sessions.length <= 1}
+                                                        className="text-xs font-bold text-[#DE350B] hover:underline disabled:opacity-40 disabled:no-underline flex items-center gap-1"
+                                                    >
+                                                        <Ban size={12} /> Revoke All Others
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-[#5E6C84] mb-4">These are the devices currently signed into your account.</p>
+
+                                                {sessions.length === 0 ? (
+                                                    <p className="text-xs text-[#5E6C84] italic">No active sessions found.</p>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {sessions.map(session => (
+                                                            <div key={session.id} className="flex items-center justify-between bg-[#F4F5F7] p-3 rounded border border-[#DFE1E6]">
+                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                    <div className="text-[#5E6C84] shrink-0">
+                                                                        {session.device_type === 'mobile' ? <Smartphone size={16} /> : session.device_type === 'tablet' ? <Tablet size={16} /> : <Monitor size={16} />}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs font-semibold text-[#172B4D] truncate">{session.ip_address}</p>
+                                                                        <p className="text-[11px] text-[#5E6C84] truncate">{session.user_agent?.slice(0, 60)}{session.user_agent?.length > 60 ? '…' : ''}</p>
+                                                                        <p className="text-[10px] text-[#5E6C84] mt-0.5 flex items-center gap-1">
+                                                                            <Wifi size={9} /> Last active: {new Date(session.last_activity).toLocaleString()}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => handleRevokeSession(session.id)}
+                                                                    className="shrink-0 ml-2 px-3 py-1 text-xs font-bold border border-[#DFE1E6] text-[#42526E] rounded hover:bg-[#FFEBE6] hover:border-[#DE350B] hover:text-[#DE350B] transition-colors"
+                                                                >
+                                                                    Revoke
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                <button
+                                                    onClick={fetchSessions}
+                                                    className="mt-3 text-xs text-[#0052CC] hover:underline flex items-center gap-1"
+                                                >
+                                                    <RefreshCw size={11} /> Refresh sessions
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

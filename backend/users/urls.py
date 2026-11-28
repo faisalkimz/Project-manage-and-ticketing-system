@@ -5,7 +5,7 @@ from .views import (
     LoginView, RegisterView, UserProfileView, UserListView,
     TeamInviteViewSet, TeamViewSet, UserDetailView, ChangePasswordView,
     OAuthConnectionsView, TwoFactorSetupView, TwoFactorVerifyView, TwoFactorDisableView,
-    WorkspaceViewSet
+    WorkspaceViewSet, UserSessionView, SecuritySettingsView
 )
 from .scim import SCIMUsersView, SCIMUserDetailView
 
@@ -27,6 +27,8 @@ urlpatterns = [
     path('2fa/setup/', TwoFactorSetupView.as_view(), name='2fa-setup'),
     path('2fa/verify/', TwoFactorVerifyView.as_view(), name='2fa-verify'),
     path('2fa/disable/', TwoFactorDisableView.as_view(), name='2fa-disable'),
+    path('sessions/', UserSessionView.as_view(), name='user-sessions'),
+    path('security/', SecuritySettingsView.as_view(), name='security-settings'),
     path('scim/v2/Users', SCIMUsersView.as_view(), name='scim-users'),
     path('scim/v2/Users/<int:pk>', SCIMUserDetailView.as_view(), name='scim-user-detail'),
 ]

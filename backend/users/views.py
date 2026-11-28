@@ -3,8 +3,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import UserSerializer, RegisterSerializer, TeamInviteSerializer, TeamSerializer, UserUpdateSerializer, OAuthConnectionSerializer
-from .models import User, TeamInvite, Team, OAuthConnection
+from .serializers import UserSerializer, RegisterSerializer, TeamInviteSerializer, TeamSerializer, UserUpdateSerializer, OAuthConnectionSerializer, UserSessionSerializer
+from .models import User, TeamInvite, Team, OAuthConnection, UserSession
 from django.core.mail import send_mail
 
 # Role model removed, using CharField
@@ -12,6 +12,67 @@ from django.core.mail import send_mail
 class LoginView(TokenObtainPairView):
     permission_classes = (permissions.AllowAny,)
     authentication_classes = ()
+
+    def post(self, request, *args, **kwargs):
+        from django.utils import timezone
+        import uuid
+        username = request.data.get('username')
+        user = User.objects.filter(username=username).first()
+
+        # Check account lockout
+        if user and user.account_locked_until:
+            if user.account_locked_until > timezone.now():
+                diff_minutes = max(1, int((user.account_locked_until - timezone.now()).total_seconds() / 60))
+                return Response(
+                    {"detail": f"Account is temporarily locked due to multiple failed login attempts. Please try again in {diff_minutes} minute(s)."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            else:
+                user.account_locked_until = None
+                user.failed_login_attempts = 0
+                user.save(update_fields=['account_locked_until', 'failed_login_attempts'])
+
+        # Enforce IP whitelist check on login if enabled
+        if user and user.enforce_ip_whitelist:
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            client_ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else request.META.get('REMOTE_ADDR', '127.0.0.1')
+            if user.ip_whitelist and client_ip not in user.ip_whitelist and client_ip not in ['127.0.0.1', '::1', 'localhost']:
+                return Response(
+                    {"detail": f"Access denied: IP {client_ip} is not in your authorized IP whitelist."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        try:
+            response = super().post(request, *args, **kwargs)
+        except Exception as e:
+            if user:
+                user.failed_login_attempts += 1
+                if user.failed_login_attempts >= 5:
+                    user.account_locked_until = timezone.now() + timezone.timedelta(minutes=15)
+                user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+            raise e
+
+        if response.status_code == status.HTTP_200_OK and user:
+            user.failed_login_attempts = 0
+            user.account_locked_until = None
+
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            client_ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else request.META.get('REMOTE_ADDR', '127.0.0.1')
+            ua = request.META.get('HTTP_USER_AGENT', 'Unknown Browser')
+            user.last_login_ip = client_ip
+            user.save(update_fields=['failed_login_attempts', 'account_locked_until', 'last_login_ip'])
+
+            device_type = 'mobile' if any(m in ua for m in ['Mobile', 'Android', 'iPhone']) else 'desktop'
+            UserSession.objects.create(
+                user=user,
+                session_key=str(uuid.uuid4())[:40],
+                ip_address=client_ip,
+                user_agent=ua,
+                device_type=device_type,
+                is_active=True
+            )
+
+        return response
 
 class TeamViewSet(viewsets.ModelViewSet):
     queryset = Team.objects.all()
@@ -281,4 +342,69 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         ws = serializer.save(owner=self.request.user)
         ws.members.add(self.request.user)
+
+
+class UserSessionView(generics.GenericAPIView):
+    """List active sessions and allow revoking individual sessions or all others."""
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        from .serializers import UserSessionSerializer
+        sessions = UserSession.objects.filter(user=request.user, is_active=True).order_by('-last_activity')
+        return Response(UserSessionSerializer(sessions, many=True).data)
+
+    def delete(self, request):
+        """Revoke a specific session by id, or all others if id='others'."""
+        session_id = request.query_params.get('id')
+        if session_id == 'others':
+            UserSession.objects.filter(user=request.user, is_active=True).exclude(
+                session_key=request.query_params.get('current', '')
+            ).update(is_active=False)
+            return Response({'message': 'All other sessions revoked.'})
+        elif session_id:
+            UserSession.objects.filter(user=request.user, id=session_id).update(is_active=False)
+            return Response({'message': 'Session revoked.'})
+        return Response({'error': 'Provide ?id=<session_id> or ?id=others'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SecuritySettingsView(generics.GenericAPIView):
+    """Get/update user security settings: IP whitelist, enforce toggle."""
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        from django.utils import timezone
+        user = request.user
+        locked = bool(user.account_locked_until and user.account_locked_until > timezone.now())
+        lock_until = user.account_locked_until.isoformat() if locked else None
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        client_ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else request.META.get('REMOTE_ADDR', '127.0.0.1')
+        return Response({
+            'ip_whitelist': user.ip_whitelist,
+            'enforce_ip_whitelist': user.enforce_ip_whitelist,
+            'failed_login_attempts': user.failed_login_attempts,
+            'account_locked': locked,
+            'account_locked_until': lock_until,
+            'last_login_ip': user.last_login_ip,
+            'current_ip': client_ip,
+        })
+
+    def patch(self, request):
+        user = request.user
+        if 'ip_whitelist' in request.data:
+            user.ip_whitelist = request.data['ip_whitelist']
+        if 'enforce_ip_whitelist' in request.data:
+            user.enforce_ip_whitelist = bool(request.data['enforce_ip_whitelist'])
+        user.save(update_fields=['ip_whitelist', 'enforce_ip_whitelist'])
+        return Response({'message': 'Security settings updated.', 'ip_whitelist': user.ip_whitelist, 'enforce_ip_whitelist': user.enforce_ip_whitelist})
+
+    def post(self, request):
+        """Admin-only: unlock a user account."""
+        from django.utils import timezone
+        user = request.user
+        if request.data.get('action') == 'unlock':
+            user.failed_login_attempts = 0
+            user.account_locked_until = None
+            user.save(update_fields=['failed_login_attempts', 'account_locked_until'])
+            return Response({'message': 'Account unlocked.'})
+        return Response({'error': 'Unknown action.'}, status=status.HTTP_400_BAD_REQUEST)
 

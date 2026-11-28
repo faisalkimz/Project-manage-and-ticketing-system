@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, TeamInvite, Team, OAuthConnection
+from .models import User, TeamInvite, Team, OAuthConnection, UserSession
 from projects.models import Project
 from django.core.exceptions import ValidationError
 
@@ -9,7 +9,14 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'role', 'permissions', 'profile_image', 'bio', 'is_active', 'department', 'job_title', 'email_notifications', 'push_notifications', 'digest_enabled', 'task_updates_only', 'is_2fa_enabled']
+        fields = [
+            'id', 'username', 'email', 'role', 'permissions', 'profile_image',
+            'bio', 'is_active', 'department', 'job_title', 'email_notifications',
+            'push_notifications', 'digest_enabled', 'task_updates_only',
+            'is_2fa_enabled', 'enforce_ip_whitelist', 'ip_whitelist',
+            'failed_login_attempts', 'account_locked_until', 'last_login_ip'
+        ]
+        read_only_fields = ['failed_login_attempts', 'account_locked_until', 'last_login_ip']
 
     def get_permissions(self, obj):
         if obj.role == 'ADMIN':
@@ -129,3 +136,10 @@ class WorkspaceSerializer(serializers.ModelSerializer):
         model = Workspace
         fields = ['id', 'name', 'slug', 'description', 'owner', 'members', 'created_at']
         read_only_fields = ['owner', 'created_at']
+
+
+class UserSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSession
+        fields = ['id', 'session_key', 'ip_address', 'user_agent', 'device_type', 'created_at', 'last_activity', 'is_active']
+        read_only_fields = ['id', 'created_at', 'last_activity']

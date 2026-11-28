@@ -32,9 +32,9 @@ Maturity classifications:
 | Login with token refresh | ✅ Fully | ✅ 401 auto-redirect | ✅ Interceptor | Working |
 | 2FA / TOTP | ✅ Fully | ✅ Full setup wizard with QR code | ✅ django-otp, pyotp + API endpoints | Working |
 | Social/OAuth Login | 🎭 UI Only | ✅ SocialLoginButtons.jsx | ❌ No OAuth views | Buttons render, no backend |
-| Account lockout (brute force) | 🔧 Backend | ❌ No UI | ✅ failed_login_attempts field | Not enforced in views |
-| IP Whitelist enforcement | 🔧 Backend | ❌ No UI | ✅ Users.middleware.py | Partial enforcement |
-| Session management | 🔧 Backend | ❌ No UI | ✅ UserSession model | Logged but not exposed |
+| Account lockout (brute force) | ✅ Fully | ✅ Lockout status card + unlock button in Settings Security tab | ✅ LoginView enforces 5-attempt lockout, 15-min ban | Working |
+| IP Whitelist enforcement | ✅ Fully | ✅ IP whitelist manager in Settings Security tab | ✅ Users.middleware.py + LoginView pre-check + SecuritySettingsView PATCH | Working |
+| Session management | ✅ Fully | ✅ Active sessions list + revoke in Settings Security tab | ✅ UserSession model + UserSessionView GET/DELETE | Working |
 | Password change | ✅ Fully | ✅ Settings page | ✅ change-password endpoint | Working |
 | Profile update | ✅ Fully | ✅ Settings page | ✅ User serializer | Working |
 | Profile image upload | ✅ Fully | ✅ Upload photo, preview, camera overlay & remove in Settings.jsx | ✅ profile_image ImageField + MultiPartParser | Working |
