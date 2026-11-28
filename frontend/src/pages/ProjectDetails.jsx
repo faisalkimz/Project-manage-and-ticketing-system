@@ -16,6 +16,7 @@ import { useConfirm } from '../components/ConfirmModal';
 import TaskTableView from '../components/TaskTableView';
 import AiRiskModal from '../components/AiRiskModal';
 import RichTextEditor from '../components/RichTextEditor';
+import EditTimeEntryModal from '../components/EditTimeEntryModal';
 
 const ProjectDetails = () => {
     const { id } = useParams();
@@ -122,6 +123,7 @@ const ProjectDetails = () => {
     const [showAnnounceModal, setShowAnnounceModal] = useState(false);
     const [timeEntries, setTimeEntries] = useState([]);
     const [showTimeModal, setShowTimeModal] = useState(false);
+    const [editingTimeEntry, setEditingTimeEntry] = useState(null);
 
     // AI Assistant States
     const [showAiSuggestModal, setShowAiSuggestModal] = useState(false);
@@ -3170,6 +3172,7 @@ const ProjectDetails = () => {
                                                 <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase">Description</th>
                                                 <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase text-right">Duration</th>
                                                 <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase text-center">Billable</th>
+                                                <th className="px-6 py-4 text-[11px] font-bold text-[#5E6C84] uppercase text-right">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-[#DFE1E6]">
@@ -3200,11 +3203,20 @@ const ProjectDetails = () => {
                                                     <td className="px-6 py-4 text-center">
                                                         <div className={`w-2 h-2 rounded-full mx-auto ${entry.is_billable ? 'bg-green-500' : 'bg-gray-300'}`} />
                                                     </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <button
+                                                            onClick={() => setEditingTimeEntry(entry)}
+                                                            className="p-1 hover:bg-[#EBECF0] rounded text-[#5E6C84] hover:text-[#0052CC] inline-flex items-center gap-1 text-xs font-semibold transition"
+                                                            title="Edit Time Log"
+                                                        >
+                                                            <Edit2 size={13} /> Edit
+                                                        </button>
+                                                    </td>
                                                 </tr>
                                             ))}
                                             {timeEntries.length === 0 && (
                                                 <tr>
-                                                    <td colSpan="6" className="px-6 py-20 text-center text-[#5E6C84]">
+                                                    <td colSpan="7" className="px-6 py-20 text-center text-[#5E6C84]">
                                                         <Clock size={48} className="mx-auto mb-4 opacity-20" />
                                                         <p>No time entries recorded for this project.</p>
                                                     </td>
@@ -3214,6 +3226,13 @@ const ProjectDetails = () => {
                                     </table>
                                 </div>
                             </div>
+
+                            <EditTimeEntryModal
+                                isOpen={Boolean(editingTimeEntry)}
+                                onClose={() => setEditingTimeEntry(null)}
+                                entry={editingTimeEntry}
+                                onSaved={fetchProjectData}
+                            />
                         </div>
                     )
                 }

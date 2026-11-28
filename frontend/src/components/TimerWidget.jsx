@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Play, Square, Clock, Download } from 'lucide-react';
+import { Play, Square, Clock, Download, Edit2 } from 'lucide-react';
 import api from '../services/api';
+import EditTimeEntryModal from './EditTimeEntryModal';
 
 const TimerWidget = () => {
     const [currentEntry, setCurrentEntry] = useState(null);
     const [elapsed, setElapsed] = useState(0);
     const [loading, setLoading] = useState(false);
     const [recentTasks, setRecentTasks] = useState([]);
+    const [recentEntries, setRecentEntries] = useState([]);
+    const [editingEntry, setEditingEntry] = useState(null);
 
     useEffect(() => {
         fetchCurrentTimer();
         fetchRecentTasks();
+        fetchRecentEntries();
     }, []);
 
     useEffect(() => {
@@ -43,6 +47,14 @@ const TimerWidget = () => {
         } catch (error) { }
     };
 
+    const fetchRecentEntries = async () => {
+        try {
+            const res = await api.get('/timetracking/entries/');
+            const list = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+            setRecentEntries(list.filter(e => !e.is_running).slice(0, 3));
+        } catch (error) { }
+    };
+
     const startTimer = async (taskId) => {
         setLoading(true);
         try {
@@ -57,6 +69,7 @@ const TimerWidget = () => {
             await api.post('/timetracking/entries/stop_timer/');
             setCurrentEntry(null);
             setElapsed(0);
+            fetchRecentEntries();
         } catch (error) { } finally { setLoading(false); }
     };
 
@@ -145,6 +158,36 @@ const TimerWidget = () => {
                 <Download size={13} className="text-[#5E6C84]" />
                 <span>Export Timesheet CSV</span>
             </button>
+
+            {recentEntries.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                    <p className="text-[11px] font-bold text-[#5E6C84] uppercase">Recent Logs</p>
+                    {recentEntries.map(entry => (
+                        <div key={entry.id} className="p-2 bg-white border border-[#DFE1E6] rounded-sm flex items-center justify-between text-xs">
+                            <div className="min-w-0 flex-1 pr-2">
+                                <p className="font-medium text-[#172B4D] truncate">{entry.description || entry.task_details?.title || 'Log'}</p>
+                                <p className="text-[10px] text-[#5E6C84]">{entry.duration_minutes}m • {entry.is_billable ? 'Billable' : 'Non-billable'}</p>
+                            </div>
+                            <button
+                                onClick={() => setEditingEntry(entry)}
+                                className="p-1 hover:bg-[#EBECF0] rounded text-[#5E6C84] hover:text-[#0052CC]"
+                                title="Edit Time Entry"
+                            >
+                                <Edit2 size={12} />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <EditTimeEntryModal
+                isOpen={Boolean(editingEntry)}
+                onClose={() => setEditingEntry(null)}
+                entry={editingEntry}
+                onSaved={() => {
+                    fetchRecentEntries();
+                }}
+            />
         </div>
     );
 };

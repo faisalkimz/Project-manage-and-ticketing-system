@@ -205,7 +205,7 @@ Maturity classifications:
 | Time by task | ✅ Fully | ✅ Time entries display | ✅ task FK | Working |
 | Time by project | ✅ Fully | ✅ Project time stats | ✅ project FK | Working |
 | Time reports | ⚠️ Partial | ⚠️ Stats widget | ✅ stats endpoint | Very limited reporting |
-| Time entry editing | ⚠️ Partial | ❌ No edit UI | ✅ PATCH available | Can't correct mistakes via UI |
+| Time entry editing | ✅ Fully | ✅ Edit modal with duration, notes & billable toggle in Timesheet, Approvals & TimerWidget | ✅ PATCH endpoint with auto end_time calculation | Working |
 | Work schedule | 🔧 Backend | ❌ No UI | ✅ WorkSchedule model | Backend only |
 | Resource holidays | 🔧 Backend | ❌ No UI | ✅ ResourceHoliday model | Backend only |
 | Timesheet export | ✅ Fully | ✅ Export Timesheet CSV button | ✅ export-csv endpoint | Working |

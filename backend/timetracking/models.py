@@ -28,10 +28,13 @@ class TimeEntry(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        # Auto-calculate duration if end_time is set
-        if self.start_time and self.end_time and not self.is_running:
+        # Auto-calculate duration or end_time appropriately
+        import datetime
+        if self.start_time and self.end_time and not self.is_running and not self.duration_minutes:
             delta = self.end_time - self.start_time
-            self.duration_minutes = int(delta.total_seconds() / 60)
+            self.duration_minutes = max(1, int(delta.total_seconds() / 60))
+        elif self.start_time and self.duration_minutes and not self.is_running:
+            self.end_time = self.start_time + datetime.timedelta(minutes=self.duration_minutes)
         
         # Ensure project is set if task is set
         if self.task and not self.project:

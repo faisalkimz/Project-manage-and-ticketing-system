@@ -11,7 +11,7 @@ class TimeEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = TimeEntry
         fields = '__all__'
-        read_only_fields = ['user', 'is_running', 'duration_minutes']
+        read_only_fields = ['user', 'is_running']
 
 class ResourceHolidaySerializer(serializers.ModelSerializer):
     user_details = UserSerializer(source='user', read_only=True)

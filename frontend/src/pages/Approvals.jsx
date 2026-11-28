@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Check, X, Clock } from 'lucide-react';
+import { Check, X, Clock, Edit2 } from 'lucide-react';
 import api from '../services/api';
+import EditTimeEntryModal from '../components/EditTimeEntryModal';
 
 const Approvals = () => {
     const [entries, setEntries] = useState([]);
     const [filter, setFilter] = useState('PENDING');
+    const [editingEntry, setEditingEntry] = useState(null);
 
     const fetchEntries = async () => {
         try {
@@ -79,6 +81,13 @@ const Approvals = () => {
                                     </span>
                                 </td>
                                 <td className="px-4 py-3 text-right space-x-2">
+                                    <button
+                                        onClick={() => setEditingEntry(entry)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-[#F4F5F7] border border-[#DFE1E6] text-[#42526E] rounded text-xs font-semibold transition"
+                                        title="Edit Entry"
+                                    >
+                                        <Edit2 size={12} /> Edit
+                                    </button>
                                     {(entry.approval_status || 'PENDING') === 'PENDING' && (
                                         <>
                                             <button
@@ -108,6 +117,13 @@ const Approvals = () => {
                     </tbody>
                 </table>
             </div>
+
+            <EditTimeEntryModal
+                isOpen={Boolean(editingEntry)}
+                onClose={() => setEditingEntry(null)}
+                entry={editingEntry}
+                onSaved={fetchEntries}
+            />
         </div>
     );
 };
