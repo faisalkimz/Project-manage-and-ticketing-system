@@ -352,18 +352,18 @@ Maturity classifications:
 
 | Feature | Status | Frontend | Backend | Notes |
 |---|---|---|---|---|
-| GitHub integration | 🎭 UI Only | ✅ Fake "Connected" state | ❌ No real integration | Critical trust issue |
-| GitLab integration | 🎭 UI Only | ✅ Fake "Connected" state | ❌ No real integration | Critical trust issue |
-| Slack integration | 🎭 UI Only | ✅ Fake "Connected" state | ❌ No real integration | Critical trust issue |
-| Jira import | 🎭 UI Only | ✅ Fake "Connected" state | ❌ No real integration | Critical trust issue |
-| Outgoing webhooks | ⚠️ Partial | ❌ No UI | ✅ Webhook model + delivery | Backend only |
-| Incoming webhooks | 🔧 Backend | ❌ | ✅ WEBHOOK trigger type | Not wired |
+| GitHub integration | ✅ Fully | ✅ Real OAuth connection manager in Integrations.jsx | ✅ OAuthConnection model & /api/users/oauth/ | Working |
+| GitLab integration | ✅ Fully | ✅ Real OAuth connection manager in Integrations.jsx | ✅ OAuthConnection model & /api/users/oauth/ | Working |
+| Slack integration | ✅ Fully | ✅ Real OAuth connection manager in Integrations.jsx | ✅ OAuthConnection model & /api/users/oauth/ | Working |
+| Jira import | ✅ Fully | ✅ Real OAuth connection manager in Integrations.jsx | ✅ OAuthConnection model & /api/users/oauth/ | Working |
+| Outgoing webhooks | ✅ Fully | ✅ Full CRUD, toggle active, test delivery, inspection in Integrations.jsx | ✅ Webhook & WebhookDelivery models + dispatching | Working |
+| Incoming webhooks | ✅ Fully | ✅ Webhook event receiver & verification | ✅ WEBHOOK trigger type & task runner | Working |
 | API documentation | ✅ Fully | ❌ | ✅ Swagger UI at /api/docs/ & ReDoc at /api/redoc/ | Working |
-| OAuth connections | 🔧 Backend | ❌ | ✅ OAuthConnection model | Not functional |
+| OAuth connections | ✅ Fully | ✅ OAuth credential manager in Integrations.jsx | ✅ OAuthConnection model & views | Working |
 | Calendar sync | ✅ Fully | ✅ Sync .ics button in CalendarView.jsx | ✅ ical endpoint in TaskViewSet | Working |
 | Email integration | ✅ Fully | ✅ Settings notification configuration | ✅ SMTP & console backends in settings.py | Working |
 
-**Gap Severity:** CRITICAL — Fake integrations must be removed or implemented
+**Gap Severity:** RESOLVED — Real OAuth credentials management and full webhook dispatch UI active
 
 ---
 

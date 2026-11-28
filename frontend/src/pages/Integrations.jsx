@@ -86,6 +86,12 @@ const Integrations = () => {
     const [webhookLogs, setWebhookLogs] = useState([]);
     const [loadingLogs, setLoadingLogs] = useState(false);
 
+    // Connected Apps state
+    const [connectedApps, setConnectedApps] = useState([]);
+    const [connectAppModal, setConnectAppModal] = useState(null);
+    const [connectToken, setConnectToken] = useState('');
+    const [connectingApp, setConnectingApp] = useState(false);
+
     const tools = [
         { 
             id: 'github', 
@@ -119,7 +125,56 @@ const Integrations = () => {
 
     useEffect(() => {
         fetchWebhooks();
+        fetchConnectedApps();
     }, []);
+
+    const fetchConnectedApps = async () => {
+        try {
+            const res = await api.get('/users/oauth/');
+            setConnectedApps(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            setConnectedApps([]);
+        }
+    };
+
+    const handleConnectApp = async (e) => {
+        e.preventDefault();
+        if (!connectToken.trim() || !connectAppModal) return;
+        setConnectingApp(true);
+        try {
+            await api.post('/users/oauth/', {
+                provider: connectAppModal.id,
+                access_token: connectToken.trim(),
+                scopes: 'read,write',
+            });
+            showToast(`${connectAppModal.name} connected successfully!`, 'success');
+            setConnectAppModal(null);
+            setConnectToken('');
+            fetchConnectedApps();
+        } catch (err) {
+            showToast(`Failed to connect ${connectAppModal.name}`, 'error');
+        } finally {
+            setConnectingApp(false);
+        }
+    };
+
+    const handleDisconnectApp = async (tool) => {
+        const confirmed = await confirm({
+            title: `Disconnect ${tool.name}`,
+            message: `Are you sure you want to disconnect ${tool.name}? Active credential tokens will be cleared.`,
+            confirmText: 'Disconnect',
+            cancelText: 'Cancel',
+            isDanger: true,
+        });
+        if (!confirmed) return;
+        try {
+            await api.delete('/users/oauth/', { params: { provider: tool.id } });
+            showToast(`${tool.name} disconnected.`, 'info');
+            fetchConnectedApps();
+        } catch (err) {
+            showToast(`Failed to disconnect ${tool.name}`, 'error');
+        }
+    };
 
     const fetchWebhooks = async () => {
         try {
@@ -319,8 +374,10 @@ const Integrations = () => {
                 >
                     <Layers size={18} />
                     <span>Connected Apps</span>
-                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">
-                        Coming Soon
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                        connectedApps.length > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                        {connectedApps.length > 0 ? `${connectedApps.length} Connected` : 'Configurable'}
                     </span>
                 </button>
 
@@ -540,64 +597,81 @@ const Integrations = () => {
                 </div>
             )}
 
-            {/* TAB 2: CONNECTED APPS (Coming Soon State) */}
+            {/* TAB 2: CONNECTED APPS */}
             {activeTab === 'apps' && (
                 <div className="space-y-6">
-                    <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 flex items-start gap-3">
-                        <Info size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-blue-900 flex items-start gap-3">
+                        <Info size={20} className="text-[#0052CC] shrink-0 mt-0.5" />
                         <div>
-                            <h3 className="font-bold text-sm">Third-Party Direct OAuth Connectors In Development</h3>
-                            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                                Native integrations for GitHub, GitLab, Slack, and Jira Software are currently being built.
-                                In the meantime, you can stream real-time events to your team and pipelines using our active{' '}
-                                <button onClick={() => setActiveTab('webhooks')} className="font-bold underline text-[#0052CC]">
-                                    Outbound Webhooks
-                                </button>{' '}
-                                or automate workflows via our public{' '}
-                                <button onClick={() => setActiveTab('api')} className="font-bold underline text-[#0052CC]">
-                                    REST API
-                                </button>.
+                            <h3 className="font-bold text-sm">Direct OAuth & Personal Access Token Connections</h3>
+                            <p className="text-xs text-blue-800 mt-1 leading-relaxed">
+                                Connect your organization's external tools with secure credentials. Credentials are encrypted and tied to your user account for automated pipeline sync and notifications.
                             </p>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {tools.map(tool => (
-                            <div key={tool.id} className="bg-white p-6 rounded-xl border border-[#DFE1E6] shadow-sm flex flex-col justify-between">
-                                <div className="flex gap-4">
-                                    <div className="w-12 h-12 bg-[#F4F5F7] rounded-lg flex items-center justify-center text-[#172B4D] shrink-0">
-                                        {tool.icon}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-bold text-[#172B4D] text-lg">{tool.name}</h3>
-                                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                                Coming Soon
-                                            </span>
+                        {tools.map(tool => {
+                            const connection = connectedApps.find(c => c.provider?.toLowerCase() === tool.id.toLowerCase());
+                            const isConnected = Boolean(connection);
+
+                            return (
+                                <div key={tool.id} className="bg-white p-6 rounded-xl border border-[#DFE1E6] shadow-sm flex flex-col justify-between">
+                                    <div className="flex gap-4">
+                                        <div className="w-12 h-12 bg-[#F4F5F7] rounded-lg flex items-center justify-center text-[#172B4D] shrink-0">
+                                            {tool.icon}
                                         </div>
-                                        <p className="text-sm text-[#5E6C84] mt-1.5 leading-relaxed">{tool.desc}</p>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-bold text-[#172B4D] text-lg">{tool.name}</h3>
+                                                {isConnected ? (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                                        <CheckCircle2 size={11} /> Connected
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                                        Not Connected
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-sm text-[#5E6C84] mt-1.5 leading-relaxed">{tool.desc}</p>
+                                            {isConnected && connection.created_at && (
+                                                <p className="text-[11px] text-[#5E6C84] mt-2 flex items-center gap-1">
+                                                    <Clock size={12} /> Connected on {new Date(connection.created_at).toLocaleDateString()}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-5 pt-4 border-t border-[#DFE1E6] flex items-center justify-between">
+                                        <a
+                                            href={tool.docUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-[#0052CC] hover:underline flex items-center gap-1 font-semibold"
+                                        >
+                                            Documentation <ExternalLink size={12} />
+                                        </a>
+
+                                        {isConnected ? (
+                                            <button
+                                                onClick={() => handleDisconnectApp(tool)}
+                                                className="px-3.5 py-1.5 bg-white text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                                            >
+                                                <Trash2 size={13} /> Disconnect
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => { setConnectAppModal(tool); setConnectToken(''); }}
+                                                className="px-3.5 py-1.5 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                                            >
+                                                <Plus size={13} /> Connect App
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
-
-                                <div className="mt-5 pt-4 border-t border-[#DFE1E6] flex items-center justify-between">
-                                    <a
-                                        href={tool.docUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs text-[#0052CC] hover:underline flex items-center gap-1 font-semibold"
-                                    >
-                                        OAuth Docs <ExternalLink size={12} />
-                                    </a>
-
-                                    <button
-                                        disabled
-                                        className="px-3.5 py-1.5 bg-[#F4F5F7] text-slate-400 rounded-lg text-xs font-bold cursor-not-allowed border border-[#DFE1E6]"
-                                    >
-                                        Coming Soon
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -938,6 +1012,61 @@ const Integrations = () => {
                                 Close
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Connect App Modal */}
+            {connectAppModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setConnectAppModal(null)}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-[#DFE1E6]" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-[#DFE1E6] flex items-center justify-between bg-[#FAFBFC]">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-[#F4F5F7] flex items-center justify-center">{connectAppModal.icon}</div>
+                                <div>
+                                    <h3 className="font-bold text-[#172B4D] text-sm">Connect {connectAppModal.name}</h3>
+                                    <p className="text-[11px] text-[#5E6C84]">{connectAppModal.category}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setConnectAppModal(null)} className="p-1 hover:bg-[#EBECF0] rounded text-[#5E6C84]">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleConnectApp} className="p-6 space-y-4">
+                            <p className="text-xs text-[#5E6C84] leading-relaxed">
+                                Enter your Personal Access Token or OAuth API Key for <strong>{connectAppModal.name}</strong>. Credentials are encrypted and securely stored with your profile.
+                            </p>
+                            <div>
+                                <label className="block text-xs font-bold text-[#5E6C84] uppercase mb-1">
+                                    Access Token / API Key <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="password"
+                                    required
+                                    autoFocus
+                                    value={connectToken}
+                                    onChange={e => setConnectToken(e.target.value)}
+                                    placeholder={`Enter token for ${connectAppModal.name}...`}
+                                    className="w-full px-3 py-2 border border-[#DFE1E6] rounded text-sm focus:border-[#0052CC] outline-none font-mono text-xs"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setConnectAppModal(null)}
+                                    className="px-4 py-2 border border-[#DFE1E6] text-[#42526E] rounded text-xs font-bold hover:bg-[#F4F5F7]"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={connectingApp || !connectToken.trim()}
+                                    className="px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded text-xs font-bold transition disabled:opacity-50"
+                                >
+                                    {connectingApp ? 'Connecting...' : 'Save & Connect'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
